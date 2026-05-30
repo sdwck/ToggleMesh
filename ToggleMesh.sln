@@ -1,0 +1,46 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{288184C9-5C1D-4368-A201-1E674D148477}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{37AD175F-1614-4E02-B09C-042DF208D76E}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "sample", "sample", "{B54216AA-3F85-414B-A723-C9C0141A1AB2}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ToggleMesh.API", "src\ToggleMesh.API\ToggleMesh.API.csproj", "{23424115-F11E-4A46-B819-028C477EC2CB}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ToggleMesh.IntegrationTests", "tests\ToggleMesh.IntegrationTests\ToggleMesh.IntegrationTests.csproj", "{027D1A75-831C-4B53-9820-39EBB868E922}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ToggleMesh.ConsoleClient", "samples\ToggleMesh.ConsoleClient\ToggleMesh.ConsoleClient.csproj", "{9909092A-E253-450D-962E-B118F28ABEF9}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ToggleMesh.SDK", "src\ToggleMesh.SDK\ToggleMesh.SDK.csproj", "{EDC38EB7-B809-4CAD-8DDD-6951A3549B27}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{23424115-F11E-4A46-B819-028C477EC2CB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{23424115-F11E-4A46-B819-028C477EC2CB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{23424115-F11E-4A46-B819-028C477EC2CB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{23424115-F11E-4A46-B819-028C477EC2CB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{027D1A75-831C-4B53-9820-39EBB868E922}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{027D1A75-831C-4B53-9820-39EBB868E922}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{027D1A75-831C-4B53-9820-39EBB868E922}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{027D1A75-831C-4B53-9820-39EBB868E922}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9909092A-E253-450D-962E-B118F28ABEF9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9909092A-E253-450D-962E-B118F28ABEF9}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9909092A-E253-450D-962E-B118F28ABEF9}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9909092A-E253-450D-962E-B118F28ABEF9}.Release|Any CPU.Build.0 = Release|Any CPU
+		{EDC38EB7-B809-4CAD-8DDD-6951A3549B27}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EDC38EB7-B809-4CAD-8DDD-6951A3549B27}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EDC38EB7-B809-4CAD-8DDD-6951A3549B27}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EDC38EB7-B809-4CAD-8DDD-6951A3549B27}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{23424115-F11E-4A46-B819-028C477EC2CB} = {288184C9-5C1D-4368-A201-1E674D148477}
+		{027D1A75-831C-4B53-9820-39EBB868E922} = {37AD175F-1614-4E02-B09C-042DF208D76E}
+		{9909092A-E253-450D-962E-B118F28ABEF9} = {B54216AA-3F85-414B-A723-C9C0141A1AB2}
+		{EDC38EB7-B809-4CAD-8DDD-6951A3549B27} = {288184C9-5C1D-4368-A201-1E674D148477}
+	EndGlobalSection
+EndGlobal
