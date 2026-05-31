@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.DependencyInjection;
 using ToggleMesh.API.Features.Flags;
 using ToggleMesh.API.Features.Flags.Create;
+using ToggleMesh.API.Features.Flags.Get;
 using ToggleMesh.API.Features.Flags.Toggle;
 using ToggleMesh.API.Features.Projects;
 using ToggleMesh.API.Persistence;
@@ -87,7 +88,7 @@ public class FlagsEndpointsTests : IClassFixture<TestWebApplicationFactory>
         var flagKey = "signalr_test_flag";
         await _client.PostAsJsonAsync("/api/flags", new CreateFlagRequest { EnvironmentId = envId, Key = flagKey });
         
-        var tcs = new TaskCompletionSource<(string Key, bool IsEnabled)>();
+        var tcs = new TaskCompletionSource<GetFlagResponse>();
         
         var hubConnection = new HubConnectionBuilder()
             .WithUrl("http://localhost/hubs/toggle", options => 
@@ -97,9 +98,9 @@ public class FlagsEndpointsTests : IClassFixture<TestWebApplicationFactory>
             })
             .Build();
 
-        hubConnection.On<string, bool>("FlagUpdated", (key, isEnabled) =>
+        hubConnection.On<GetFlagResponse>("FlagUpdated", (flag) =>
         {
-            tcs.SetResult((key, isEnabled));
+            tcs.SetResult(flag);
         });
 
         await hubConnection.StartAsync();
@@ -117,8 +118,8 @@ public class FlagsEndpointsTests : IClassFixture<TestWebApplicationFactory>
         
         completedTask.Should().Be(signalRTask, "SignalR event was not received within 5 seconds");
         
-        var (receivedKey, receivedStatus) = await signalRTask;
-        receivedKey.Should().Be(flagKey);
-        receivedStatus.Should().BeTrue();
+        var receivedFlag = await signalRTask;
+        receivedFlag.Key.Should().Be(flagKey);
+        receivedFlag.IsEnabled.Should().BeTrue();
     }
 }

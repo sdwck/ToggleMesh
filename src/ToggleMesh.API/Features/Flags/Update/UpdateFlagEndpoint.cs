@@ -6,34 +6,34 @@ using ToggleMesh.API.Features.Flags.Get;
 using ToggleMesh.API.Hubs;
 using ToggleMesh.API.Persistence;
 
-namespace ToggleMesh.API.Features.Flags.Toggle;
+namespace ToggleMesh.API.Features.Flags.Update;
 
-public class ToggleFlagEndpoint : Endpoint<ToggleFlagRequest>
+public class UpdateFlagEndpoint : Endpoint<UpdateFlagRequest, GetFlagResponse>
 {
-    private readonly IHubContext<ToggleHub> _hubContext;
     private readonly AppDbContext _db;
-    private readonly ILogger<ToggleFlagEndpoint> _logger;
+    private readonly IHubContext<ToggleHub> _hubContext;
     private readonly IDatabase _redis;
+    private readonly ILogger<UpdateFlagEndpoint> _logger;
 
-    public ToggleFlagEndpoint(
+    public UpdateFlagEndpoint(
+        AppDbContext db, 
         IHubContext<ToggleHub> hubContext, 
-        AppDbContext db,
-        ILogger<ToggleFlagEndpoint> logger,
-        IConnectionMultiplexer redis)
+        IConnectionMultiplexer redis,
+        ILogger<UpdateFlagEndpoint> logger)
     {
-        _hubContext = hubContext;
         _db = db;
-        _logger = logger;
+        _hubContext = hubContext;
         _redis = redis.GetDatabase();
+        _logger = logger;
     }
 
     public override void Configure()
     {
-        Post("/api/flags/toggle");
+        Put("/api/flags");
         AllowAnonymous();
     }
 
-    public override async Task HandleAsync(ToggleFlagRequest req, CancellationToken ct)
+    public override async Task HandleAsync(UpdateFlagRequest req, CancellationToken ct)
     {
         var flag = await _db.FeatureFlags
             .Include(x => x.Rules)
@@ -44,8 +44,18 @@ public class ToggleFlagEndpoint : Endpoint<ToggleFlagRequest>
             await Send.NotFoundAsync(ct);
             return;
         }
-
+        
         flag.IsEnabled = req.IsEnabled;
+        flag.RolloutPercentage = req.RolloutPercentage;
+
+        _db.RemoveRange(flag.Rules);
+        flag.Rules = req.Rules.Select(r => new FlagRule
+        {
+            Attribute = r.Attribute,
+            Operator = r.Operator,
+            Value = r.Value
+        }).ToList();
+
         await _db.SaveChangesAsync(ct);
 
         var response = new GetFlagResponse(
@@ -75,6 +85,6 @@ public class ToggleFlagEndpoint : Endpoint<ToggleFlagRequest>
             _logger.LogError(e, "Failed to broadcast flag update");
         }
 
-        await Send.OkAsync(new { req.Key, req.IsEnabled }, ct);
+        await Send.OkAsync(response, ct);
     }
 }

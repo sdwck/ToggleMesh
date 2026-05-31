@@ -2,6 +2,8 @@
 using Microsoft.Extensions.Options;
 using ToggleMesh.SDK.Clients;
 using ToggleMesh.SDK.Options;
+using ToggleMesh.SDK.Rules;
+using ToggleMesh.SDK.Rules.Operators;
 
 namespace ToggleMesh.SDK.Extensions;
 
@@ -19,6 +21,16 @@ public static class ServiceCollectionExtensions
             client.BaseAddress = new Uri(o.EndpointUrl);
             client.DefaultRequestHeaders.Add("x-api-key", o.ApiKey);
         }).RemoveAllLoggers();
+
+        services.AddSingleton<IRuleOperator, EqualsOperator>();
+        services.AddSingleton<IRuleOperator, NotEqualsOperator>();
+        services.AddSingleton<IRuleOperator, ContainsOperator>();
+        services.AddSingleton<IRuleOperator, StartsWithOperator>();
+        services.AddSingleton<IRuleOperator, EndsWithOperator>();
+        services.AddSingleton<IRuleOperator, GreaterThanOperator>();
+        services.AddSingleton<IRuleOperator, LessThanOperator>();
+        services.AddSingleton<IRuleOperator, InListOperator>();
+        services.AddSingleton<IRuleEngine, RuleEngine>();
         
         services.AddSingleton<ToggleMeshClient>();
         services.AddSingleton<IToggleMeshClient>(sp => sp.GetRequiredService<ToggleMeshClient>());

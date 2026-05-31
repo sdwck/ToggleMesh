@@ -40,8 +40,13 @@ public class SdkGetFlagsEndpoint : Endpoint<SdkGetFlagsRequest, List<GetFlagResp
         
         var flags = await _db.FeatureFlags
             .AsNoTracking()
+            .Include(x => x.Rules)
             .Where(x => x.EnvironmentId == envKey.EnvironmentId)
-            .Select(x => new GetFlagResponse(x.Key, x.IsEnabled))
+            .Select(x => new GetFlagResponse(
+                x.Key, 
+                x.IsEnabled, 
+                x.Rules.Select(r => new RuleDto(r.Attribute, r.Operator, r.Value)),
+                x.RolloutPercentage))
             .ToListAsync(ct);
         
         await Send.OkAsync(flags, ct);

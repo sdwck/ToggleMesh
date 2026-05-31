@@ -1,4 +1,4 @@
-﻿using ToggleMesh.API.Features.Projects;
+using ToggleMesh.API.Features.Projects;
 
 namespace ToggleMesh.API.Features.Flags;
 
@@ -9,4 +9,6 @@ public class FeatureFlag
     public bool IsEnabled { get; set; }
     public Guid EnvironmentId { get; set; }
     public ProjectEnvironment Environment { get; set; } = null!;
+    public ICollection<FlagRule> Rules { get; set; } = new List<FlagRule>();
+    public int? RolloutPercentage { get; set; }
 }

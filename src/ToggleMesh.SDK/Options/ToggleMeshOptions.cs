@@ -22,4 +22,6 @@ public class ToggleMeshOptions
     /// If not provided, a default path in the application's base directory will be used.
     /// </summary>
     public string? FallbackFilePath { get; set; }
+    public bool UseFallbackFile { get; set; } = true;
+    public IEnumerable<string> IdentityKeys { get; set; } = [];
 }

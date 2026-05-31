@@ -6,28 +6,46 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using ToggleMesh.SDK.Options;
+using ToggleMesh.SDK.Rules;
 
 namespace ToggleMesh.SDK.Clients;
 
 public class ToggleMeshClient : IToggleMeshClient, IHostedService
 {
-    private readonly ConcurrentDictionary<string, bool> _cache = new();
+    private readonly ConcurrentDictionary<string, FeatureFlagDto> _cache = new();
     private readonly HubConnection _connection;
     private readonly ILogger<ToggleMeshClient> _logger;
     private readonly HttpClient _client;
-    private readonly string _fallbackFilePath;
+    private readonly IRuleEngine _ruleEngine;
+    private readonly string? _fallbackFilePath;
+    private readonly List<string> _identityKeys = ["UserId", "Email", "SessionId", "DeviceId", "Id"];
+
+    private static string GetSafeFileName(string apiKey)
+    {
+        if (string.IsNullOrWhiteSpace(apiKey)) return "default";
+        var bytes = System.Text.Encoding.UTF8.GetBytes(apiKey);
+        var hash = System.Security.Cryptography.SHA256.HashData(bytes);
+        return Convert.ToHexString(hash)[..12].ToLowerInvariant();
+    }
 
     public ToggleMeshClient(
         IHttpClientFactory httpClientFactory,
         IOptions<ToggleMeshOptions> options, 
-        ILogger<ToggleMeshClient> logger)
+        ILogger<ToggleMeshClient> logger,
+        IRuleEngine ruleEngine)
     {
         _logger = logger;
+        _ruleEngine = ruleEngine;
+        if (options.Value.IdentityKeys.Any())
+            _identityKeys = options.Value.IdentityKeys.ToList();
         _client = httpClientFactory.CreateClient("ToggleMesh");
         
-        _fallbackFilePath = string.IsNullOrWhiteSpace(options.Value.FallbackFilePath)
-            ? Path.Combine(AppContext.BaseDirectory, ".togglemesh", $"{options.Value.ApiKey}.json")
-            : options.Value.FallbackFilePath;
+        var safeKey = GetSafeFileName(options.Value.ApiKey);
+
+        if (options.Value.UseFallbackFile)
+            _fallbackFilePath = string.IsNullOrWhiteSpace(options.Value.FallbackFilePath)
+                ? Path.Combine(AppContext.BaseDirectory, ".togglemesh", $"{safeKey}.json")
+                : options.Value.FallbackFilePath;
 
         var hubUrl = new Uri(
             new Uri(options.Value.EndpointUrl), Constants.Endpoints.ToggleHub);
@@ -41,10 +59,12 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService
             ])
             .Build();
 
-        _connection.On<string, bool>("FlagUpdated", (key, value) =>
+        _connection.On<FeatureFlagDto>("FlagUpdated", (flag) =>
         {
-            _logger.LogDebug("[ToggleMesh] Flag updated remotely: {Key} = {Value}", key, value);
-            _cache[key] = value;
+            _logger.LogDebug("[ToggleMesh] Flag updated remotely: {Key} (IsEnabled: {Value}, Rules: {RuleCount})", 
+                flag.Key, flag.IsEnabled, flag.Rules.Count());
+            
+            _cache[flag.Key] = flag;
             _ = SaveFallbackAsync();
         });
 
@@ -61,9 +81,61 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService
         };
     }
     
-    public bool IsEnabled(string flagKey, bool defaultValue = false)
+    public bool IsEnabled(string flagKey, bool defaultValue = false) => 
+        IsEnabled(flagKey, string.Empty, (IDictionary<string, string>)new Dictionary<string, string>(), defaultValue);
+
+    public bool IsEnabled(string flagKey, string identity, bool defaultValue = false) => 
+        IsEnabled(flagKey, identity, (IDictionary<string, string>)new Dictionary<string, string>(), defaultValue);
+
+    public bool IsEnabled(string flagKey, IDictionary<string, string> context, bool defaultValue = false) => 
+        IsEnabled(flagKey, string.Empty, context, defaultValue);
+    
+    public bool IsEnabled<TContext>(string flagKey, TContext contextObject, bool defaultValue = false) =>
+        IsEnabled(flagKey, string.Empty, ContextMapper<TContext>.ToDictionary(contextObject), defaultValue);
+
+    public bool IsEnabled<TContext>(string flagKey, string identity, TContext contextObject, bool defaultValue = false) =>
+        IsEnabled(flagKey, identity, ContextMapper<TContext>.ToDictionary(contextObject), defaultValue);
+
+    public bool IsEnabled(string flagKey, string identity, IDictionary<string, string> context, bool defaultValue = false)
     {
-        return _cache.GetValueOrDefault(flagKey, defaultValue);
+        if (!_cache.TryGetValue(flagKey, out var flag))
+        {
+            return defaultValue;
+        }
+
+        if (!flag.IsEnabled)
+        {
+            return false;
+        }
+
+        if (!_ruleEngine.Evaluate(flag.Rules, context))
+        {
+            return false;
+        }
+
+        var actualIdentity = GetIdentity(identity, context);
+        return RolloutEvaluator.Evaluate(flag.RolloutPercentage, flagKey, actualIdentity);
+    }
+
+    private string GetIdentity(string explicitIdentity, IDictionary<string, string> context)
+    {
+        if (!string.IsNullOrWhiteSpace(explicitIdentity)) return explicitIdentity;
+        
+        foreach (var key in _identityKeys)
+        {
+            if (context.TryGetValue(key, out var val) && !string.IsNullOrWhiteSpace(val))
+            {
+                return val;
+            }
+            
+            var caseInsensitiveKey = context.Keys.FirstOrDefault(k => string.Equals(k, key, StringComparison.OrdinalIgnoreCase));
+            if (caseInsensitiveKey != null && !string.IsNullOrWhiteSpace(context[caseInsensitiveKey]))
+            {
+                return context[caseInsensitiveKey];
+            }
+        }
+        
+        return string.Empty;
     }
 
     public async Task StartAsync(CancellationToken cancellationToken)
@@ -99,7 +171,6 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService
             {
                 if (_connection.State == HubConnectionState.Disconnected)
                 {
-                    _logger.LogTrace("[ToggleMesh] Attempting to establish SignalR connection.");
                     await _connection.StartAsync(ct);
                     _logger.LogTrace("[ToggleMesh] SignalR connection established.");
                     await SyncStateWithApiAsync(ct);
@@ -143,7 +214,7 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService
 
             foreach (var flag in flags)
             {
-                _cache[flag.Key] = flag.IsEnabled;
+                _cache[flag.Key] = flag;
             }
 
             _logger.LogInformation("[ToggleMesh] State synchronized with API. Loaded {Count} flags.", flags.Count);
@@ -165,6 +236,12 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService
     {
         try
         {
+            if (_fallbackFilePath is null)
+            {
+                _logger.LogTrace("[ToggleMesh] Fallback file path not configured. Skipping offline fallback load.");
+                return;
+            }
+            
             if (!File.Exists(_fallbackFilePath))
             {
                 _logger.LogTrace("[ToggleMesh] No fallback file found at {Path}", _fallbackFilePath);
@@ -172,13 +249,13 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService
             }
 
             var content = await File.ReadAllTextAsync(_fallbackFilePath);
-            var flags = JsonSerializer.Deserialize<Dictionary<string, bool>>(content);
+            var flags = JsonSerializer.Deserialize<List<FeatureFlagDto>>(content);
             
             if (flags != null)
             {
-                foreach (var (key, value) in flags)
+                foreach (var flag in flags)
                 {
-                    _cache[key] = value;
+                    _cache[flag.Key] = flag;
                 }
                 _logger.LogInformation("[ToggleMesh] Loaded {Count} flags from offline fallback file.", flags.Count);
             }
@@ -193,13 +270,19 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService
     {
         try
         {
+            if (_fallbackFilePath is null)
+            {
+                _logger.LogTrace("[ToggleMesh] Fallback file path not configured. Skipping offline fallback save.");
+                return;
+            }
+            
             var dir = Path.GetDirectoryName(_fallbackFilePath);
             if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
             {
                 Directory.CreateDirectory(dir);
             }
 
-            var content = JsonSerializer.Serialize(_cache);
+            var content = JsonSerializer.Serialize(_cache.Values);
             await File.WriteAllTextAsync(_fallbackFilePath, content);
             _logger.LogTrace("[ToggleMesh] Fallback state saved successfully.");
         }
@@ -209,5 +292,6 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService
         }
     }
     
-    private sealed record FeatureFlagDto(string Key, bool IsEnabled);
+    // ReSharper disable once ClassNeverInstantiated.Local
+    private sealed record FeatureFlagDto(string Key, bool IsEnabled, IEnumerable<RuleDto> Rules, int? RolloutPercentage = null);
 }

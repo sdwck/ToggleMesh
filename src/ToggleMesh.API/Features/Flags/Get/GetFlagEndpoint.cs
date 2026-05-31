@@ -36,12 +36,17 @@ public class GetFlagEndpoint : Endpoint<GetFlagRequest, GetFlagResponse>
         var cachedValue = await _redis.StringGetAsync(cacheKey);
         if (cachedValue.HasValue)
         {
-            await Send.OkAsync(new GetFlagResponse(flagKey, (bool)cachedValue), ct);
-            return;
+            var cachedResponse = System.Text.Json.JsonSerializer.Deserialize<GetFlagResponse>((string)cachedValue!);
+            if (cachedResponse is not null)
+            {
+                await Send.OkAsync(cachedResponse, ct);
+                return;
+            }
         }
 
         var flag = await _db.FeatureFlags
             .AsNoTracking()
+            .Include(x => x.Rules)
             .FirstOrDefaultAsync(x => x.EnvironmentId == req.EnvironmentId && x.Key == flagKey, ct);
 
         if (flag is null)
@@ -50,7 +55,13 @@ public class GetFlagEndpoint : Endpoint<GetFlagRequest, GetFlagResponse>
             return;
         }
 
-        await _redis.StringSetAsync(cacheKey, flag.IsEnabled, TimeSpan.FromMinutes(10));
-        await Send.OkAsync(new GetFlagResponse(flag.Key, flag.IsEnabled), ct);
+        var response = new GetFlagResponse(
+            flag.Key, 
+            flag.IsEnabled, 
+            flag.Rules.Select(r => new RuleDto(r.Attribute, r.Operator, r.Value)),
+            flag.RolloutPercentage);
+
+        await _redis.StringSetAsync(cacheKey, System.Text.Json.JsonSerializer.Serialize(response), TimeSpan.FromMinutes(10));
+        await Send.OkAsync(response, ct);
     }
 }
