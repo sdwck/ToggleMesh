@@ -5,7 +5,7 @@ using ToggleMesh.API.Persistence;
 
 namespace ToggleMesh.API.Features.Flags.GetAll;
 
-public class GetFlagsEndpoint : Endpoint<EmptyRequest, List<GetFlagResponse>>
+public class GetFlagsEndpoint : Endpoint<GetFlagRequest, List<GetFlagResponse>>
 {
     private readonly AppDbContext _db;
 
@@ -20,10 +20,11 @@ public class GetFlagsEndpoint : Endpoint<EmptyRequest, List<GetFlagResponse>>
         AllowAnonymous();
     }
 
-    public override async Task HandleAsync(EmptyRequest req, CancellationToken ct)
+    public override async Task HandleAsync(GetFlagRequest req, CancellationToken ct)
     {
         var flags = await _db.FeatureFlags
             .AsNoTracking()
+            .Where(x => x.EnvironmentId == req.EnvironmentId)
             .Select(x => new GetFlagResponse(x.Key, x.IsEnabled))
             .ToListAsync(ct);
         

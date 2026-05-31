@@ -17,7 +17,8 @@ public static class ServiceCollectionExtensions
         services.AddHttpClient("ToggleMesh", (sp, client) => {
             var o = sp.GetRequiredService<IOptions<ToggleMeshOptions>>().Value;
             client.BaseAddress = new Uri(o.EndpointUrl);
-        });
+            client.DefaultRequestHeaders.Add("x-api-key", o.ApiKey);
+        }).RemoveAllLoggers();
         
         services.AddSingleton<ToggleMeshClient>();
         services.AddSingleton<IToggleMeshClient>(sp => sp.GetRequiredService<ToggleMeshClient>());

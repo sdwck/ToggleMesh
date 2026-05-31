@@ -1,36 +1,56 @@
-﻿using FastEndpoints;
+using FastEndpoints;
 using Microsoft.EntityFrameworkCore;
+using StackExchange.Redis;
 using ToggleMesh.API.Persistence;
 
 namespace ToggleMesh.API.Features.Flags.Get;
 
-public class GetFlagEndpoint : Endpoint<EmptyRequest, GetFlagResponse>
+public class GetFlagEndpoint : Endpoint<GetFlagRequest, GetFlagResponse>
 {
     private readonly AppDbContext _db;
+    private readonly IDatabase _redis;
 
-    public GetFlagEndpoint(AppDbContext db)
+    public GetFlagEndpoint(AppDbContext db, IConnectionMultiplexer redis)
     {
         _db = db;
+        _redis = redis.GetDatabase();
     }
 
     public override void Configure()
     {
-        Get("/api/flags/{id:int}");
+        Get("/api/flags/{flagKey}");
         AllowAnonymous();
     }
 
-    public override async Task HandleAsync(EmptyRequest req, CancellationToken ct)
+    public override async Task HandleAsync(GetFlagRequest req, CancellationToken ct)
     {
-        var id = Route<int>("id");
+        var flagKey = Route<string>("flagKey");
+        if (flagKey is null)
+        {
+            await Send.NotFoundAsync(ct);
+            return;
+        }
+        
+        var cacheKey = $"flags:{req.EnvironmentId}:{flagKey}";
+
+        var cachedValue = await _redis.StringGetAsync(cacheKey);
+        if (cachedValue.HasValue)
+        {
+            await Send.OkAsync(new GetFlagResponse(flagKey, (bool)cachedValue), ct);
+            return;
+        }
+
         var flag = await _db.FeatureFlags
-            .FindAsync([id], ct);
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.EnvironmentId == req.EnvironmentId && x.Key == flagKey, ct);
 
         if (flag is null)
         {
             await Send.NotFoundAsync(ct);
             return;
         }
-        
+
+        await _redis.StringSetAsync(cacheKey, flag.IsEnabled, TimeSpan.FromMinutes(10));
         await Send.OkAsync(new GetFlagResponse(flag.Key, flag.IsEnabled), ct);
     }
 }

@@ -9,6 +9,7 @@ builder.ConfigureServices((_, services) =>
     services.AddToggleMeshClient(options =>
     {
         options.EndpointUrl = "https://localhost:7282";
+        options.ApiKey = "7WgP7EW50dQVpT0C6HT15ig0bXnBGkDQ";
     });
     services.AddHostedService<Worker>();
 });

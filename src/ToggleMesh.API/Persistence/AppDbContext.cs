@@ -1,10 +1,14 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using ToggleMesh.API.Features.Flags;
+using ToggleMesh.API.Features.Projects;
 
 namespace ToggleMesh.API.Persistence;
 
 public class AppDbContext : DbContext
 {
+    public DbSet<Project> Projects { get; set; }
+    public DbSet<ProjectEnvironment> Environments { get; set; }
+    public DbSet<EnvironmentKey> EnvironmentKeys { get; set; }
     public DbSet<FeatureFlag> FeatureFlags { get; set; }
 
     public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
@@ -12,12 +16,6 @@ public class AppDbContext : DbContext
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
-
-        modelBuilder.Entity<FeatureFlag>(entity =>
-        {
-            entity.HasKey(x => x.Id);
-            entity.Property(x => x.Key).HasMaxLength(256).IsRequired();
-            entity.HasIndex(x => x.Key).IsUnique();
-        });
+        modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
     }
 }

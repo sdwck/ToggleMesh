@@ -1,0 +1,25 @@
+﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using ToggleMesh.API.Features.Projects;
+
+namespace ToggleMesh.API.Persistence.Configurations;
+
+public sealed class ProjectConfiguration : IEntityTypeConfiguration<Project>
+{
+    public void Configure(EntityTypeBuilder<Project> entity)
+    {
+        entity.HasKey(x => x.Id);
+
+        entity.Property(x => x.Id)
+            .ValueGeneratedOnAdd();
+
+        entity.Property(x => x.Name)
+            .HasMaxLength(256)
+            .IsRequired();
+
+        entity.HasMany(x => x.Environments)
+            .WithOne(x => x.Project)
+            .HasForeignKey(x => x.ProjectId)
+            .OnDelete(DeleteBehavior.Cascade);
+    }
+}

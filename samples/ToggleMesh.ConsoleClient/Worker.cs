@@ -14,9 +14,10 @@ public class Worker : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        var feature = "test-feature";
         while (!stoppingToken.IsCancellationRequested)
         {
-            Console.WriteLine("test-feature: " + _toggleMeshClient.IsEnabled("test-feature"));
+            Console.WriteLine($"[{DateTime.Now.TimeOfDay}] {feature}: {_toggleMeshClient.IsEnabled(feature)}");
             await Task.Delay(1000, stoppingToken);
         }
     }

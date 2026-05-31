@@ -23,16 +23,19 @@ public class CreateFlagEndpoint : Endpoint<CreateFlagRequest>
 
     public override async Task HandleAsync(CreateFlagRequest req, CancellationToken ct)
     {
-        var exists = await _db.FeatureFlags.AnyAsync(x => x.Key == req.Key, ct);
+        var exists = await _db.FeatureFlags
+            .AnyAsync(x => x.EnvironmentId == req.EnvironmentId && x.Key == req.Key, ct);
         if (exists)
         {
-            AddError(x => x.Key, "A feature flag with this key already exists.");
+            AddError(x => x.Key, 
+                "A feature flag with this key already exists.");
             await Send.ErrorsAsync(cancellation: ct);
             return;
         }
 
         var newFlag = new FeatureFlag
         {
+            EnvironmentId = req.EnvironmentId,
             Key = req.Key,
             IsEnabled = false
         };

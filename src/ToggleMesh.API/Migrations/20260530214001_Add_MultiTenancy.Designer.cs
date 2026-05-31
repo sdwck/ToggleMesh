@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using ToggleMesh.API.Persistence;
@@ -11,9 +12,11 @@ using ToggleMesh.API.Persistence;
 namespace ToggleMesh.API.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260530214001_Add_MultiTenancy")]
+    partial class Add_MultiTenancy
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -46,7 +49,7 @@ namespace ToggleMesh.API.Migrations
                     b.HasIndex("EnvironmentId", "Key")
                         .IsUnique();
 
-                    b.ToTable("FeatureFlags", (string)null);
+                    b.ToTable("FeatureFlags");
                 });
 
             modelBuilder.Entity("ToggleMesh.API.Features.Projects.EnvironmentKey", b =>
@@ -76,7 +79,7 @@ namespace ToggleMesh.API.Migrations
 
                     b.HasIndex("EnvironmentId");
 
-                    b.ToTable("EnvironmentKeys", (string)null);
+                    b.ToTable("EnvironmentKeys");
                 });
 
             modelBuilder.Entity("ToggleMesh.API.Features.Projects.Project", b =>
@@ -92,7 +95,7 @@ namespace ToggleMesh.API.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Projects", (string)null);
+                    b.ToTable("Projects");
                 });
 
             modelBuilder.Entity("ToggleMesh.API.Features.Projects.ProjectEnvironment", b =>
@@ -113,7 +116,7 @@ namespace ToggleMesh.API.Migrations
 
                     b.HasIndex("ProjectId");
 
-                    b.ToTable("Environments", (string)null);
+                    b.ToTable("Environments");
                 });
 
             modelBuilder.Entity("ToggleMesh.API.Features.Flags.FeatureFlag", b =>
