@@ -1,6 +1,7 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using ToggleMesh.SDK.Clients;
+using ToggleMesh.SDK.Contexts;
 using ToggleMesh.SDK.Options;
 using ToggleMesh.SDK.Rules;
 using ToggleMesh.SDK.Rules.Operators;
@@ -35,6 +36,14 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ToggleMeshClient>();
         services.AddSingleton<IToggleMeshClient>(sp => sp.GetRequiredService<ToggleMeshClient>());
         services.AddHostedService(sp => sp.GetRequiredService<ToggleMeshClient>());
+        return services;
+    }
+    
+    public static IServiceCollection AddToggleMeshHttpContext(this IServiceCollection services)
+    {
+        services.AddHttpContextAccessor();
+        services.AddSingleton<IToggleMeshContextProvider, HttpContextToggleContextProvider>();
+        
         return services;
     }
 }

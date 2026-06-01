@@ -1,5 +1,4 @@
 ﻿using System.ComponentModel.DataAnnotations;
-using Microsoft.Extensions.Options;
 
 namespace ToggleMesh.SDK.Options;
 
@@ -22,6 +21,16 @@ public class ToggleMeshOptions
     /// If not provided, a default path in the application's base directory will be used.
     /// </summary>
     public string? FallbackFilePath { get; set; }
+    /// <summary>
+    /// Whether to use the fallback file when the API is unreachable.
+    /// </summary>
     public bool UseFallbackFile { get; set; } = true;
+    /// <summary>
+    /// Identity keys to include in the context when evaluating flags.
+    /// </summary>
     public IEnumerable<string> IdentityKeys { get; set; } = [];
+    /// <summary>
+    /// Whether to enable metrics collection for flag evaluations.
+    /// </summary>
+    public bool IsMetricsEnabled { get; set; } = true;
 }

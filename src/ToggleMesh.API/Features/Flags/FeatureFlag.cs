@@ -11,4 +11,6 @@ public class FeatureFlag
     public ProjectEnvironment Environment { get; set; } = null!;
     public ICollection<FlagRule> Rules { get; set; } = new List<FlagRule>();
     public int? RolloutPercentage { get; set; }
+    public long TrueCount { get; set; }
+    public long FalseCount { get; set; }
 }

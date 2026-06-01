@@ -91,7 +91,7 @@ public class FlagsEndpointsTests : IClassFixture<TestWebApplicationFactory>
         var tcs = new TaskCompletionSource<GetFlagResponse>();
         
         var hubConnection = new HubConnectionBuilder()
-            .WithUrl("http://localhost/hubs/toggle", options => 
+            .WithUrl("http://localhost/api/hubs/toggle", options => 
             {
                 options.Headers.Add("x-api-key", apiKey);
                 options.HttpMessageHandlerFactory = _ => _factory.Server.CreateHandler();

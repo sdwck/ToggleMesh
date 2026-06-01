@@ -5,6 +5,8 @@ using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using ToggleMesh.SDK.Contexts;
+using ToggleMesh.SDK.Models;
 using ToggleMesh.SDK.Options;
 using ToggleMesh.SDK.Rules;
 
@@ -18,7 +20,10 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService
     private readonly HttpClient _client;
     private readonly IRuleEngine _ruleEngine;
     private readonly string? _fallbackFilePath;
+    private readonly IEnumerable<IToggleMeshContextProvider> _contextProviders;
     private readonly List<string> _identityKeys = ["UserId", "Email", "SessionId", "DeviceId", "Id"];
+    private ConcurrentDictionary<string, FlagMetrics> _metricsBuffer = new();
+    private readonly bool _isMetricsEnabled;
 
     private static string GetSafeFileName(string apiKey)
     {
@@ -32,10 +37,13 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService
         IHttpClientFactory httpClientFactory,
         IOptions<ToggleMeshOptions> options, 
         ILogger<ToggleMeshClient> logger,
-        IRuleEngine ruleEngine)
+        IRuleEngine ruleEngine, 
+        IEnumerable<IToggleMeshContextProvider> contextProviders)
     {
         _logger = logger;
         _ruleEngine = ruleEngine;
+        _contextProviders = contextProviders;
+        _isMetricsEnabled = options.Value.IsMetricsEnabled;
         if (options.Value.IdentityKeys.Any())
             _identityKeys = options.Value.IdentityKeys.ToList();
         _client = httpClientFactory.CreateClient("ToggleMesh");
@@ -99,22 +107,82 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService
     public bool IsEnabled(string flagKey, string identity, IDictionary<string, string> context, bool defaultValue = false)
     {
         if (!_cache.TryGetValue(flagKey, out var flag))
-        {
             return defaultValue;
-        }
 
-        if (!flag.IsEnabled)
+        bool result;
+
+        if (!flag.IsEnabled || 
+            !_ruleEngine.Evaluate(flag.Rules, GetMergedContext(context)))
+            result = false;
+        else
         {
-            return false;
+            var actualIdentity = GetIdentity(identity, GetMergedContext(context));
+            result = RolloutEvaluator.Evaluate(flag.RolloutPercentage, flagKey, actualIdentity);
         }
-
-        if (!_ruleEngine.Evaluate(flag.Rules, context))
+        
+        UpdateMetrics(flagKey, result);
+        return result;
+    }
+    
+    private IDictionary<string, string> GetMergedContext(IDictionary<string, string> context)
+    {
+        var mergedContext = new Dictionary<string, string>(context, StringComparer.OrdinalIgnoreCase);
+        foreach (var provider in _contextProviders)
         {
-            return false;
+            var providerContext = provider.GetContext();
+            foreach (var kvp in providerContext)
+            {
+                mergedContext.TryAdd(kvp.Key, kvp.Value);
+            }
         }
+        
+        return mergedContext;
+    }
 
-        var actualIdentity = GetIdentity(identity, context);
-        return RolloutEvaluator.Evaluate(flag.RolloutPercentage, flagKey, actualIdentity);
+    private void UpdateMetrics(string flagKey, bool result)
+    {
+        var metrics = _metricsBuffer.GetOrAdd(flagKey, _ => new FlagMetrics());
+        if (result)
+            Interlocked.Increment(ref metrics.TrueCount);
+        else
+            Interlocked.Increment(ref metrics.FalseCount);
+    }
+
+    private async Task RunMetricsFlusherAsync(CancellationToken ct)
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(10));
+        while (!ct.IsCancellationRequested && await timer.WaitForNextTickAsync(ct))
+        {
+            try
+            {
+                var oldBuffer = Interlocked.Exchange(ref _metricsBuffer, new ConcurrentDictionary<string, FlagMetrics>());
+                if (oldBuffer.IsEmpty)
+                    continue;
+
+                var payload = oldBuffer.Select(kvp => new
+                {
+                    kvp.Key,
+                    TrueCount = Interlocked.Read(ref kvp.Value.TrueCount),
+                    FalseCount = Interlocked.Read(ref kvp.Value.FalseCount)
+                }).ToList();
+
+                var response = await _client.PostAsJsonAsync(Constants.Endpoints.Metrics, payload, ct);
+                if (!response.IsSuccessStatusCode)
+                {
+                    _logger.LogWarning("[ToggleMesh] Failed to flush metrics. Status: {StatusCode}", response.StatusCode);
+                    foreach (var kvp in oldBuffer)
+                    {
+                        var activeMetrics = _metricsBuffer.GetOrAdd(kvp.Key, _ => new FlagMetrics());
+                        Interlocked.Add(ref activeMetrics.TrueCount, Interlocked.Read(ref kvp.Value.TrueCount));
+                        Interlocked.Add(ref activeMetrics.FalseCount, Interlocked.Read(ref kvp.Value.FalseCount));
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                _logger.LogTrace(e, "[ToggleMesh] Error during metrics flush.");
+            }
+        }
     }
 
     private string GetIdentity(string explicitIdentity, IDictionary<string, string> context)
@@ -161,6 +229,8 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService
         }
         
         _ = Task.Run(() => EnsureConnectedLoopAsync(CancellationToken.None), CancellationToken.None);
+        if (_isMetricsEnabled)
+            _ = Task.Run(() => RunMetricsFlusherAsync(CancellationToken.None), CancellationToken.None);
     }
 
     private async Task EnsureConnectedLoopAsync(CancellationToken ct)

@@ -1,5 +1,4 @@
-﻿using FastEndpoints;
-using ToggleMesh.API.Features.Flags.Get;
+﻿using ToggleMesh.API.Features.Flags.Get;
 
 namespace ToggleMesh.API.Features.Flags.Create;
 

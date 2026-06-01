@@ -1,7 +1,7 @@
 using System.Linq.Expressions;
 using System.Reflection;
 
-namespace ToggleMesh.SDK.Clients;
+namespace ToggleMesh.SDK.Contexts;
 
 public static class ContextMapper<T>
 {

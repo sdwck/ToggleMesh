@@ -1,7 +1,6 @@
 ﻿using FastEndpoints;
 using Microsoft.EntityFrameworkCore;
 using ToggleMesh.API.Features.Flags.Get;
-using ToggleMesh.API.Features.Flags.GetAll;
 using ToggleMesh.API.Persistence;
 
 namespace ToggleMesh.API.Features.Flags.Create;

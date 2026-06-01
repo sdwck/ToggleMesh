@@ -1,18 +1,16 @@
 ﻿using Microsoft.AspNetCore.SignalR;
-using Microsoft.EntityFrameworkCore;
-using ToggleMesh.API.Persistence;
+using ToggleMesh.API.Features.Projects;
 
 namespace ToggleMesh.API.Hubs;
 
 public class ToggleHub : Hub
 {
-    private readonly AppDbContext _db;
-
+    private readonly IApiKeyCacheService _apiKeyCache;
     private readonly ILogger<ToggleHub> _logger;
 
-    public ToggleHub(AppDbContext db, ILogger<ToggleHub> logger)
+    public ToggleHub(IApiKeyCacheService apiKeyCache, ILogger<ToggleHub> logger)
     {
-        _db = db;
+        _apiKeyCache = apiKeyCache;
         _logger = logger;
     }
 
@@ -29,18 +27,16 @@ public class ToggleHub : Hub
             return;
         }
         
-        var envKey = await _db.EnvironmentKeys
-            .AsNoTracking()
-            .FirstOrDefaultAsync(x => x.ApiKey == apiKey && (x.ExpireOn == null || x.ExpireOn > DateTime.UtcNow));
+        var envId = await _apiKeyCache.GetEnvironmentIdAsync(apiKey);
 
-        if (envKey is null)
+        if (envId is null)
         {
             _logger.LogWarning("Connection aborted: Invalid or expired API key {ApiKey}", apiKey);
             Context.Abort();
             return;
         }
         
-        var groupName = envKey.EnvironmentId.ToString();
+        var groupName = envId.Value.ToString();
         await Groups.AddToGroupAsync(Context.ConnectionId, groupName);
         _logger.LogInformation("Client {ConnectionId} added to group {GroupName}", Context.ConnectionId, groupName);
         await base.OnConnectedAsync();
