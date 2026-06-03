@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Time.Testing;
 using StackExchange.Redis;
 using Testcontainers.PostgreSql;
 using Testcontainers.Redis;
@@ -22,10 +23,14 @@ public class TestWebApplicationFactory : WebApplicationFactory<Program>, IAsyncL
         new RedisBuilder("redis:latest")
             .Build();
 
+    public FakeTimeProvider TimeProvider { get; } = new();
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.ConfigureServices(services =>
         {
+            services.AddSingleton<TimeProvider>(TimeProvider);
+            
             var dbDescriptor = services.SingleOrDefault(
                 d => d.ServiceType == typeof(DbContextOptions<AppDbContext>));
             if (dbDescriptor is not null) 
@@ -36,8 +41,10 @@ public class TestWebApplicationFactory : WebApplicationFactory<Program>, IAsyncL
             if (redisDescriptor is not null) 
                 services.Remove(redisDescriptor);
 
-            services.AddDbContext<AppDbContext>(options =>
-                options.UseNpgsql(_db.GetConnectionString()));
+            services.AddDbContext<AppDbContext>((sp, options) =>
+            {
+                options.UseNpgsql(_db.GetConnectionString());
+            });
             
             services.AddSingleton<IConnectionMultiplexer>(_ =>
                 ConnectionMultiplexer.Connect(_redis.GetConnectionString()));

@@ -6,21 +6,29 @@ using StackExchange.Redis;
 using ToggleMesh.API.BackgroundServices;
 using ToggleMesh.API.Exceptions;
 using ToggleMesh.API.Features.Metrics;
+using ToggleMesh.API.Features.Projects;
 using ToggleMesh.API.Hubs;
 using ToggleMesh.API.Persistence;
+using ToggleMesh.API.Persistence.Interceptors;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddOpenApi();
 builder.Services.AddSignalR()
     .AddStackExchangeRedis(builder.Configuration.GetConnectionString("Redis")!);
 
-builder.Services.AddSingleton<IConnectionMultiplexer>(sp => 
+builder.Services.AddSingleton<IConnectionMultiplexer>(_ => 
     ConnectionMultiplexer.Connect(builder.Configuration.GetConnectionString("Redis")!));
 
-builder.Services.AddScoped<ToggleMesh.API.Features.Projects.IApiKeyCacheService, ToggleMesh.API.Features.Projects.ApiKeyCacheService>();
+builder.Services.AddScoped<IApiKeyCacheService, ApiKeyCacheService>();
+builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddFastEndpoints();
-builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+builder.Services.AddSingleton<AuditInterceptor>();
+builder.Services.AddDbContext<AppDbContext>((serviceProvider, options) =>
+{
+    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"));
+    options.AddInterceptors(
+        serviceProvider.GetRequiredService<AuditInterceptor>());
+});
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
 builder.Services.AddHostedService<MetricsWorker>();

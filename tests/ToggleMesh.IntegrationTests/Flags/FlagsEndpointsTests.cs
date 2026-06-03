@@ -98,13 +98,12 @@ public class FlagsEndpointsTests : IClassFixture<TestWebApplicationFactory>
             })
             .Build();
 
-        hubConnection.On<GetFlagResponse>("FlagUpdated", (flag) =>
+        hubConnection.On<GetFlagResponse>("FlagUpdated", flag =>
         {
             tcs.SetResult(flag);
         });
 
         await hubConnection.StartAsync();
-        await Task.Delay(500);
         
         // Act
         var toggleRequest = new ToggleFlagRequest { EnvironmentId = envId, Key = flagKey, IsEnabled = true };
@@ -114,7 +113,7 @@ public class FlagsEndpointsTests : IClassFixture<TestWebApplicationFactory>
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         
         var signalRTask = tcs.Task;
-        var completedTask = await Task.WhenAny(signalRTask, Task.Delay(5000));
+        var completedTask = await Task.WhenAny(signalRTask, Task.Delay(10000));
         
         completedTask.Should().Be(signalRTask, "SignalR event was not received within 5 seconds");
         

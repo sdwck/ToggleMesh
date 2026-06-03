@@ -1,6 +1,7 @@
 ﻿using System.Net;
 using System.Net.Http.Json;
 using FluentAssertions;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using ToggleMesh.API.Features.Flags;
 using ToggleMesh.API.Features.Metrics.Ingest;
@@ -75,11 +76,19 @@ public class MetricsEndpointsTests : IClassFixture<TestWebApplicationFactory>
         var response = await _client.SendAsync(httpRequest);
 
         response.StatusCode.Should().Be(HttpStatusCode.Accepted);
-
-        await Task.Delay(6000);
+        
+        _factory.TimeProvider.Advance(TimeSpan.FromSeconds(6));
 
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        
+        for (var i = 0; i < 10; i++)
+        {
+            var flagToCheck = await db.FeatureFlags.AsNoTracking().SingleAsync(f => f.Key == flagKey);
+            if (flagToCheck.TrueCount == 25) 
+                break;
+            await Task.Delay(200);
+        }
 
         var flag = db.FeatureFlags.Single(f => f.Key == flagKey);
         flag.TrueCount.Should().Be(25);

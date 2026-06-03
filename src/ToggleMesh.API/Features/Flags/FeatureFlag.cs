@@ -2,7 +2,7 @@ using ToggleMesh.API.Features.Projects;
 
 namespace ToggleMesh.API.Features.Flags;
 
-public class FeatureFlag 
+public class FeatureFlag : IHasEnvironment
 {
     public int Id { get; set; }
     public string Key { get; set; } = string.Empty;

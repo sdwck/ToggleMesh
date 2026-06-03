@@ -51,7 +51,7 @@ public class ToggleFlagEndpoint : Endpoint<ToggleFlagRequest>
         var response = new GetFlagResponse(
             flag.Key, 
             flag.IsEnabled, 
-            flag.Rules.Select(r => new RuleDto(r.Attribute, r.Operator, r.Value)),
+            flag.Rules.Select(r => new RuleDto(r.GroupId, r.Attribute, r.Operator, r.Value)),
             flag.RolloutPercentage);
 
         try

@@ -18,8 +18,18 @@ public class RuleEngineTests
         services.AddSingleton<IRuleOperator, StartsWithOperator>();
         services.AddSingleton<IRuleOperator, EndsWithOperator>();
         services.AddSingleton<IRuleOperator, GreaterThanOperator>();
+        services.AddSingleton<IRuleOperator, GreaterThanOrEqualOperator>();
         services.AddSingleton<IRuleOperator, LessThanOperator>();
+        services.AddSingleton<IRuleOperator, LessThanOrEqualOperator>();
         services.AddSingleton<IRuleOperator, InListOperator>();
+        services.AddSingleton<IRuleOperator, DateAfterOperator>();
+        services.AddSingleton<IRuleOperator, DateBeforeOperator>();
+        services.AddSingleton<IRuleOperator, RegexOperator>();
+        services.AddSingleton<IRuleOperator, SemVerEqualOperator>();
+        services.AddSingleton<IRuleOperator, SemVerGreaterThanOperator>();
+        services.AddSingleton<IRuleOperator, SemVerGreaterThanOrEqualOperator>();
+        services.AddSingleton<IRuleOperator, SemVerLessThanOperator>();
+        services.AddSingleton<IRuleOperator, SemVerLessThanOrEqualOperator>();
         services.AddSingleton<IRuleEngine, RuleEngine>();
 
         var provider = services.BuildServiceProvider();
@@ -39,17 +49,26 @@ public class RuleEngineTests
     [InlineData("EndsWith", "image.jpg", ".png", false)]
     [InlineData("GreaterThan", "25", "18", true)]
     [InlineData("GreaterThan", "15", "18", false)]
+    [InlineData("GreaterThanOrEqual", "18", "18", true)]
     [InlineData("LessThan", "15", "18", true)]
     [InlineData("LessThan", "25", "18", false)]
+    [InlineData("LessThanOrEqual", "18", "18", true)]
     [InlineData("InList", "US", "US,CA,UK", true)]
     [InlineData("InList", "RU", "US,CA,UK", false)]
     [InlineData("InList", "uk", "US, CA, UK", true)]
+    [InlineData("DateAfter", "2026-06-03", "2026-06-01", true)]
+    [InlineData("DateBefore", "2026-06-01", "2026-06-03", true)]
+    [InlineData("Regex", "user-123", "^user-\\d+$", true)]
+    [InlineData("Regex", "admin", "^user-\\d+$", false)]
+    [InlineData("SemVerEqual", "1.2.3", "1.2.3", true)]
+    [InlineData("SemVerGreaterThan", "1.2.4", "1.2.3", true)]
+    [InlineData("SemVerLessThan", "1.2.2", "1.2.3", true)]
     public void Evaluate_SingleRule_ShouldComputeCorrectly(string op, string userValue, string ruleValue, bool expectedResult)
     {
         // Arrange
         var rules = new List<RuleDto>
         {
-            new("CustomAttribute", op, ruleValue)
+            new(0, "CustomAttribute", op, ruleValue)
         };
 
         var context = new Dictionary<string, string>
@@ -65,14 +84,52 @@ public class RuleEngineTests
     }
 
     [Fact]
-    public void Evaluate_MultipleRules_ShouldRequireAllToPass_AndLogic()
+    public void Evaluate_RuleGroups_ShouldUseOrBetweenGroups_AndAndWithinGroups()
     {
         // Arrange
         var rules = new List<RuleDto>
         {
-            new RuleDto("Email", "EndsWith", "@company.com"),
-            new RuleDto("Age", "GreaterThan", "21"),
-            new RuleDto("Role", "InList", "Admin,Manager")
+            new(1, "Email", "EndsWith", "@company.com"),
+            new(1, "Age", "GreaterThan", "21"),
+            new(2, "Country", "Equals", "CA"),
+            new(2, "Plan", "Equals", "Premium")
+        };
+
+        var contextGroup1Pass = new Dictionary<string, string>
+        {
+            { "Email", "user@company.com" },
+            { "Age", "25" }
+        };
+
+        var contextGroup2Pass = new Dictionary<string, string>
+        {
+            { "Country", "CA" },
+            { "Plan", "Premium" }
+        };
+
+        var contextBothGroupsFail = new Dictionary<string, string>
+        {
+            { "Email", "user@company.com" },
+            { "Age", "18" },
+            { "Country", "US" },
+            { "Plan", "Premium" }
+        };
+
+        // Act & Assert
+        _engine.Evaluate(rules, contextGroup1Pass).Should().BeTrue();
+        _engine.Evaluate(rules, contextGroup2Pass).Should().BeTrue();
+        _engine.Evaluate(rules, contextBothGroupsFail).Should().BeFalse();
+    }
+
+    [Fact]
+    public void Evaluate_MultipleRules_SameGroup_ShouldRequireAllToPass()
+    {
+        // Arrange
+        var rules = new List<RuleDto>
+        {
+            new RuleDto(0, "Email", "EndsWith", "@company.com"),
+            new RuleDto(0, "Age", "GreaterThan", "21"),
+            new RuleDto(0, "Role", "InList", "Admin,Manager")
         };
 
         var passingContext = new Dictionary<string, string>
@@ -108,7 +165,7 @@ public class RuleEngineTests
         var result = _engine.Evaluate(new List<RuleDto>(), new Dictionary<string, string>());
 
         // Assert
-        result.Should().BeTrue("No rules means the flag relies solely on its IsEnabled status");
+        result.Should().BeTrue();
     }
 
     [Fact]
@@ -117,7 +174,7 @@ public class RuleEngineTests
         // Arrange
         var rules = new List<RuleDto>
         {
-            new RuleDto("Device", "MagicOperator", "iPhone")
+            new RuleDto(0, "Device", "MagicOperator", "iPhone")
         };
 
         var context = new Dictionary<string, string>
@@ -129,6 +186,6 @@ public class RuleEngineTests
         var result = _engine.Evaluate(rules, context);
 
         // Assert
-        result.Should().BeFalse("Engine should safely fail un-evaluable rules to prevent accidental exposure");
+        result.Should().BeFalse();
     }
 }

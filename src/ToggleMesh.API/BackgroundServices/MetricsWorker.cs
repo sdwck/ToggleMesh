@@ -10,33 +10,39 @@ public class MetricsWorker : BackgroundService
     private readonly Channel<MetricQueueItem> _channel;
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<MetricsWorker> _logger;
+    private readonly TimeProvider _timeProvider;
 
-    public MetricsWorker(Channel<MetricQueueItem> channel, IServiceProvider serviceProvider, ILogger<MetricsWorker> logger)
+    public MetricsWorker(
+        Channel<MetricQueueItem> channel, 
+        IServiceProvider serviceProvider, 
+        ILogger<MetricsWorker> logger, 
+        TimeProvider timeProvider)
     {
         _channel = channel;
         _serviceProvider = serviceProvider;
         _logger = logger;
+        _timeProvider = timeProvider;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         var batch = new Dictionary<(Guid, string), (long TrueCount, long FalseCount)>();
-        var lastFlush = DateTime.UtcNow;
+        var lastFlush = _timeProvider.GetUtcNow(); 
 
         while (!stoppingToken.IsCancellationRequested)
         {
-            var timeToWait = TimeSpan.FromSeconds(5) - (DateTime.UtcNow - lastFlush);
+            var timeToWait = TimeSpan.FromSeconds(5) - (_timeProvider.GetUtcNow() - lastFlush);
 
             if (timeToWait <= TimeSpan.Zero || batch.Count >= 100)
             {
                 if (batch.Count > 0 && await FlushToDatabaseAsync(batch, stoppingToken))
                     batch.Clear();
-                lastFlush = DateTime.UtcNow;
+                lastFlush = _timeProvider.GetUtcNow();
                 continue;
             }
 
             var readTask = _channel.Reader.WaitToReadAsync(stoppingToken).AsTask();
-            var delayTask = Task.Delay(timeToWait, stoppingToken);
+            var delayTask = Task.Delay(timeToWait, _timeProvider, stoppingToken);
             var completedTask = await Task.WhenAny(readTask, delayTask);
 
             if (completedTask == delayTask)

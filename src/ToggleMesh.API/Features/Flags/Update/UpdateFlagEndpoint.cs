@@ -48,20 +48,32 @@ public class UpdateFlagEndpoint : Endpoint<UpdateFlagRequest, GetFlagResponse>
         flag.IsEnabled = req.IsEnabled;
         flag.RolloutPercentage = req.RolloutPercentage;
 
-        _db.RemoveRange(flag.Rules);
-        flag.Rules = req.Rules.Select(r => new FlagRule
+        var existingRules = flag.Rules.ToList();
+        foreach (var oldRule in existingRules)
         {
-            Attribute = r.Attribute,
-            Operator = r.Operator,
-            Value = r.Value
-        }).ToList();
+            if (!req.Rules.Any(r => r.GroupId == oldRule.GroupId && r.Attribute == oldRule.Attribute && r.Operator == oldRule.Operator && r.Value == oldRule.Value))
+                _db.Remove(oldRule);
+        }
+        
+        foreach (var newRule in req.Rules)
+        {
+            if (!existingRules.Any(r => r.GroupId == newRule.GroupId && r.Attribute == newRule.Attribute && r.Operator == newRule.Operator && r.Value == newRule.Value))
+            {
+                flag.Rules.Add(new FlagRule { 
+                    GroupId = newRule.GroupId, 
+                    Attribute = newRule.Attribute, 
+                    Operator = newRule.Operator, 
+                    Value = newRule.Value 
+                });
+            }
+        }
 
         await _db.SaveChangesAsync(ct);
 
         var response = new GetFlagResponse(
             flag.Key, 
             flag.IsEnabled, 
-            flag.Rules.Select(r => new RuleDto(r.Attribute, r.Operator, r.Value)),
+            flag.Rules.Select(r => new RuleDto(r.GroupId, r.Attribute, r.Operator, r.Value)),
             flag.RolloutPercentage);
 
         try

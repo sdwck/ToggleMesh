@@ -40,6 +40,7 @@ public class CreateFlagEndpoint : Endpoint<CreateFlagRequest>
             RolloutPercentage = req.RolloutPercentage,
             Rules = req.Rules.Select(r => new FlagRule
             {
+                GroupId = r.GroupId,
                 Attribute = r.Attribute,
                 Operator = r.Operator,
                 Value = r.Value
@@ -52,7 +53,7 @@ public class CreateFlagEndpoint : Endpoint<CreateFlagRequest>
         var response = new GetFlagResponse(
             newFlag.Key, 
             newFlag.IsEnabled, 
-            newFlag.Rules.Select(r => new RuleDto(r.Attribute, r.Operator, r.Value)),
+            newFlag.Rules.Select(r => new RuleDto(r.GroupId, r.Attribute, r.Operator, r.Value)),
             newFlag.RolloutPercentage);
 
         await Send.CreatedAtAsync<GetFlagEndpoint>(

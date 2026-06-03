@@ -29,7 +29,7 @@ public class GetFlagsEndpoint : Endpoint<GetFlagRequest, List<GetFlagResponse>>
             .Select(x => new GetFlagResponse(
                 x.Key, 
                 x.IsEnabled, 
-                x.Rules.Select(r => new RuleDto(r.Attribute, r.Operator, r.Value)),
+                x.Rules.Select(r => new RuleDto(r.GroupId, r.Attribute, r.Operator, r.Value)),
                 x.RolloutPercentage))
             .ToListAsync(ct);
         

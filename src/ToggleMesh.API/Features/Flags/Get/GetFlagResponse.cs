@@ -2,4 +2,4 @@
 
 public record GetFlagResponse(string Key, bool IsEnabled, IEnumerable<RuleDto> Rules, int? RolloutPercentage = null);
 
-public record RuleDto(string Attribute, string Operator, string Value);
+public record RuleDto(int GroupId, string Attribute, string Operator, string Value);

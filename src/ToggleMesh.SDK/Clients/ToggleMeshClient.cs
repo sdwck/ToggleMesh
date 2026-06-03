@@ -11,7 +11,7 @@ using ToggleMesh.SDK.Options;
 using ToggleMesh.SDK.Rules;
 
 namespace ToggleMesh.SDK.Clients;
-
+// TODO: Rewrite using Spans/structs
 public class ToggleMeshClient : IToggleMeshClient, IHostedService
 {
     private readonly ConcurrentDictionary<string, FeatureFlagDto> _cache = new();
@@ -24,6 +24,7 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService
     private readonly List<string> _identityKeys = ["UserId", "Email", "SessionId", "DeviceId", "Id"];
     private ConcurrentDictionary<string, FlagMetrics> _metricsBuffer = new();
     private readonly bool _isMetricsEnabled;
+    private readonly TimeProvider _timeProvider;
 
     private static string GetSafeFileName(string apiKey)
     {
@@ -38,11 +39,13 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService
         IOptions<ToggleMeshOptions> options, 
         ILogger<ToggleMeshClient> logger,
         IRuleEngine ruleEngine, 
-        IEnumerable<IToggleMeshContextProvider> contextProviders)
+        IEnumerable<IToggleMeshContextProvider> contextProviders, 
+        TimeProvider? timeProvider = null)
     {
         _logger = logger;
         _ruleEngine = ruleEngine;
         _contextProviders = contextProviders;
+        _timeProvider = timeProvider ?? TimeProvider.System;
         _isMetricsEnabled = options.Value.IsMetricsEnabled;
         if (options.Value.IdentityKeys.Any())
             _identityKeys = options.Value.IdentityKeys.ToList();
@@ -67,13 +70,19 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService
             ])
             .Build();
 
-        _connection.On<FeatureFlagDto>("FlagUpdated", (flag) =>
+        _connection.On<FeatureFlagDto>("FlagUpdated", flag =>
         {
             _logger.LogDebug("[ToggleMesh] Flag updated remotely: {Key} (IsEnabled: {Value}, Rules: {RuleCount})", 
                 flag.Key, flag.IsEnabled, flag.Rules.Count());
             
             _cache[flag.Key] = flag;
             _ = SaveFallbackAsync();
+        });
+        
+        _connection.On("StateReloadRequired", async () =>
+        {
+            _logger.LogInformation("[ToggleMesh] Received state reload request from server.");
+            await SyncStateWithApiAsync(CancellationToken.None);
         });
 
         _connection.Reconnected += async _ =>
@@ -212,12 +221,15 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService
         
         await LoadFallbackAsync();
         
-        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        cts.CancelAfter(TimeSpan.FromSeconds(2));
+        using var cts = new CancellationTokenSource(
+            TimeSpan.FromSeconds(2), _timeProvider);
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
+            cts.Token,
+            cancellationToken);
         
         try
         {
-            await SyncStateWithApiAsync(cts.Token);
+            await SyncStateWithApiAsync(linkedCts.Token);
         }
         catch (OperationCanceledException)
         {
@@ -250,7 +262,7 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService
             catch (Exception ex)
             {
                 _logger.LogTrace(ex, "[ToggleMesh] Background connection attempt failed. Retrying in 5s.");
-                await Task.Delay(5000, ct);
+                await Task.Delay(TimeSpan.FromSeconds(5), _timeProvider, ct);
             }
         }
     }

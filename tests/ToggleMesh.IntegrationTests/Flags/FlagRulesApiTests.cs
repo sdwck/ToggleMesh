@@ -56,8 +56,8 @@ public class FlagRulesApiTests : IClassFixture<TestWebApplicationFactory>
             Key = "rule_flag_1",
             Rules =
             [
-                new RuleDto("Region", "InList", "EU,US"),
-                new RuleDto("Plan", "Equals", "Premium")
+                new RuleDto(0, "Region", "InList", "EU,US"),
+                new RuleDto(0, "Plan", "Equals", "Premium")
             ]
         };
 
@@ -84,7 +84,7 @@ public class FlagRulesApiTests : IClassFixture<TestWebApplicationFactory>
         { 
             EnvironmentId = envId, 
             Key = "rule_flag_update",
-            Rules = [new RuleDto("Age", "GreaterThan", "18")]
+            Rules = [new RuleDto(0, "Age", "GreaterThan", "18")]
         };
         await _client.PostAsJsonAsync("/api/flags", createRequest);
 
@@ -95,8 +95,8 @@ public class FlagRulesApiTests : IClassFixture<TestWebApplicationFactory>
             IsEnabled = true,
             Rules =
             [
-                new RuleDto("Country", "Equals", "CA"),
-                new RuleDto("Device", "StartsWith", "Mobile")
+                new RuleDto(0, "Country", "Equals", "CA"),
+                new RuleDto(0, "Device", "StartsWith", "Mobile")
             ]
         };
 

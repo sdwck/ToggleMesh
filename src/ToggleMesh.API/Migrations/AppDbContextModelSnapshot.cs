@@ -22,6 +22,53 @@ namespace ToggleMesh.API.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("ToggleMesh.API.Features.Audit.AuditLog", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("EntityId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("EntityName")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<Guid?>("EnvironmentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("NewValues")
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("OldValues")
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("PerformedBy")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<DateTime>("Timestamp")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EntityName", "EntityId");
+
+                    b.HasIndex("EnvironmentId", "Timestamp");
+
+                    b.ToTable("AuditLogs");
+                });
+
             modelBuilder.Entity("ToggleMesh.API.Features.Flags.FeatureFlag", b =>
                 {
                     b.Property<int>("Id")
@@ -72,6 +119,9 @@ namespace ToggleMesh.API.Migrations
                         .HasColumnType("character varying(128)");
 
                     b.Property<int>("FeatureFlagId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("GroupId")
                         .HasColumnType("integer");
 
                     b.Property<string>("Operator")
@@ -171,11 +221,13 @@ namespace ToggleMesh.API.Migrations
 
             modelBuilder.Entity("ToggleMesh.API.Features.Flags.FlagRule", b =>
                 {
-                    b.HasOne("ToggleMesh.API.Features.Flags.FeatureFlag", null)
+                    b.HasOne("ToggleMesh.API.Features.Flags.FeatureFlag", "FeatureFlag")
                         .WithMany("Rules")
                         .HasForeignKey("FeatureFlagId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("FeatureFlag");
                 });
 
             modelBuilder.Entity("ToggleMesh.API.Features.Projects.EnvironmentKey", b =>

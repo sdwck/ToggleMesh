@@ -1,4 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using ToggleMesh.API.Features.Audit;
 using ToggleMesh.API.Features.Flags;
 using ToggleMesh.API.Features.Projects;
 
@@ -10,6 +11,7 @@ public class AppDbContext : DbContext
     public DbSet<ProjectEnvironment> Environments { get; set; }
     public DbSet<EnvironmentKey> EnvironmentKeys { get; set; }
     public DbSet<FeatureFlag> FeatureFlags { get; set; }
+    public DbSet<AuditLog> AuditLogs { get; set; }
 
     public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
 

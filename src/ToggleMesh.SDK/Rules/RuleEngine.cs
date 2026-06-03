@@ -1,12 +1,5 @@
 namespace ToggleMesh.SDK.Rules;
 
-public interface IRuleEngine
-{
-    bool Evaluate(IEnumerable<RuleDto> rules, IDictionary<string, string> context);
-}
-
-public record RuleDto(string Attribute, string Operator, string Value);
-
 public class RuleEngine : IRuleEngine
 {
     private readonly Dictionary<string, IRuleOperator> _operators;
@@ -21,13 +14,15 @@ public class RuleEngine : IRuleEngine
         var listRules = rules?.ToList();
         if (listRules == null || listRules.Count == 0)
             return true;
-
-        foreach (var rule in listRules)
-            if (!context.TryGetValue(rule.Attribute, out var userValue) ||
-                !_operators.TryGetValue(rule.Operator, out var op) ||
-                !op.Evaluate(userValue, rule.Value))
-                return false;
-
-        return true;
+        
+        var ruleGroups = listRules.GroupBy(rule => rule.GroupId);
+        
+        return ruleGroups.Any(group => 
+            group.All(rule => 
+                context.TryGetValue(rule.Attribute, out var userValue) &&
+                _operators.TryGetValue(rule.Operator, out var op) &&
+                op.Evaluate(userValue, rule.Value)
+            )
+        );
     }
 }

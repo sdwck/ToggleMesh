@@ -2,10 +2,9 @@
 
 namespace ToggleMesh.API.Features.Projects;
 
-public class EnvironmentKey
+public class EnvironmentKey : IHasEnvironment
 {
     public Guid Id { get; set; }
-    [MaxLength(64)]
     public string ApiKey { get; set; } = string.Empty;
     public Guid EnvironmentId { get; set; }
     public ProjectEnvironment Environment { get; set; } = null!;

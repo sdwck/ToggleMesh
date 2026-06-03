@@ -23,7 +23,7 @@ public sealed class FlagRuleConfiguration
             .HasMaxLength(1024)
             .IsRequired();
 
-        entity.HasOne<FeatureFlag>()
+        entity.HasOne<FeatureFlag>(x => x.FeatureFlag)
             .WithMany(x => x.Rules)
             .HasForeignKey(x => x.FeatureFlagId)
             .OnDelete(DeleteBehavior.Cascade);

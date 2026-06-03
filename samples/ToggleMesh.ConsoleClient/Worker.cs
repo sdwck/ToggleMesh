@@ -22,7 +22,9 @@ public class Worker : BackgroundService
         while (!stoppingToken.IsCancellationRequested)
         {
             Console.WriteLine($"[{DateTime.Now.TimeOfDay}] {feature}: {_toggleMeshClient.IsEnabled(feature, userContext)}");
-            await Task.Delay(1000, stoppingToken);
+            Console.WriteLine($"[{DateTime.Now.TimeOfDay}] prod-feat: {_toggleMeshClient.IsEnabled("prod-feat", userContext)}");
+            Console.WriteLine($"[{DateTime.Now.TimeOfDay}] prod-feat2: {_toggleMeshClient.IsEnabled("prod-feat2", userContext)}");
+            await Task.Delay(3000, stoppingToken);
         }
     }
 }
