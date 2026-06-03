@@ -1,6 +1,9 @@
-﻿namespace ToggleMesh.SDK.Rules;
+﻿using ToggleMesh.SDK.Contexts;
+
+namespace ToggleMesh.SDK.Rules;
 
 public interface IRuleEngine
 {
-    bool Evaluate(IEnumerable<RuleDto> rules, IDictionary<string, string> context);
+    public bool Evaluate<TAccessor>(CompiledRuleGroup[] groups, ref EvaluationContext<TAccessor> context) where TAccessor : IContextAccessor;
+    public CompiledRuleGroup[] CompileRules(IEnumerable<RuleDto>? rules);
 }

@@ -1,5 +1,6 @@
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
+using ToggleMesh.SDK.Contexts;
 using ToggleMesh.SDK.Rules;
 using ToggleMesh.SDK.Rules.Operators;
 
@@ -34,6 +35,14 @@ public class RuleEngineTests
 
         var provider = services.BuildServiceProvider();
         _engine = provider.GetRequiredService<IRuleEngine>();
+    }
+    
+    private bool EvaluateHelper(IEnumerable<RuleDto> rules, IDictionary<string, string> context)
+    {
+        var compiledRules = _engine.CompileRules(rules);
+        var accessor = new ContextAccessor<IDictionary<string, string>>(context);
+        var evalContext = new EvaluationContext<ContextAccessor<IDictionary<string, string>>>(accessor, [], []);
+        return _engine.Evaluate(compiledRules, ref evalContext);
     }
 
     [Theory]
@@ -77,7 +86,7 @@ public class RuleEngineTests
         };
 
         // Act
-        var result = _engine.Evaluate(rules, context);
+        var result = EvaluateHelper(rules, context);
 
         // Assert
         result.Should().Be(expectedResult);
@@ -116,9 +125,9 @@ public class RuleEngineTests
         };
 
         // Act & Assert
-        _engine.Evaluate(rules, contextGroup1Pass).Should().BeTrue();
-        _engine.Evaluate(rules, contextGroup2Pass).Should().BeTrue();
-        _engine.Evaluate(rules, contextBothGroupsFail).Should().BeFalse();
+        EvaluateHelper(rules, contextGroup1Pass).Should().BeTrue();
+        EvaluateHelper(rules, contextGroup2Pass).Should().BeTrue();
+        EvaluateHelper(rules, contextBothGroupsFail).Should().BeFalse();
     }
 
     [Fact]
@@ -153,19 +162,15 @@ public class RuleEngineTests
         };
 
         // Act & Assert
-        _engine.Evaluate(rules, passingContext).Should().BeTrue();
-        _engine.Evaluate(rules, failingContext1).Should().BeFalse();
-        _engine.Evaluate(rules, failingContext2).Should().BeFalse();
+        EvaluateHelper(rules, passingContext).Should().BeTrue();
+        EvaluateHelper(rules, failingContext1).Should().BeFalse();
+        EvaluateHelper(rules, failingContext2).Should().BeFalse();
     }
 
     [Fact]
     public void Evaluate_NoRules_ShouldReturnTrue()
     {
-        // Act
-        var result = _engine.Evaluate(new List<RuleDto>(), new Dictionary<string, string>());
-
-        // Assert
-        result.Should().BeTrue();
+        EvaluateHelper(new List<RuleDto>(), new Dictionary<string, string>()).Should().BeTrue();
     }
 
     [Fact]
@@ -183,7 +188,7 @@ public class RuleEngineTests
         };
 
         // Act
-        var result = _engine.Evaluate(rules, context);
+        var result = EvaluateHelper(rules, context);
 
         // Assert
         result.Should().BeFalse();

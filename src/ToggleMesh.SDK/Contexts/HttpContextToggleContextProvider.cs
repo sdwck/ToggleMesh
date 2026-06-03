@@ -12,17 +12,35 @@ public class HttpContextToggleContextProvider : IToggleMeshContextProvider
         _httpContextAccessor = httpContextAccessor;
     }
 
-    public Dictionary<string, string> GetContext()
+    public bool TryGetValue(string key, out string? value)
     {
         var user = _httpContextAccessor.HttpContext?.User;
         if (user == null || !user.Identity?.IsAuthenticated == true)
-            return new Dictionary<string, string>();
-
-        return new Dictionary<string, string>
         {
-            { "UserId", user.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? string.Empty },
-            { "Email", user.FindFirst(ClaimTypes.Email)?.Value ?? string.Empty },
-            { "Roles", string.Join(",", user.FindAll(ClaimTypes.Role).Select(r => r.Value)) }
-        };
+            value = null;
+            return false;
+        }
+        
+        if (string.Equals(key, "UserId", StringComparison.OrdinalIgnoreCase))
+        {
+            value = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            return value != null;
+        }
+        
+        if (string.Equals(key, "Email", StringComparison.OrdinalIgnoreCase))
+        {
+            value = user.FindFirst(ClaimTypes.Email)?.Value;
+            return value != null;
+        }
+        
+        if (string.Equals(key, "Roles", StringComparison.OrdinalIgnoreCase))
+        {
+            var roles = user.FindAll(ClaimTypes.Role).Select(r => r.Value);
+            value = string.Join(",", roles);
+            return !string.IsNullOrEmpty(value);
+        }
+
+        value = null;
+        return false;
     }
 }

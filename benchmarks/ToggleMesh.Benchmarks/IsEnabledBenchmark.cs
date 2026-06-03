@@ -42,11 +42,9 @@ public class IsEnabledBenchmark
             NullLogger<ToggleMeshClient>.Instance, 
             engine, 
             []);
-
-        var cacheField = typeof(ToggleMeshClient).GetField("_cache", BindingFlags.NonPublic | BindingFlags.Instance);
-        var cacheInstance = cacheField!.GetValue(_client)!;
-
-        var dtoType = typeof(ToggleMeshClient).GetNestedType("FeatureFlagDto", BindingFlags.NonPublic);
+        
+        var dtoType = typeof(ToggleMeshClient).GetNestedType("FeatureFlagDto", BindingFlags.Public | BindingFlags.NonPublic);
+        
         var flagData = new { 
             Key = "bench-flag", 
             IsEnabled = true, 
@@ -58,13 +56,13 @@ public class IsEnabledBenchmark
             System.Text.Json.JsonSerializer.Serialize(flagData), 
             dtoType!,
             new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-        
-        var tryAddMethod = cacheInstance.GetType().GetMethod("TryAdd", [typeof(string), dtoType!]);
-        
-        if (tryAddMethod == null)
-            throw new Exception("Could not find TryAdd method on cache instance.");
 
-        tryAddMethod.Invoke(cacheInstance, ["bench-flag", dto!]);
+        var cacheFlagMethod = typeof(ToggleMeshClient).GetMethod("CacheFlag", BindingFlags.NonPublic | BindingFlags.Instance);
+        
+        if (cacheFlagMethod == null)
+            throw new Exception("Could not find CacheFlag method on ToggleMeshClient.");
+
+        cacheFlagMethod.Invoke(_client, [dto!]);
     }
 
     [Benchmark]

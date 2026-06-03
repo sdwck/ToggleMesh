@@ -8,6 +8,6 @@ Intel Core i7-14700K 3.40GHz, 1 CPU, 28 logical and 20 physical cores
 Toolchain=InProcessNoEmitToolchain  
 
 ```
-| Method              | Mean     | Error   | StdDev  | Gen0   | Allocated |
-|-------------------- |---------:|--------:|--------:|-------:|----------:|
-| IsEnabled_WithRules | 182.2 ns | 1.54 ns | 1.44 ns | 0.0694 |   1.17 KB |
+| Method              | Mean     | Error    | StdDev   | Allocated |
+|-------------------- |---------:|---------:|---------:|----------:|
+| IsEnabled_WithRules | 37.73 ns | 0.325 ns | 0.304 ns |         - |

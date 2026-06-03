@@ -1,6 +1,6 @@
 ﻿namespace ToggleMesh.SDK.Contexts;
 
-public interface IToggleMeshContextProvider
+public interface IContextAccessor
 {
     bool TryGetValue(string key, out string? value);
 }

@@ -11,10 +11,10 @@ using ToggleMesh.SDK.Options;
 using ToggleMesh.SDK.Rules;
 
 namespace ToggleMesh.SDK.Clients;
-// TODO: Rewrite using Spans/structs
+
 public class ToggleMeshClient : IToggleMeshClient, IHostedService
 {
-    private readonly ConcurrentDictionary<string, FeatureFlagDto> _cache = new();
+    private readonly ConcurrentDictionary<string, CachedFlag> _cache = new();
     private readonly HubConnection _connection;
     private readonly ILogger<ToggleMeshClient> _logger;
     private readonly HttpClient _client;
@@ -74,8 +74,8 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService
         {
             _logger.LogDebug("[ToggleMesh] Flag updated remotely: {Key} (IsEnabled: {Value}, Rules: {RuleCount})", 
                 flag.Key, flag.IsEnabled, flag.Rules.Count());
-            
-            _cache[flag.Key] = flag;
+
+            CacheFlag(flag);
             _ = SaveFallbackAsync();
         });
         
@@ -99,53 +99,54 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService
     }
     
     public bool IsEnabled(string flagKey, bool defaultValue = false) => 
-        IsEnabled(flagKey, string.Empty, (IDictionary<string, string>)new Dictionary<string, string>(), defaultValue);
+        IsEnabled<object>(flagKey, string.Empty, null!, defaultValue);
 
     public bool IsEnabled(string flagKey, string identity, bool defaultValue = false) => 
-        IsEnabled(flagKey, identity, (IDictionary<string, string>)new Dictionary<string, string>(), defaultValue);
+        IsEnabled<object>(flagKey, identity, null!, defaultValue);
 
     public bool IsEnabled(string flagKey, IDictionary<string, string> context, bool defaultValue = false) => 
         IsEnabled(flagKey, string.Empty, context, defaultValue);
     
+    public bool IsEnabled(string flagKey, string identity, IDictionary<string, string> context, bool defaultValue = false) =>
+        IsEnabled<IDictionary<string, string>>(flagKey, identity, context, defaultValue);
+    
     public bool IsEnabled<TContext>(string flagKey, TContext contextObject, bool defaultValue = false) =>
-        IsEnabled(flagKey, string.Empty, ContextMapper<TContext>.ToDictionary(contextObject), defaultValue);
+        IsEnabled(flagKey, string.Empty, contextObject, defaultValue);
 
-    public bool IsEnabled<TContext>(string flagKey, string identity, TContext contextObject, bool defaultValue = false) =>
-        IsEnabled(flagKey, identity, ContextMapper<TContext>.ToDictionary(contextObject), defaultValue);
-
-    public bool IsEnabled(string flagKey, string identity, IDictionary<string, string> context, bool defaultValue = false)
+    public bool IsEnabled<TContext>(string flagKey, string identity, TContext contextObject, bool defaultValue = false)
     {
         if (!_cache.TryGetValue(flagKey, out var flag))
             return defaultValue;
 
+        var accessor = new ContextAccessor<TContext>(contextObject);
+        var evalContext = new EvaluationContext<ContextAccessor<TContext>>(accessor, _contextProviders, _identityKeys);
+
         bool result;
 
-        if (!flag.IsEnabled || 
-            !_ruleEngine.Evaluate(flag.Rules, GetMergedContext(context)))
+        if (!flag.IsEnabled || !_ruleEngine.Evaluate(flag.Groups, ref evalContext))
+        {
             result = false;
+        }
         else
         {
-            var actualIdentity = GetIdentity(identity, GetMergedContext(context));
+            var actualIdentity = evalContext.GetIdentity(identity);
             result = RolloutEvaluator.Evaluate(flag.RolloutPercentage, flagKey, actualIdentity);
         }
-        
+
         UpdateMetrics(flagKey, result);
         return result;
     }
-    
-    private IDictionary<string, string> GetMergedContext(IDictionary<string, string> context)
+
+    private void CacheFlag(FeatureFlagDto flag)
     {
-        var mergedContext = new Dictionary<string, string>(context, StringComparer.OrdinalIgnoreCase);
-        foreach (var provider in _contextProviders)
-        {
-            var providerContext = provider.GetContext();
-            foreach (var kvp in providerContext)
-            {
-                mergedContext.TryAdd(kvp.Key, kvp.Value);
-            }
-        }
-        
-        return mergedContext;
+        _cache[flag.Key] = new CachedFlag 
+        { 
+            Key = flag.Key, 
+            IsEnabled = flag.IsEnabled, 
+            RolloutPercentage = flag.RolloutPercentage,
+            Groups = _ruleEngine.CompileRules(flag.Rules),
+            OriginalDto = flag
+        };
     }
 
     private void UpdateMetrics(string flagKey, bool result)
@@ -192,27 +193,6 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService
                 _logger.LogTrace(e, "[ToggleMesh] Error during metrics flush.");
             }
         }
-    }
-
-    private string GetIdentity(string explicitIdentity, IDictionary<string, string> context)
-    {
-        if (!string.IsNullOrWhiteSpace(explicitIdentity)) return explicitIdentity;
-        
-        foreach (var key in _identityKeys)
-        {
-            if (context.TryGetValue(key, out var val) && !string.IsNullOrWhiteSpace(val))
-            {
-                return val;
-            }
-            
-            var caseInsensitiveKey = context.Keys.FirstOrDefault(k => string.Equals(k, key, StringComparison.OrdinalIgnoreCase));
-            if (caseInsensitiveKey != null && !string.IsNullOrWhiteSpace(context[caseInsensitiveKey]))
-            {
-                return context[caseInsensitiveKey];
-            }
-        }
-        
-        return string.Empty;
     }
 
     public async Task StartAsync(CancellationToken cancellationToken)
@@ -290,14 +270,10 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService
             var keysToRemove = _cache.Keys.Where(k => !fetchedKeys.Contains(k)).ToList();
 
             foreach (var key in keysToRemove)
-            {
                 _cache.TryRemove(key, out _);
-            }
 
             foreach (var flag in flags)
-            {
-                _cache[flag.Key] = flag;
-            }
+                CacheFlag(flag);
 
             _logger.LogInformation("[ToggleMesh] State synchronized with API. Loaded {Count} flags.", flags.Count);
             
@@ -336,9 +312,7 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService
             if (flags != null)
             {
                 foreach (var flag in flags)
-                {
-                    _cache[flag.Key] = flag;
-                }
+                    CacheFlag(flag);
                 _logger.LogInformation("[ToggleMesh] Loaded {Count} flags from offline fallback file.", flags.Count);
             }
         }
@@ -360,11 +334,10 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService
             
             var dir = Path.GetDirectoryName(_fallbackFilePath);
             if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
-            {
                 Directory.CreateDirectory(dir);
-            }
 
-            var content = JsonSerializer.Serialize(_cache.Values);
+            var payload = _cache.Values.Select(x => x.OriginalDto).ToList();
+            var content = JsonSerializer.Serialize(payload);
             await File.WriteAllTextAsync(_fallbackFilePath, content);
             _logger.LogTrace("[ToggleMesh] Fallback state saved successfully.");
         }
@@ -375,5 +348,5 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService
     }
     
     // ReSharper disable once ClassNeverInstantiated.Local
-    private sealed record FeatureFlagDto(string Key, bool IsEnabled, IEnumerable<RuleDto> Rules, int? RolloutPercentage = null);
+    internal sealed record FeatureFlagDto(string Key, bool IsEnabled, IEnumerable<RuleDto> Rules, int? RolloutPercentage = null);
 }
