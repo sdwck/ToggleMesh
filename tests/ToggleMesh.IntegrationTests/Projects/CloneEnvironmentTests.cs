@@ -63,7 +63,7 @@ public class CloneEnvironmentTests : IClassFixture<TestWebApplicationFactory>
 
         var tcs = new TaskCompletionSource<bool>();
         var hubConnection = new HubConnectionBuilder()
-            .WithUrl("http://localhost/api/hubs/toggle", options => 
+            .WithUrl("http://localhost/api/v1/hubs/toggle", options => 
             {
                 options.Headers.Add("x-api-key", key.ApiKey);
                 options.HttpMessageHandlerFactory = _ => _factory.Server.CreateHandler();
@@ -74,7 +74,7 @@ public class CloneEnvironmentTests : IClassFixture<TestWebApplicationFactory>
         await hubConnection.StartAsync();
 
         // Act
-        var response = await _client.PostAsync($"/api/projects/{project.Id}/environments/{sourceEnv.Id}/clone-to/{targetEnv.Id}", null);
+        var response = await _client.PostAsync($"/api/v1/projects/{project.Id}/environments/{sourceEnv.Id}/clone-to/{targetEnv.Id}", null);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.NoContent);

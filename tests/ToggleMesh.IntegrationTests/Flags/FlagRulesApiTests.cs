@@ -62,7 +62,7 @@ public class FlagRulesApiTests : IClassFixture<TestWebApplicationFactory>
         };
 
         // Act
-        var response = await _client.PostAsJsonAsync("/api/flags", request);
+        var response = await _client.PostAsJsonAsync("/api/v1/flags", request);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Created);
@@ -86,7 +86,7 @@ public class FlagRulesApiTests : IClassFixture<TestWebApplicationFactory>
             Key = "rule_flag_update",
             Rules = [new RuleDto(0, "Age", "GreaterThan", "18")]
         };
-        await _client.PostAsJsonAsync("/api/flags", createRequest);
+        await _client.PostAsJsonAsync("/api/v1/flags", createRequest);
 
         var updateRequest = new UpdateFlagRequest
         {
@@ -101,7 +101,7 @@ public class FlagRulesApiTests : IClassFixture<TestWebApplicationFactory>
         };
 
         // Act
-        var updateResponse = await _client.PutAsJsonAsync("/api/flags", updateRequest);
+        var updateResponse = await _client.PutAsJsonAsync("/api/v1/flags", updateRequest);
 
         // Assert
         updateResponse.StatusCode.Should().Be(HttpStatusCode.OK);

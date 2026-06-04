@@ -29,7 +29,8 @@ public class ToggleFlagEndpoint : Endpoint<ToggleFlagRequest>
 
     public override void Configure()
     {
-        Post("/api/flags/toggle");
+        Post("/flags/toggle");
+        Version(1);
         AllowAnonymous();
     }
 

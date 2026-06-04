@@ -25,7 +25,8 @@ public class CloneEnvironmentEndpoint : EndpointWithoutRequest
 
     public override void Configure()
     {
-        Post("/api/projects/{projectId:guid}/environments/{sourceEnvId:guid}/clone-to/{targetEnvId:guid}");
+        Post("/projects/{projectId:guid}/environments/{sourceEnvId:guid}/clone-to/{targetEnvId:guid}");
+        Version(1);
         AllowAnonymous();
     }
 

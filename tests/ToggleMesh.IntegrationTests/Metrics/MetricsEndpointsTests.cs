@@ -67,7 +67,7 @@ public class MetricsEndpointsTests : IClassFixture<TestWebApplicationFactory>
             new(flagKey, 10, 2)
         };
 
-        var httpRequest = new HttpRequestMessage(HttpMethod.Post, "/api/sdk/metrics")
+        var httpRequest = new HttpRequestMessage(HttpMethod.Post, "/api/v1/sdk/metrics")
         {
             Content = JsonContent.Create(payload) 
         };
@@ -100,7 +100,7 @@ public class MetricsEndpointsTests : IClassFixture<TestWebApplicationFactory>
     {
         var payload = new List<MetricPayloadDto> { new("some_flag", 1, 0) };
 
-        var httpRequest = new HttpRequestMessage(HttpMethod.Post, "/api/sdk/metrics")
+        var httpRequest = new HttpRequestMessage(HttpMethod.Post, "/api/v1/sdk/metrics")
         {
             Content = JsonContent.Create(payload)
         };

@@ -36,7 +36,7 @@ public class AuditTests : IClassFixture<TestWebApplicationFactory>
         var request = new CreateFlagRequest { EnvironmentId = env.Id, Key = "audit_flag" };
 
         // Act
-        await _client.PostAsJsonAsync("/api/flags", request);
+        await _client.PostAsJsonAsync("/api/v1/flags", request);
 
         // Assert
         var logs = await db.AuditLogs
@@ -62,7 +62,7 @@ public class AuditTests : IClassFixture<TestWebApplicationFactory>
         db.Environments.Add(env);
         await db.SaveChangesAsync();
 
-        await _client.PostAsJsonAsync("/api/flags", new CreateFlagRequest { EnvironmentId = env.Id, Key = "audit_update_flag" });
+        await _client.PostAsJsonAsync("/api/v1/flags", new CreateFlagRequest { EnvironmentId = env.Id, Key = "audit_update_flag" });
         
         db.AuditLogs.RemoveRange(db.AuditLogs);
         await db.SaveChangesAsync();
@@ -70,7 +70,7 @@ public class AuditTests : IClassFixture<TestWebApplicationFactory>
         var toggleRequest = new { EnvironmentId = env.Id, Key = "audit_update_flag", IsEnabled = true };
 
         // Act
-        await _client.PostAsJsonAsync("/api/flags/toggle", toggleRequest);
+        await _client.PostAsJsonAsync("/api/v1/flags/toggle", toggleRequest);
 
         // Assert
         var logs = await db.AuditLogs

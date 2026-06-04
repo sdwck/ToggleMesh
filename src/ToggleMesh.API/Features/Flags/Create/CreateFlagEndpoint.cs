@@ -16,7 +16,8 @@ public class CreateFlagEndpoint : Endpoint<CreateFlagRequest>
 
     public override void Configure()
     {
-        Post("/api/flags");
+        Post("/flags");
+        Version(1);
         AllowAnonymous();
     }
 

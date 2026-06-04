@@ -29,7 +29,8 @@ public class UpdateFlagEndpoint : Endpoint<UpdateFlagRequest, GetFlagResponse>
 
     public override void Configure()
     {
-        Put("/api/flags");
+        Put("/flags");
+        Version(1);
         AllowAnonymous();
     }
 

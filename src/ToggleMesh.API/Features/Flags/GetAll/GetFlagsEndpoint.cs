@@ -16,7 +16,8 @@ public class GetFlagsEndpoint : Endpoint<GetFlagRequest, List<GetFlagResponse>>
 
     public override void Configure()
     {
-        Get("/api/flags");
+        Get("/flags");
+        Version(1);
         AllowAnonymous();
     }
 

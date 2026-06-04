@@ -52,7 +52,13 @@ if (app.Environment.IsDevelopment())
     app.MapScalarApiReference();
 }
 
-app.UseFastEndpoints();
-app.MapHub<ToggleHub>("/api/hubs/toggle");
+app.UseFastEndpoints(c =>
+{
+    c.Endpoints.RoutePrefix = "api";
+    c.Versioning.Prefix = "v";
+    c.Versioning.DefaultVersion = 1;
+    c.Versioning.PrependToRoute = true;
+});
+app.MapHub<ToggleHub>("/api/v1/hubs/toggle");
 
 app.Run();

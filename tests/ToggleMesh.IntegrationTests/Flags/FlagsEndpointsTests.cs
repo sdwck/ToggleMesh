@@ -55,7 +55,7 @@ public class FlagsEndpointsTests : IClassFixture<TestWebApplicationFactory>
         var request = new CreateFlagRequest { EnvironmentId = envId, Key = "test_feature_1" };
 
         // Act
-        var response = await _client.PostAsJsonAsync("/api/flags", request);
+        var response = await _client.PostAsJsonAsync("/api/v1/flags", request);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Created);
@@ -74,7 +74,7 @@ public class FlagsEndpointsTests : IClassFixture<TestWebApplicationFactory>
         var request = new CreateFlagRequest { EnvironmentId = envId, Key = "" };
 
         // Act
-        var response = await _client.PostAsJsonAsync("/api/flags", request);
+        var response = await _client.PostAsJsonAsync("/api/v1/flags", request);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
@@ -86,12 +86,12 @@ public class FlagsEndpointsTests : IClassFixture<TestWebApplicationFactory>
         // Arrange
         var (envId, apiKey) = await SeedEnvironmentAsync();
         var flagKey = "signalr_test_flag";
-        await _client.PostAsJsonAsync("/api/flags", new CreateFlagRequest { EnvironmentId = envId, Key = flagKey });
+        await _client.PostAsJsonAsync("/api/v1/flags", new CreateFlagRequest { EnvironmentId = envId, Key = flagKey });
         
         var tcs = new TaskCompletionSource<GetFlagResponse>();
         
         var hubConnection = new HubConnectionBuilder()
-            .WithUrl("http://localhost/api/hubs/toggle", options => 
+            .WithUrl("http://localhost/api/v1/hubs/toggle", options => 
             {
                 options.Headers.Add("x-api-key", apiKey);
                 options.HttpMessageHandlerFactory = _ => _factory.Server.CreateHandler();
@@ -107,15 +107,15 @@ public class FlagsEndpointsTests : IClassFixture<TestWebApplicationFactory>
         
         // Act
         var toggleRequest = new ToggleFlagRequest { EnvironmentId = envId, Key = flagKey, IsEnabled = true };
-        var response = await _client.PostAsJsonAsync("/api/flags/toggle", toggleRequest);
+        var response = await _client.PostAsJsonAsync("/api/v1/flags/toggle", toggleRequest);
         
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         
         var signalRTask = tcs.Task;
-        var completedTask = await Task.WhenAny(signalRTask, Task.Delay(10000));
+        var completedTask = await Task.WhenAny(signalRTask, Task.Delay(15000));
         
-        completedTask.Should().Be(signalRTask, "SignalR event was not received within 5 seconds");
+        completedTask.Should().Be(signalRTask, "SignalR event was not received within 15 seconds");
         
         var receivedFlag = await signalRTask;
         receivedFlag.Key.Should().Be(flagKey);

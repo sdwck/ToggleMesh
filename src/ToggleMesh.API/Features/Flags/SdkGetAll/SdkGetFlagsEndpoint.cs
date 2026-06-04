@@ -19,7 +19,8 @@ public class SdkGetFlagsEndpoint : Endpoint<SdkGetFlagsRequest, List<GetFlagResp
 
     public override void Configure()
     {
-        Get("/api/sdk/flags");
+        Get("/sdk/flags");
+        Version(1);
         AllowAnonymous();
     }
 

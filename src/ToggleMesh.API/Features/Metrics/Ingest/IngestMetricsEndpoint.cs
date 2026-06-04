@@ -17,7 +17,8 @@ public class IngestMetricsEndpoint : Endpoint<IngestMetricsRequest>
 
     public override void Configure()
     {
-        Post("/api/sdk/metrics");
+        Post("/sdk/metrics");
+        Version(1);
         AllowAnonymous();
     }
 
