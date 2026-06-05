@@ -8,6 +8,7 @@ using ToggleMesh.API.Features.Flags.Create;
 using ToggleMesh.API.Features.Flags.Get;
 using ToggleMesh.API.Features.Flags.Toggle;
 using ToggleMesh.API.Features.Projects;
+using ToggleMesh.API.Infrastructure.Security;
 using ToggleMesh.API.Persistence;
 using ToggleMesh.IntegrationTests.Infrastructure;
 
@@ -24,7 +25,7 @@ public class FlagsEndpointsTests : IClassFixture<TestWebApplicationFactory>
         _client = factory.CreateClient();
     }
 
-    private async Task<(Guid EnvironmentId, string ApiKey)> SeedEnvironmentAsync()
+    private async Task<(Guid ProjectId, Guid EnvironmentId, string ApiKey)> SeedEnvironmentAsync()
     {
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -35,31 +36,34 @@ public class FlagsEndpointsTests : IClassFixture<TestWebApplicationFactory>
         var environment = new ProjectEnvironment { Name = "Development", Project = project };
         db.Environments.Add(environment);
 
+        var plainKey = Guid.NewGuid().ToString("N");
+        var keyHash = ApiKeyHasher.Hash(plainKey);
         var key = new EnvironmentKey
         {
             Environment = environment,
-            ApiKey = Guid.NewGuid().ToString("N"),
+            KeyHash = keyHash,
+            KeyPreview = ApiKeyHasher.GeneratePreview(keyHash),
             CreatedOn = DateTime.UtcNow
         };
         db.EnvironmentKeys.Add(key);
 
         await db.SaveChangesAsync();
-        return (environment.Id, key.ApiKey);
+        return (project.Id, environment.Id, plainKey);
     }
 
     [Fact]
     public async Task CreateFlag_WithValidData_ShouldReturn201Created()
     {
         // Arrange
-        var (envId, _) = await SeedEnvironmentAsync();
-        var request = new CreateFlagRequest { EnvironmentId = envId, Key = "test_feature_1" };
+        var (projectId, envId, _) = await SeedEnvironmentAsync();
+        var request = new CreateFlagRequest { Key = "test_feature_1" };
 
         // Act
-        var response = await _client.PostAsJsonAsync("/api/v1/flags", request);
+        var response = await _client.PostAsJsonAsync($"/api/v1/projects/{projectId}/environments/{envId}/flags", request);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Created);
-        
+
         var result = await response.Content.ReadFromJsonAsync<FeatureFlag>();
         result.Should().NotBeNull();
         result.Key.Should().Be("test_feature_1");
@@ -70,11 +74,11 @@ public class FlagsEndpointsTests : IClassFixture<TestWebApplicationFactory>
     public async Task CreateFlag_WithInvalidData_ShouldReturn400BadRequest()
     {
         // Arrange
-        var (envId, _) = await SeedEnvironmentAsync();
-        var request = new CreateFlagRequest { EnvironmentId = envId, Key = "" };
+        var (projectId, envId, _) = await SeedEnvironmentAsync();
+        var request = new CreateFlagRequest { Key = "" };
 
         // Act
-        var response = await _client.PostAsJsonAsync("/api/v1/flags", request);
+        var response = await _client.PostAsJsonAsync($"/api/v1/projects/{projectId}/environments/{envId}/flags", request);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
@@ -84,14 +88,14 @@ public class FlagsEndpointsTests : IClassFixture<TestWebApplicationFactory>
     public async Task ToggleFlag_ShouldUpdateDb_AndBroadcastViaSignalR()
     {
         // Arrange
-        var (envId, apiKey) = await SeedEnvironmentAsync();
+        var (projectId, envId, apiKey) = await SeedEnvironmentAsync();
         var flagKey = "signalr_test_flag";
-        await _client.PostAsJsonAsync("/api/v1/flags", new CreateFlagRequest { EnvironmentId = envId, Key = flagKey });
-        
+        await _client.PostAsJsonAsync($"/api/v1/projects/{projectId}/environments/{envId}/flags", new CreateFlagRequest { Key = flagKey });
+
         var tcs = new TaskCompletionSource<GetFlagResponse>();
-        
+
         var hubConnection = new HubConnectionBuilder()
-            .WithUrl("http://localhost/api/v1/hubs/toggle", options => 
+            .WithUrl("http://localhost/api/v1/hubs/toggle", options =>
             {
                 options.Headers.Add("x-api-key", apiKey);
                 options.HttpMessageHandlerFactory = _ => _factory.Server.CreateHandler();
@@ -105,18 +109,20 @@ public class FlagsEndpointsTests : IClassFixture<TestWebApplicationFactory>
 
         await hubConnection.StartAsync();
         
+        await Task.Delay(500);
+
         // Act
-        var toggleRequest = new ToggleFlagRequest { EnvironmentId = envId, Key = flagKey, IsEnabled = true };
-        var response = await _client.PostAsJsonAsync("/api/v1/flags/toggle", toggleRequest);
-        
+        var toggleRequest = new ToggleFlagRequest { IsEnabled = true };   
+        var response = await _client.PostAsJsonAsync($"/api/v1/projects/{projectId}/environments/{envId}/flags/{flagKey}/toggle", toggleRequest);
+
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
-        
+
         var signalRTask = tcs.Task;
         var completedTask = await Task.WhenAny(signalRTask, Task.Delay(15000));
-        
+
         completedTask.Should().Be(signalRTask, "SignalR event was not received within 15 seconds");
-        
+
         var receivedFlag = await signalRTask;
         receivedFlag.Key.Should().Be(flagKey);
         receivedFlag.IsEnabled.Should().BeTrue();

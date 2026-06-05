@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using ToggleMesh.API.Features.Flags;
 using ToggleMesh.API.Features.Projects;
+using ToggleMesh.API.Infrastructure.Security;
 using ToggleMesh.API.Persistence;
 using ToggleMesh.IntegrationTests.Infrastructure;
 using ToggleMesh.SDK.Rules;
@@ -37,7 +38,15 @@ public class CloneEnvironmentTests : IClassFixture<TestWebApplicationFactory>
         var targetEnv = new ProjectEnvironment { Name = "Target", Project = project };
         db.Environments.AddRange(sourceEnv, targetEnv);
 
-        var key = new EnvironmentKey { Environment = targetEnv, ApiKey = Guid.NewGuid().ToString("N"), CreatedOn = DateTime.UtcNow };
+        var plainKey = Guid.NewGuid().ToString("N");
+        var keyHash = ApiKeyHasher.Hash(plainKey);
+        var key = new EnvironmentKey
+        {
+            Environment = targetEnv,
+            KeyHash = keyHash,
+            KeyPreview = ApiKeyHasher.GeneratePreview(keyHash),
+            CreatedOn = DateTime.UtcNow
+        };
         db.EnvironmentKeys.Add(key);
 
         var sourceFlag = new FeatureFlag
@@ -65,7 +74,7 @@ public class CloneEnvironmentTests : IClassFixture<TestWebApplicationFactory>
         var hubConnection = new HubConnectionBuilder()
             .WithUrl("http://localhost/api/v1/hubs/toggle", options => 
             {
-                options.Headers.Add("x-api-key", key.ApiKey);
+                options.Headers.Add("x-api-key", plainKey);
                 options.HttpMessageHandlerFactory = _ => _factory.Server.CreateHandler();
             })
             .Build();

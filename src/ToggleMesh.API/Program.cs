@@ -1,22 +1,32 @@
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Text;
 using System.Threading.Channels;
 using FastEndpoints;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
 using StackExchange.Redis;
 using ToggleMesh.API.BackgroundServices;
 using ToggleMesh.API.Exceptions;
+using ToggleMesh.API.Features.Auth.Authorization;
+using ToggleMesh.API.Features.Auth.Models;
 using ToggleMesh.API.Features.Metrics;
-using ToggleMesh.API.Features.Projects;
 using ToggleMesh.API.Hubs;
+using ToggleMesh.API.Infrastructure;
 using ToggleMesh.API.Persistence;
 using ToggleMesh.API.Persistence.Interceptors;
 
+JwtSecurityTokenHandler.DefaultInboundClaimTypeMap.Clear();
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddOpenApi();
 builder.Services.AddSignalR()
     .AddStackExchangeRedis(builder.Configuration.GetConnectionString("Redis")!);
 
-builder.Services.AddSingleton<IConnectionMultiplexer>(_ => 
+builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
     ConnectionMultiplexer.Connect(builder.Configuration.GetConnectionString("Redis")!));
 
 builder.Services.AddScoped<IApiKeyCacheService, ApiKeyCacheService>();
@@ -37,11 +47,51 @@ builder.Services.AddSingleton(Channel.CreateBounded<MetricQueueItem>(new Bounded
     FullMode = BoundedChannelFullMode.DropOldest
 }));
 
+builder.Services.AddIdentityCore<ApplicationUser>(options =>
+    {
+        options.Password.RequireDigit = false;
+        options.Password.RequireLowercase = false;
+        options.Password.RequireNonAlphanumeric = false;
+        options.Password.RequireUppercase = false;
+        options.Password.RequiredLength = 6;
+    })
+    .AddRoles<IdentityRole<Guid>>()
+    .AddEntityFrameworkStores<AppDbContext>()
+    .AddDefaultTokenProviders();
+
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.MapInboundClaims = false;
+        
+        var jwtSettings = builder.Configuration.GetSection("Jwt");
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            NameClaimType = JwtRegisteredClaimNames.Sub,
+            RoleClaimType = "Role",
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = jwtSettings["Issuer"],
+            ValidAudience = jwtSettings["Audience"],
+            IssuerSigningKey = new SymmetricSecurityKey(
+                Encoding.UTF8
+                    .GetBytes(jwtSettings["Key"]
+                              ?? throw new InvalidOperationException("JWT Key is not configured."))),
+        };
+    });
+
+builder.Services.AddAuthorization();
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddSingleton<IAuthorizationPolicyProvider, PermissionPolicyProvider>();
+builder.Services.AddScoped<IAuthorizationHandler, PermissionAuthorizationHandler>();
+
 var app = builder.Build();
 
 app.UseHttpsRedirection();
 
-if (app.Environment.IsStaging() || app.Environment.IsProduction()) 
+if (app.Environment.IsStaging() || app.Environment.IsProduction())
 {
     app.UseExceptionHandler();
 }
@@ -51,6 +101,9 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
     app.MapScalarApiReference();
 }
+
+app.UseAuthentication();
+app.UseAuthorization();
 
 app.UseFastEndpoints(c =>
 {

@@ -136,9 +136,9 @@ public class RuleEngineTests
         // Arrange
         var rules = new List<RuleDto>
         {
-            new RuleDto(0, "Email", "EndsWith", "@company.com"),
-            new RuleDto(0, "Age", "GreaterThan", "21"),
-            new RuleDto(0, "Role", "InList", "Admin,Manager")
+            new(0, "Email", "EndsWith", "@company.com"),
+            new(0, "Age", "GreaterThan", "21"),
+            new(0, "Role", "InList", "Admin,Manager")
         };
 
         var passingContext = new Dictionary<string, string>
@@ -179,7 +179,7 @@ public class RuleEngineTests
         // Arrange
         var rules = new List<RuleDto>
         {
-            new RuleDto(0, "Device", "MagicOperator", "iPhone")
+            new(0, "Device", "MagicOperator", "iPhone")
         };
 
         var context = new Dictionary<string, string>

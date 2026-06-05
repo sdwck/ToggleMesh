@@ -1,13 +1,12 @@
-﻿using FastEndpoints;
-using FluentValidation;
-using Microsoft.AspNetCore.SignalR;
+﻿using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using ToggleMesh.API.Hubs;
+using ToggleMesh.API.Infrastructure;
 using ToggleMesh.API.Persistence;
 
 namespace ToggleMesh.API.Features.Projects.CloneEnvironment;
 
-public class CloneEnvironmentEndpoint : EndpointWithoutRequest
+public class CloneEnvironmentEndpoint : ToggleEndpointWithoutRequest
 {
     private readonly AppDbContext _db;
     private readonly IHubContext<ToggleHub> _hubContext;
@@ -27,7 +26,7 @@ public class CloneEnvironmentEndpoint : EndpointWithoutRequest
     {
         Post("/projects/{projectId:guid}/environments/{sourceEnvId:guid}/clone-to/{targetEnvId:guid}");
         Version(1);
-        AllowAnonymous();
+        Policies($"Permission:{Auth.Models.Permissions.EnvironmentsSync}");
     }
 
     public override async Task HandleAsync(CancellationToken ct)

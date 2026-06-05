@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.SignalR;
 using ToggleMesh.API.Features.Projects;
+using ToggleMesh.API.Infrastructure;
 
 namespace ToggleMesh.API.Hubs;
 

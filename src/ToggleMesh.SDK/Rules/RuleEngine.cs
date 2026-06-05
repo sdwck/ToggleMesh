@@ -52,14 +52,18 @@ public class RuleEngine : IRuleEngine
             .Select(g => new CompiledRuleGroup(
                 g.Select(r => new CompiledRule(
                     r.Attribute,
-                    _operators.GetValueOrDefault(r.Operator) ?? new FalseOperator(), 
+                    _operators.GetValueOrDefault(r.Operator) ?? FalseOperator.Instance, 
                     r.Value)
                 ).ToArray())
             ).ToArray();
     }
     
-    private class FalseOperator : IRuleOperator
+    private sealed class FalseOperator : IRuleOperator
     {
+        public static readonly FalseOperator Instance = new();
+        
+        private FalseOperator() { }
+        
         public string Name => "False";
 
         public bool Evaluate(string userValue, string ruleValue) => false;

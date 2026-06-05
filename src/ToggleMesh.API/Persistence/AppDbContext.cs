@@ -1,17 +1,21 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using ToggleMesh.API.Features.Audit;
+using ToggleMesh.API.Features.Auth.Models;
 using ToggleMesh.API.Features.Flags;
 using ToggleMesh.API.Features.Projects;
 
 namespace ToggleMesh.API.Persistence;
 
-public class AppDbContext : DbContext
+public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid>, Guid>
 {
     public DbSet<Project> Projects { get; set; }
     public DbSet<ProjectEnvironment> Environments { get; set; }
     public DbSet<EnvironmentKey> EnvironmentKeys { get; set; }
     public DbSet<FeatureFlag> FeatureFlags { get; set; }
     public DbSet<AuditLog> AuditLogs { get; set; }
+    public DbSet<ProjectMember> ProjectMembers { get; set; }
 
     public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
 

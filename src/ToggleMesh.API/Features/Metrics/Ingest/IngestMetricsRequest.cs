@@ -1,13 +1,16 @@
 ﻿using FastEndpoints;
+using ToggleMesh.API.Features.Projects;
+using ToggleMesh.API.Infrastructure;
 
 namespace ToggleMesh.API.Features.Metrics.Ingest;
 
-public class IngestMetricsRequest
+public class IngestMetricsRequest : ISdkRequest
 {
     [FromHeader("x-api-key")] 
     public string ApiKey { get; set; } = string.Empty;
-    
-    // ReSharper disable once CollectionNeverUpdated.Global
+    [HideFromDocs]
+    public Guid EnvId { get; set; }
+
     [FromBody]
     public List<MetricPayloadDto> Metrics { get; set; } = [];
 }

@@ -1,11 +1,11 @@
-using FastEndpoints;
 using Microsoft.EntityFrameworkCore;
 using StackExchange.Redis;
+using ToggleMesh.API.Infrastructure;
 using ToggleMesh.API.Persistence;
 
 namespace ToggleMesh.API.Features.Flags.Get;
 
-public class GetFlagEndpoint : Endpoint<GetFlagRequest, GetFlagResponse>
+public class GetFlagEndpoint : ToggleEndpointWithoutRequest<GetFlagResponse>
 {
     private readonly AppDbContext _db;
     private readonly IDatabase _redis;
@@ -18,13 +18,15 @@ public class GetFlagEndpoint : Endpoint<GetFlagRequest, GetFlagResponse>
 
     public override void Configure()
     {
-        Get("/flags/{flagKey}");
+        Get("/projects/{projectId}/environments/{environmentId}/flags/{flagKey}");
         Version(1);
-        AllowAnonymous();
+        Policies($"Permission:{Auth.Models.Permissions.FlagsView}");
     }
 
-    public override async Task HandleAsync(GetFlagRequest req, CancellationToken ct)
+    public override async Task HandleAsync(CancellationToken ct)
     {
+        var projectId = Route<Guid>("projectId");
+        var environmentId = Route<Guid>("environmentId");
         var flagKey = Route<string>("flagKey");
         if (flagKey is null)
         {
@@ -32,7 +34,7 @@ public class GetFlagEndpoint : Endpoint<GetFlagRequest, GetFlagResponse>
             return;
         }
         
-        var cacheKey = $"flags:{req.EnvironmentId}:{flagKey}";
+        var cacheKey = $"flags:{environmentId}:{flagKey}";
 
         var cachedValue = await _redis.StringGetAsync(cacheKey);
         if (cachedValue.HasValue)
@@ -48,7 +50,7 @@ public class GetFlagEndpoint : Endpoint<GetFlagRequest, GetFlagResponse>
         var flag = await _db.FeatureFlags
             .AsNoTracking()
             .Include(x => x.Rules)
-            .FirstOrDefaultAsync(x => x.EnvironmentId == req.EnvironmentId && x.Key == flagKey, ct);
+            .FirstOrDefaultAsync(x => x.EnvironmentId == environmentId && x.Key == flagKey, ct);
 
         if (flag is null)
         {

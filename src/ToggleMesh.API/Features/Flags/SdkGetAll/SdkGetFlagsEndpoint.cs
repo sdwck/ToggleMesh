@@ -1,20 +1,17 @@
-using FastEndpoints;
 using Microsoft.EntityFrameworkCore;
 using ToggleMesh.API.Features.Flags.Get;
-using ToggleMesh.API.Features.Projects;
+using ToggleMesh.API.Infrastructure;
 using ToggleMesh.API.Persistence;
 
 namespace ToggleMesh.API.Features.Flags.SdkGetAll;
 
-public class SdkGetFlagsEndpoint : Endpoint<SdkGetFlagsRequest, List<GetFlagResponse>>
+public class SdkGetFlagsEndpoint : ToggleEndpoint<SdkGetFlagsRequest, List<GetFlagResponse>>
 {
     private readonly AppDbContext _db;
-    private readonly IApiKeyCacheService _apiKeyCache;
 
-    public SdkGetFlagsEndpoint(AppDbContext db, IApiKeyCacheService apiKeyCache)
+    public SdkGetFlagsEndpoint(AppDbContext db)
     {
         _db = db;
-        _apiKeyCache = apiKeyCache;
     }
 
     public override void Configure()
@@ -22,28 +19,15 @@ public class SdkGetFlagsEndpoint : Endpoint<SdkGetFlagsRequest, List<GetFlagResp
         Get("/sdk/flags");
         Version(1);
         AllowAnonymous();
+        PreProcessor<ApiKeyPreProcessor<SdkGetFlagsRequest>>();
     }
 
     public override async Task HandleAsync(SdkGetFlagsRequest req, CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(req.ApiKey))
-        {
-            await Send.UnauthorizedAsync(ct);
-            return;
-        }
-
-        var envId = await _apiKeyCache.GetEnvironmentIdAsync(req.ApiKey, ct);
-
-        if (envId == null)
-        {
-            await Send.UnauthorizedAsync(ct);
-            return;
-        }
-
         var flags = await _db.FeatureFlags
             .AsNoTracking()
             .Include(x => x.Rules)
-            .Where(x => x.EnvironmentId == envId.Value)
+            .Where(x => x.EnvironmentId == req.EnvId)
             .Select(x => new GetFlagResponse(
                 x.Key, 
                 x.IsEnabled, 

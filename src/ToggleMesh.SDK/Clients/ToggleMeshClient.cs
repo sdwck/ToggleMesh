@@ -5,6 +5,9 @@ using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Polly;
+using Polly.CircuitBreaker;
+using Polly.Retry;
 using ToggleMesh.SDK.Contexts;
 using ToggleMesh.SDK.Models;
 using ToggleMesh.SDK.Options;
@@ -21,18 +24,11 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService
     private readonly IRuleEngine _ruleEngine;
     private readonly string? _fallbackFilePath;
     private readonly IEnumerable<IToggleMeshContextProvider> _contextProviders;
-    private readonly List<string> _identityKeys = ["UserId", "Email", "SessionId", "DeviceId", "Id"];
+    private readonly List<string> _identityKeys = ["UserId", "sub", "Email", "SessionId", "DeviceId", "Id"];
     private ConcurrentDictionary<string, FlagMetrics> _metricsBuffer = new();
     private readonly bool _isMetricsEnabled;
     private readonly TimeProvider _timeProvider;
-
-    private static string GetSafeFileName(string apiKey)
-    {
-        if (string.IsNullOrWhiteSpace(apiKey)) return "default";
-        var bytes = System.Text.Encoding.UTF8.GetBytes(apiKey);
-        var hash = System.Security.Cryptography.SHA256.HashData(bytes);
-        return Convert.ToHexString(hash)[..12].ToLowerInvariant();
-    }
+    private readonly ResiliencePipeline _resiliencePipeline;
 
     public ToggleMeshClient(
         IHttpClientFactory httpClientFactory,
@@ -50,6 +46,41 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService
         if (options.Value.IdentityKeys.Any())
             _identityKeys = options.Value.IdentityKeys.ToList();
         _client = httpClientFactory.CreateClient("ToggleMesh");
+        
+        _resiliencePipeline = new ResiliencePipelineBuilder()
+            .AddRetry(new RetryStrategyOptions
+            {
+                ShouldHandle = new PredicateBuilder().Handle<HttpRequestException>(ex => 
+                    ex.StatusCode == null || (int)ex.StatusCode >= 500 || ex.StatusCode == System.Net.HttpStatusCode.RequestTimeout),
+                MaxRetryAttempts = 2,
+                Delay = TimeSpan.FromSeconds(2),
+                BackoffType = DelayBackoffType.Exponential
+            })
+            .AddCircuitBreaker(new CircuitBreakerStrategyOptions
+            {
+                ShouldHandle = new PredicateBuilder().Handle<HttpRequestException>(ex => 
+                    ex.StatusCode == null || (int)ex.StatusCode >= 500 || ex.StatusCode == System.Net.HttpStatusCode.RequestTimeout),
+                FailureRatio = 0.5,
+                SamplingDuration = TimeSpan.FromSeconds(30),
+                MinimumThroughput = 2,
+                BreakDuration = TimeSpan.FromSeconds(30),
+                OnOpened = _ =>
+                {
+                    _logger.LogWarning("[ToggleMesh] API is unreachable. Circuit breaker OPENED for 30s.");
+                    return ValueTask.CompletedTask;
+                },
+                OnClosed = _ =>
+                {
+                    _logger.LogInformation("[ToggleMesh] API recovered. Circuit breaker CLOSED.");
+                    return ValueTask.CompletedTask;
+                },
+                OnHalfOpened = _ =>
+                {
+                    _logger.LogDebug("[ToggleMesh] Circuit breaker HALF-OPENED. Testing API connection...");
+                    return ValueTask.CompletedTask;
+                }
+            })
+            .Build();
         
         var safeKey = GetSafeFileName(options.Value.ApiKey);
 
@@ -96,6 +127,14 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService
             _logger.LogWarning(error, "[ToggleMesh] Connection closed permanently. Restarting background connection loop.");
             await EnsureConnectedLoopAsync(CancellationToken.None);
         };
+    }
+    
+    private static string GetSafeFileName(string apiKey)
+    {
+        if (string.IsNullOrWhiteSpace(apiKey)) return "default";
+        var bytes = System.Text.Encoding.UTF8.GetBytes(apiKey);
+        var hash = System.Security.Cryptography.SHA256.HashData(bytes);
+        return Convert.ToHexString(hash)[..12].ToLowerInvariant();
     }
     
     public bool IsEnabled(string flagKey, bool defaultValue = false) => 
@@ -161,11 +200,12 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService
     private async Task RunMetricsFlusherAsync(CancellationToken ct)
     {
         using var timer = new PeriodicTimer(TimeSpan.FromSeconds(10));
+        ConcurrentDictionary<string, FlagMetrics> oldBuffer = [];
         while (!ct.IsCancellationRequested && await timer.WaitForNextTickAsync(ct))
         {
             try
             {
-                var oldBuffer = Interlocked.Exchange(ref _metricsBuffer, new ConcurrentDictionary<string, FlagMetrics>());
+                oldBuffer = Interlocked.Exchange(ref _metricsBuffer, new ConcurrentDictionary<string, FlagMetrics>());
                 if (oldBuffer.IsEmpty)
                     continue;
 
@@ -176,7 +216,8 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService
                     FalseCount = Interlocked.Read(ref kvp.Value.FalseCount)
                 }).ToList();
 
-                var response = await _client.PostAsJsonAsync(Constants.Endpoints.Metrics, payload, ct);
+                var response = await _resiliencePipeline.ExecuteAsync(async token => 
+                    await _client.PostAsJsonAsync(Constants.Endpoints.Metrics, payload, token), ct);
                 if (!response.IsSuccessStatusCode)
                 {
                     _logger.LogWarning("[ToggleMesh] Failed to flush metrics. Status: {StatusCode}", response.StatusCode);
@@ -186,6 +227,16 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService
                         Interlocked.Add(ref activeMetrics.TrueCount, Interlocked.Read(ref kvp.Value.TrueCount));
                         Interlocked.Add(ref activeMetrics.FalseCount, Interlocked.Read(ref kvp.Value.FalseCount));
                     }
+                }
+            }
+            catch (BrokenCircuitException)
+            {
+                _logger.LogTrace("[ToggleMesh] Circuit breaker open. Skipping metrics flush.");
+                foreach (var kvp in oldBuffer)
+                {
+                    var activeMetrics = _metricsBuffer.GetOrAdd(kvp.Key, _ => new FlagMetrics());
+                    Interlocked.Add(ref activeMetrics.TrueCount, Interlocked.Read(ref kvp.Value.TrueCount));
+                    Interlocked.Add(ref activeMetrics.FalseCount, Interlocked.Read(ref kvp.Value.FalseCount));
                 }
             }
             catch (Exception e)
@@ -235,9 +286,15 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService
                 {
                     await _connection.StartAsync(ct);
                     _logger.LogTrace("[ToggleMesh] SignalR connection established.");
-                    await SyncStateWithApiAsync(ct);
                 }
+                
+                await SyncStateWithApiAsync(ct);
                 break;
+            }
+            catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+            {
+                _logger.LogCritical("[ToggleMesh] Invalid API Key. Background sync loop stopped permanently. Please check your configuration.");
+                break; 
             }
             catch (Exception ex)
             {
@@ -257,8 +314,9 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService
     {
         try
         {
-            var flags = await _client.GetFromJsonAsync<List<FeatureFlagDto>>(
-                Constants.Endpoints.GetAll, cancellationToken);
+            var flags = await _resiliencePipeline.ExecuteAsync(async token =>
+                    await _client.GetFromJsonAsync<List<FeatureFlagDto>>(Constants.Endpoints.GetAll, token),
+                cancellationToken);
 
             if (flags is null)
             {
@@ -276,8 +334,18 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService
                 CacheFlag(flag);
 
             _logger.LogInformation("[ToggleMesh] State synchronized with API. Loaded {Count} flags.", flags.Count);
-            
+
             await SaveFallbackAsync();
+        }
+        catch (BrokenCircuitException)
+        {
+            _logger.LogWarning("[ToggleMesh] Circuit breaker is open. Cannot sync state right now.");
+            throw;
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            _logger.LogCritical("[ToggleMesh] Unauthorized (401). Invalid API Key.");
+            throw;
         }
         catch (OperationCanceledException)
         {
@@ -347,6 +415,6 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService
         }
     }
     
-    // ReSharper disable once ClassNeverInstantiated.Local
+    // ReSharper disable once ClassNeverInstantiated.Global
     internal sealed record FeatureFlagDto(string Key, bool IsEnabled, IEnumerable<RuleDto> Rules, int? RolloutPercentage = null);
 }

@@ -1,11 +1,11 @@
-﻿using FastEndpoints;
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using ToggleMesh.API.Features.Flags.Get;
+using ToggleMesh.API.Infrastructure;
 using ToggleMesh.API.Persistence;
 
 namespace ToggleMesh.API.Features.Flags.GetAll;
 
-public class GetFlagsEndpoint : Endpoint<GetFlagRequest, List<GetFlagResponse>>
+public class GetFlagsEndpoint : ToggleEndpointWithoutRequest<List<GetFlagResponse>>
 {
     private readonly AppDbContext _db;
 
@@ -16,17 +16,19 @@ public class GetFlagsEndpoint : Endpoint<GetFlagRequest, List<GetFlagResponse>>
 
     public override void Configure()
     {
-        Get("/flags");
+        Get("/projects/{projectId}/environments/{environmentId}/flags");
         Version(1);
-        AllowAnonymous();
+        Policies($"Permission:{Auth.Models.Permissions.FlagsView}");
     }
 
-    public override async Task HandleAsync(GetFlagRequest req, CancellationToken ct)
+    public override async Task HandleAsync(CancellationToken ct)
     {
+        var projectId = Route<Guid>("projectId");
+        var environmentId = Route<Guid>("environmentId");
         var flags = await _db.FeatureFlags
             .AsNoTracking()
             .Include(x => x.Rules)
-            .Where(x => x.EnvironmentId == req.EnvironmentId)
+            .Where(x => x.EnvironmentId == environmentId)
             .Select(x => new GetFlagResponse(
                 x.Key, 
                 x.IsEnabled, 

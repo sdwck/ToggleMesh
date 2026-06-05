@@ -1,11 +1,11 @@
-﻿using FastEndpoints;
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using ToggleMesh.API.Features.Flags.Get;
+using ToggleMesh.API.Infrastructure;
 using ToggleMesh.API.Persistence;
 
 namespace ToggleMesh.API.Features.Flags.Create;
 
-public class CreateFlagEndpoint : Endpoint<CreateFlagRequest>
+public class CreateFlagEndpoint : ToggleEndpoint<CreateFlagRequest>
 {
     private readonly AppDbContext _db;
 
@@ -16,15 +16,17 @@ public class CreateFlagEndpoint : Endpoint<CreateFlagRequest>
 
     public override void Configure()
     {
-        Post("/flags");
+        Post("/projects/{projectId}/environments/{environmentId}/flags");
         Version(1);
-        AllowAnonymous();
+        Policies($"Permission:{Auth.Models.Permissions.FlagsCreate}");
     }
 
     public override async Task HandleAsync(CreateFlagRequest req, CancellationToken ct)
     {
+        var environmentId = Route<Guid>("environmentId");
+        
         var exists = await _db.FeatureFlags
-            .AnyAsync(x => x.EnvironmentId == req.EnvironmentId && x.Key == req.Key, ct);
+            .AnyAsync(x => x.EnvironmentId == environmentId && x.Key == req.Key, ct);
         if (exists)
         {
             AddError(x => x.Key, 
@@ -35,7 +37,7 @@ public class CreateFlagEndpoint : Endpoint<CreateFlagRequest>
 
         var newFlag = new FeatureFlag
         {
-            EnvironmentId = req.EnvironmentId,
+            EnvironmentId = environmentId,
             Key = req.Key,
             IsEnabled = false,
             RolloutPercentage = req.RolloutPercentage,

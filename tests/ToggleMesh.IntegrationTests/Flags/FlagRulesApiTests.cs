@@ -6,6 +6,7 @@ using ToggleMesh.API.Features.Flags.Create;
 using ToggleMesh.API.Features.Flags.Get;
 using ToggleMesh.API.Features.Flags.Update;
 using ToggleMesh.API.Features.Projects;
+using ToggleMesh.API.Infrastructure.Security;
 using ToggleMesh.API.Persistence;
 using ToggleMesh.IntegrationTests.Infrastructure;
 
@@ -22,7 +23,7 @@ public class FlagRulesApiTests : IClassFixture<TestWebApplicationFactory>
         _client = factory.CreateClient();
     }
 
-    private async Task<(Guid EnvironmentId, string ApiKey)> SeedEnvironmentAsync()
+    private async Task<(Guid ProjectId, Guid EnvironmentId, string ApiKey)> SeedEnvironmentAsync()
     {
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -33,26 +34,28 @@ public class FlagRulesApiTests : IClassFixture<TestWebApplicationFactory>
         var environment = new ProjectEnvironment { Name = "Staging", Project = project };
         db.Environments.Add(environment);
 
+        var plainKey = Guid.NewGuid().ToString("N");
+        var keyHash = ApiKeyHasher.Hash(plainKey);
         var key = new EnvironmentKey
         {
             Environment = environment,
-            ApiKey = Guid.NewGuid().ToString("N"),
+            KeyHash = keyHash,
+            KeyPreview = ApiKeyHasher.GeneratePreview(keyHash),
             CreatedOn = DateTime.UtcNow
         };
         db.EnvironmentKeys.Add(key);
 
         await db.SaveChangesAsync();
-        return (environment.Id, key.ApiKey);
+        return (project.Id, environment.Id, plainKey);
     }
 
     [Fact]
     public async Task CreateFlag_WithRules_ShouldReturnRulesInResponse()
     {
         // Arrange
-        var (envId, _) = await SeedEnvironmentAsync();
-        var request = new CreateFlagRequest 
-        { 
-            EnvironmentId = envId, 
+        var (projectId, envId, _) = await SeedEnvironmentAsync();
+        var request = new CreateFlagRequest
+        {
             Key = "rule_flag_1",
             Rules =
             [
@@ -62,11 +65,11 @@ public class FlagRulesApiTests : IClassFixture<TestWebApplicationFactory>
         };
 
         // Act
-        var response = await _client.PostAsJsonAsync("/api/v1/flags", request);
+        var response = await _client.PostAsJsonAsync($"/api/v1/projects/{projectId}/environments/{envId}/flags", request);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Created);
-        
+
         var result = await response.Content.ReadFromJsonAsync<GetFlagResponse>();
         result.Should().NotBeNull();
         result.Key.Should().Be("rule_flag_1");
@@ -78,20 +81,17 @@ public class FlagRulesApiTests : IClassFixture<TestWebApplicationFactory>
     public async Task UpdateFlag_WithNewRules_ShouldReplaceExistingRules()
     {
         // Arrange
-        var (envId, _) = await SeedEnvironmentAsync();
-        
-        var createRequest = new CreateFlagRequest 
-        { 
-            EnvironmentId = envId, 
+        var (projectId, envId, _) = await SeedEnvironmentAsync();
+
+        var createRequest = new CreateFlagRequest
+        {
             Key = "rule_flag_update",
             Rules = [new RuleDto(0, "Age", "GreaterThan", "18")]
         };
-        await _client.PostAsJsonAsync("/api/v1/flags", createRequest);
+        await _client.PostAsJsonAsync($"/api/v1/projects/{projectId}/environments/{envId}/flags", createRequest);
 
         var updateRequest = new UpdateFlagRequest
         {
-            EnvironmentId = envId,
-            Key = "rule_flag_update",
             IsEnabled = true,
             Rules =
             [
@@ -101,11 +101,11 @@ public class FlagRulesApiTests : IClassFixture<TestWebApplicationFactory>
         };
 
         // Act
-        var updateResponse = await _client.PutAsJsonAsync("/api/v1/flags", updateRequest);
+        var updateResponse = await _client.PutAsJsonAsync($"/api/v1/projects/{projectId}/environments/{envId}/flags/rule_flag_update", updateRequest);
 
         // Assert
         updateResponse.StatusCode.Should().Be(HttpStatusCode.OK);
-        
+
         var result = await updateResponse.Content.ReadFromJsonAsync<GetFlagResponse>();
         result.Should().NotBeNull();
         result.IsEnabled.Should().BeTrue();

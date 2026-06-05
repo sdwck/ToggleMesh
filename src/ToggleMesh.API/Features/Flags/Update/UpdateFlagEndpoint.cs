@@ -1,14 +1,14 @@
-using FastEndpoints;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using StackExchange.Redis;
 using ToggleMesh.API.Features.Flags.Get;
 using ToggleMesh.API.Hubs;
+using ToggleMesh.API.Infrastructure;
 using ToggleMesh.API.Persistence;
 
 namespace ToggleMesh.API.Features.Flags.Update;
 
-public class UpdateFlagEndpoint : Endpoint<UpdateFlagRequest, GetFlagResponse>
+public class UpdateFlagEndpoint : ToggleEndpoint<UpdateFlagRequest, GetFlagResponse>
 {
     private readonly AppDbContext _db;
     private readonly IHubContext<ToggleHub> _hubContext;
@@ -29,16 +29,19 @@ public class UpdateFlagEndpoint : Endpoint<UpdateFlagRequest, GetFlagResponse>
 
     public override void Configure()
     {
-        Put("/flags");
+        Put("/projects/{projectId}/environments/{environmentId}/flags/{key}");
         Version(1);
-        AllowAnonymous();
+        Policies($"Permission:{Auth.Models.Permissions.FlagsEdit}");
     }
 
     public override async Task HandleAsync(UpdateFlagRequest req, CancellationToken ct)
     {
+        var projectId = Route<Guid>("projectId");
+        var environmentId = Route<Guid>("environmentId");
+        var flagKey = Route<string>("Key");
         var flag = await _db.FeatureFlags
             .Include(x => x.Rules)
-            .FirstOrDefaultAsync(x => x.EnvironmentId == req.EnvironmentId && x.Key == req.Key, ct);
+            .FirstOrDefaultAsync(x => x.EnvironmentId == environmentId && x.Key == flagKey, ct);
 
         if (flag is null)
         {
@@ -79,18 +82,18 @@ public class UpdateFlagEndpoint : Endpoint<UpdateFlagRequest, GetFlagResponse>
 
         try
         {
-            var cacheKey = $"flags:{req.EnvironmentId}:{req.Key}";
+            var cacheKey = $"flags:{environmentId}:{flagKey}";
             await _redis.StringSetAsync(cacheKey, System.Text.Json.JsonSerializer.Serialize(response), TimeSpan.FromMinutes(10));
         }
         catch (Exception e)
         {
-            _logger.LogError(e, "Failed to update Redis cache for flag {FlagKey}", req.Key);
+            _logger.LogError(e, "Failed to update Redis cache for flag {FlagKey}", flagKey);
         }
 
         try
         {
             await _hubContext.Clients
-                .Group(req.EnvironmentId.ToString())
+                .Group(environmentId.ToString())
                 .SendAsync("FlagUpdated", response, ct);
         }
         catch (Exception e)

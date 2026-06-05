@@ -1,13 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using StackExchange.Redis;
+using ToggleMesh.API.Infrastructure.Security;
 using ToggleMesh.API.Persistence;
 
-namespace ToggleMesh.API.Features.Projects;
-
-public interface IApiKeyCacheService
-{
-    Task<Guid?> GetEnvironmentIdAsync(string apiKey, CancellationToken ct = default);
-}
+namespace ToggleMesh.API.Infrastructure;
 
 public class ApiKeyCacheService : IApiKeyCacheService
 {
@@ -24,26 +20,23 @@ public class ApiKeyCacheService : IApiKeyCacheService
     public async Task<Guid?> GetEnvironmentIdAsync(string apiKey, CancellationToken ct = default)
     {
         var db = _redis.GetDatabase();
-        var cacheKey = $"apikey:{apiKey}";
+        var keyHash = ApiKeyHasher.Hash(apiKey);
+        var cacheKey = $"apikey:{keyHash}";
 
         var cachedValue = await db.StringGetAsync(cacheKey);
-        
+
         if (cachedValue.HasValue)
         {
             if (cachedValue.ToString() == "invalid")
-            {
                 return null;
-            }
-            
+
             if (Guid.TryParse(cachedValue.ToString(), out var envId))
-            {
                 return envId;
-            }
         }
 
         var envKey = await _db.EnvironmentKeys
             .AsNoTracking()
-            .FirstOrDefaultAsync(x => x.ApiKey == apiKey && (x.ExpireOn == null || x.ExpireOn > DateTime.UtcNow), ct);
+            .FirstOrDefaultAsync(x => x.KeyHash == keyHash && (x.ExpireOn == null || x.ExpireOn > DateTime.UtcNow), ct);
 
         if (envKey == null)
         {
@@ -56,12 +49,24 @@ public class ApiKeyCacheService : IApiKeyCacheService
         {
             var timeToExpire = envKey.ExpireOn.Value - DateTime.UtcNow;
             if (timeToExpire < _cacheTtl)
-            {
                 ttl = timeToExpire;
-            }
         }
 
         await db.StringSetAsync(cacheKey, envKey.EnvironmentId.ToString(), ttl);
         return envKey.EnvironmentId;
+    }
+
+    public async Task RemoveEnvironmentIdAsync(string apiKey, CancellationToken ct = default)
+    {
+        var db = _redis.GetDatabase();
+        var cacheKey = $"apikey:{apiKey}";
+        await db.KeyDeleteAsync(cacheKey);
+    }
+
+    public async Task SetEnvironmentIdAsync(string apiKey, Guid environmentId, CancellationToken ct = default)
+    {
+        var db = _redis.GetDatabase();
+        var cacheKey = $"apikey:{apiKey}";
+        await db.StringSetAsync(cacheKey, environmentId.ToString(), _cacheTtl);
     }
 }

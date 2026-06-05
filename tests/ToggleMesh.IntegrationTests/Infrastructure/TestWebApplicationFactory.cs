@@ -1,5 +1,7 @@
-﻿using Microsoft.AspNetCore.Hosting;
+﻿using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Time.Testing;
@@ -18,7 +20,7 @@ public class TestWebApplicationFactory : WebApplicationFactory<Program>, IAsyncL
             .WithUsername("postgres")
             .WithPassword("postgres")
             .Build();
-    
+
     private readonly RedisContainer _redis =
         new RedisBuilder("redis:latest")
             .Build();
@@ -27,25 +29,32 @@ public class TestWebApplicationFactory : WebApplicationFactory<Program>, IAsyncL
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
+        builder.ConfigureTestServices(services =>
+        {
+            services.AddAuthentication(defaultScheme: TestAuthHandler.AuthenticationScheme)
+                .AddScheme<AuthenticationSchemeOptions, TestAuthHandler>(
+                    TestAuthHandler.AuthenticationScheme, options => { });
+        });
+
         builder.ConfigureServices(services =>
         {
             services.AddSingleton<TimeProvider>(TimeProvider);
-            
+
             var dbDescriptor = services.SingleOrDefault(
                 d => d.ServiceType == typeof(DbContextOptions<AppDbContext>));
-            if (dbDescriptor is not null) 
+            if (dbDescriptor is not null)
                 services.Remove(dbDescriptor);
-            
+
             var redisDescriptor = services.SingleOrDefault(
                 d => d.ServiceType == typeof(IConnectionMultiplexer));
-            if (redisDescriptor is not null) 
+            if (redisDescriptor is not null)
                 services.Remove(redisDescriptor);
 
             services.AddDbContext<AppDbContext>((sp, options) =>
             {
                 options.UseNpgsql(_db.GetConnectionString());
             });
-            
+
             services.AddSingleton<IConnectionMultiplexer>(_ =>
                 ConnectionMultiplexer.Connect(_redis.GetConnectionString()));
         });
@@ -55,10 +64,21 @@ public class TestWebApplicationFactory : WebApplicationFactory<Program>, IAsyncL
     {
         await _db.StartAsync();
         await _redis.StartAsync();
-        
+
         using var scope = Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         await db.Database.MigrateAsync();
+
+        var testUser = new API.Features.Auth.Models.ApplicationUser
+        {
+            Id = Guid.Parse(TestAuthHandler.TestUserId),
+            UserName = "test@example.com",
+            Email = "test@example.com",
+            NormalizedUserName = "TEST@EXAMPLE.COM",
+            NormalizedEmail = "TEST@EXAMPLE.COM"
+        };
+        db.Users.Add(testUser);
+        await db.SaveChangesAsync();
     }
 
     public new async Task DisposeAsync()

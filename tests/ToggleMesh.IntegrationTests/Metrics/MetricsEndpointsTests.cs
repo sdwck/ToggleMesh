@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using ToggleMesh.API.Features.Flags;
 using ToggleMesh.API.Features.Metrics.Ingest;
 using ToggleMesh.API.Features.Projects;
+using ToggleMesh.API.Infrastructure.Security;
 using ToggleMesh.API.Persistence;
 using ToggleMesh.IntegrationTests.Infrastructure;
 
@@ -33,10 +34,13 @@ public class MetricsEndpointsTests : IClassFixture<TestWebApplicationFactory>
         var environment = new ProjectEnvironment { Name = "Production", Project = project };
         db.Environments.Add(environment);
 
+        var plainKey = Guid.NewGuid().ToString("N");
+        var keyHash = ApiKeyHasher.Hash(plainKey);
         var key = new EnvironmentKey
         {
             Environment = environment,
-            ApiKey = Guid.NewGuid().ToString("N"),
+            KeyHash = keyHash,
+            KeyPreview = ApiKeyHasher.GeneratePreview(keyHash),
             CreatedOn = DateTime.UtcNow
         };
         db.EnvironmentKeys.Add(key);
@@ -52,7 +56,7 @@ public class MetricsEndpointsTests : IClassFixture<TestWebApplicationFactory>
         db.FeatureFlags.Add(flag);
 
         await db.SaveChangesAsync();
-        return (environment.Id, key.ApiKey);
+        return (environment.Id, plainKey);
     }
 
     [Fact]

@@ -1,4 +1,4 @@
-﻿namespace ToggleMesh.API.Features.Projects;
+﻿namespace ToggleMesh.API.Infrastructure;
 
 public interface IHasEnvironment
 {

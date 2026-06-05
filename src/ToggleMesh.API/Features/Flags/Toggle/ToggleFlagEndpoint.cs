@@ -1,14 +1,14 @@
-using FastEndpoints;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using StackExchange.Redis;
 using ToggleMesh.API.Features.Flags.Get;
 using ToggleMesh.API.Hubs;
+using ToggleMesh.API.Infrastructure;
 using ToggleMesh.API.Persistence;
 
 namespace ToggleMesh.API.Features.Flags.Toggle;
 
-public class ToggleFlagEndpoint : Endpoint<ToggleFlagRequest>
+public class ToggleFlagEndpoint : ToggleEndpoint<ToggleFlagRequest>
 {
     private readonly IHubContext<ToggleHub> _hubContext;
     private readonly AppDbContext _db;
@@ -29,16 +29,18 @@ public class ToggleFlagEndpoint : Endpoint<ToggleFlagRequest>
 
     public override void Configure()
     {
-        Post("/flags/toggle");
+        Post("/projects/{projectId}/environments/{environmentId}/flags/{key}/toggle");
         Version(1);
-        AllowAnonymous();
+        Policies($"Permission:{Auth.Models.Permissions.FlagsToggle}");
     }
 
     public override async Task HandleAsync(ToggleFlagRequest req, CancellationToken ct)
     {
+        var environmentId = Route<Guid>("environmentId");
+        var flagKey = Route<string>("Key");
         var flag = await _db.FeatureFlags
             .Include(x => x.Rules)
-            .FirstOrDefaultAsync(x => x.EnvironmentId == req.EnvironmentId && x.Key == req.Key, ct);
+            .FirstOrDefaultAsync(x => x.EnvironmentId == environmentId && x.Key == flagKey, ct);
 
         if (flag is null)
         {
@@ -57,18 +59,18 @@ public class ToggleFlagEndpoint : Endpoint<ToggleFlagRequest>
 
         try
         {
-            var cacheKey = $"flags:{req.EnvironmentId}:{req.Key}";
+            var cacheKey = $"flags:{environmentId}:{flagKey}";
             await _redis.StringSetAsync(cacheKey, System.Text.Json.JsonSerializer.Serialize(response), TimeSpan.FromMinutes(10));
         }
         catch (Exception e)
         {
-            _logger.LogError(e, "Failed to update Redis cache for flag {FlagKey}", req.Key);
+            _logger.LogError(e, "Failed to update Redis cache for flag {FlagKey}", flagKey);
         }
 
         try
         {
             await _hubContext.Clients
-                .Group(req.EnvironmentId.ToString())
+                .Group(environmentId.ToString())
                 .SendAsync("FlagUpdated", response, ct);
         }
         catch (Exception e)
@@ -76,6 +78,6 @@ public class ToggleFlagEndpoint : Endpoint<ToggleFlagRequest>
             _logger.LogError(e, "Failed to broadcast flag update");
         }
 
-        await Send.OkAsync(new { req.Key, req.IsEnabled }, ct);
+        await Send.OkAsync(new { flagKey, req.IsEnabled }, ct);
     }
 }

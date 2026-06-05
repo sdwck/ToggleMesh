@@ -23,21 +23,27 @@ public class HttpContextToggleContextProvider : IToggleMeshContextProvider
         
         if (string.Equals(key, "UserId", StringComparison.OrdinalIgnoreCase))
         {
-            value = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            value = user.FindFirst("sub")?.Value
+                    ?? user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             return value != null;
         }
         
         if (string.Equals(key, "Email", StringComparison.OrdinalIgnoreCase))
         {
-            value = user.FindFirst(ClaimTypes.Email)?.Value;
+            value = user.FindFirst("email")?.Value 
+                    ?? user.FindFirst(ClaimTypes.Email)?.Value;
             return value != null;
         }
         
         if (string.Equals(key, "Roles", StringComparison.OrdinalIgnoreCase))
         {
-            var roles = user.FindAll(ClaimTypes.Role).Select(r => r.Value);
-            value = string.Join(",", roles);
-            return !string.IsNullOrEmpty(value);
+            var roles = user.FindAll("Role")
+                .Concat(user.FindAll(ClaimTypes.Role))
+                .Select(r => r.Value)
+                .Distinct()
+                .ToList();
+            value = roles.Count != 0 ? string.Join(",", roles) : null;
+            return value != null;
         }
 
         value = null;

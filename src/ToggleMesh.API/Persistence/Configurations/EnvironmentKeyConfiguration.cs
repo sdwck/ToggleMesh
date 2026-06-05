@@ -14,11 +14,15 @@ public sealed class EnvironmentKeyConfiguration
         entity.Property(x => x.Id)
             .ValueGeneratedOnAdd();
 
-        entity.Property(x => x.ApiKey)
+        entity.Property(x => x.KeyHash)
             .HasMaxLength(64)
             .IsRequired();
 
-        entity.HasIndex(x => x.ApiKey)
+        entity.HasIndex(x => x.KeyHash)
             .IsUnique();
+        
+        entity.Property(x => x.KeyPreview)
+            .HasMaxLength(32)
+            .IsRequired();
     }
 }
