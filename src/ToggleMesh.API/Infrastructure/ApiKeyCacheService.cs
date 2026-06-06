@@ -48,6 +48,11 @@ public class ApiKeyCacheService : IApiKeyCacheService
         if (envKey.ExpireOn.HasValue)
         {
             var timeToExpire = envKey.ExpireOn.Value - DateTime.UtcNow;
+            if (timeToExpire <= TimeSpan.Zero)
+            {
+                await db.StringSetAsync(cacheKey, "invalid", _cacheTtl);
+                return null;
+            }
             if (timeToExpire < _cacheTtl)
                 ttl = timeToExpire;
         }
