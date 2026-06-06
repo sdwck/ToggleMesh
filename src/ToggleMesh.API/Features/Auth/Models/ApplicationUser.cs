@@ -7,4 +7,7 @@ public class ApplicationUser : IdentityUser<Guid>
 {
     // ReSharper disable once CollectionNeverUpdated.Global
     public ICollection<ProjectMember> ProjectMembers { get; set; } = [];
+
+    // ReSharper disable once CollectionNeverUpdated.Global
+    public ICollection<RefreshToken> RefreshTokens { get; set; } = [];
 }

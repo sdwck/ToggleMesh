@@ -37,7 +37,7 @@ public class HttpContextToggleContextProvider : IToggleMeshContextProvider
         
         if (string.Equals(key, "Roles", StringComparison.OrdinalIgnoreCase))
         {
-            var roles = user.FindAll("Role")
+            var roles = user.FindAll("role")
                 .Concat(user.FindAll(ClaimTypes.Role))
                 .Select(r => r.Value)
                 .Distinct()

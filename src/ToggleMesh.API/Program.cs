@@ -1,6 +1,4 @@
 using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
-using System.Text;
 using System.Threading.Channels;
 using FastEndpoints;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -68,19 +66,27 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         options.TokenValidationParameters = new TokenValidationParameters
         {
             NameClaimType = JwtRegisteredClaimNames.Sub,
-            RoleClaimType = "Role",
+            RoleClaimType = "role",
             ValidateIssuer = true,
             ValidateAudience = true,
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
             ValidIssuer = jwtSettings["Issuer"],
             ValidAudience = jwtSettings["Audience"],
-            IssuerSigningKey = new SymmetricSecurityKey(
-                Encoding.UTF8
-                    .GetBytes(jwtSettings["Key"]
-                              ?? throw new InvalidOperationException("JWT Key is not configured."))),
+            IssuerSigningKey = ToggleMesh.API.Infrastructure.Security.RsaKeyProvider.GetKey()
         };
     });
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AdminUI", policy =>
+    {
+        policy.WithOrigins("http://localhost:5173")
+            .AllowAnyHeader()
+            .AllowAnyMethod()
+            .AllowCredentials();
+    });
+});
 
 builder.Services.AddAuthorization();
 builder.Services.AddHttpContextAccessor();
@@ -102,6 +108,7 @@ if (app.Environment.IsDevelopment())
     app.MapScalarApiReference();
 }
 
+app.UseCors("AdminUI");
 app.UseAuthentication();
 app.UseAuthorization();
 

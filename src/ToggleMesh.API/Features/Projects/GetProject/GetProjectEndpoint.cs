@@ -23,7 +23,7 @@ public class GetProjectEndpoint : ToggleEndpointWithoutRequest<GetProjectRespons
     public override async Task HandleAsync(CancellationToken ct)
     {
         var projectId = Route<Guid>("projectId");
-        var isOwner = User.HasClaim(c => c is { Type: "Role", Value: "Owner" });
+        var isOwner = User.HasClaim(c => c is { Type: "role", Value: "Owner" });
 
         var query = _db.Projects
             .AsNoTracking()

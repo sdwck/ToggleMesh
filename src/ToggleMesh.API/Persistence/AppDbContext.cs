@@ -16,6 +16,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
     public DbSet<FeatureFlag> FeatureFlags { get; set; }
     public DbSet<AuditLog> AuditLogs { get; set; }
     public DbSet<ProjectMember> ProjectMembers { get; set; }
+    public DbSet<RefreshToken> RefreshTokens { get; set; }
 
     public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
 

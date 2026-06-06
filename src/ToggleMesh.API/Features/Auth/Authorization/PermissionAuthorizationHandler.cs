@@ -27,7 +27,7 @@ public class PermissionAuthorizationHandler : AuthorizationHandler<PermissionReq
             return;
         }
 
-        var isOwner = context.User.HasClaim(c => c is { Type: "Role", Value: "Owner" });
+        var isOwner = context.User.HasClaim(c => c is { Type: "role", Value: "Owner" });
         if (isOwner)
         {
             if (Permissions.OwnerPermissions.Contains(requirement.Permission))

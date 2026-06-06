@@ -1,10 +1,7 @@
 using Microsoft.AspNetCore.Identity;
-using Microsoft.IdentityModel.Tokens;
-using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
-using System.Text;
 using ToggleMesh.API.Features.Auth.Models;
 using ToggleMesh.API.Infrastructure;
+using ToggleMesh.API.Persistence;
 
 namespace ToggleMesh.API.Features.Auth.Endpoints;
 
@@ -12,11 +9,13 @@ public class LoginEndpoint : ToggleEndpoint<LoginRequest, LoginResponse>
 {
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly IConfiguration _configuration;
+    private readonly AppDbContext _db;
 
-    public LoginEndpoint(UserManager<ApplicationUser> userManager, IConfiguration configuration)
+    public LoginEndpoint(UserManager<ApplicationUser> userManager, IConfiguration configuration, AppDbContext db)
     {
         _userManager = userManager;
         _configuration = configuration;
+        _db = db;
     }
 
     public override void Configure()
@@ -32,36 +31,23 @@ public class LoginEndpoint : ToggleEndpoint<LoginRequest, LoginResponse>
         if (user == null || !await _userManager.CheckPasswordAsync(user, req.Password))
             ThrowError("Invalid email or password");
 
-        var jwtSettings = _configuration.GetSection("Jwt");
-        var claims = new List<Claim>
+        var (accessToken, refreshToken) = await TokenGenerator.GenerateTokensAsync(user, _userManager, _configuration);
+
+        var rt = new RefreshToken
         {
-            new(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
-            new(JwtRegisteredClaimNames.Email, user.Email!),
-            new(JwtRegisteredClaimNames.Name, user.UserName!)
+            Token = refreshToken,
+            UserId = user.Id,
+            Expires = DateTime.UtcNow.AddDays(7),
+            Created = DateTime.UtcNow
         };
         
-        var userClaims = await _userManager.GetClaimsAsync(user);
-        claims.AddRange(userClaims);
-        
-        var key = new SymmetricSecurityKey(
-            Encoding.UTF8
-                .GetBytes(jwtSettings["Key"] 
-                          ?? throw new InvalidOperationException("JWT Key is not configured.")));
-        var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
-
-        var token = new JwtSecurityToken(
-            issuer: jwtSettings["Issuer"],
-            audience: jwtSettings["Audience"],
-            claims: claims,
-            expires: DateTime.UtcNow.AddDays(7),
-            signingCredentials: creds
-        );
-
-        var tokenHandler = new JwtSecurityTokenHandler();
+        _db.RefreshTokens.Add(rt);
+        await _db.SaveChangesAsync(ct);
 
         await Send.OkAsync(new LoginResponse
         {
-            Token = tokenHandler.WriteToken(token)
+            Token = accessToken,
+            RefreshToken = refreshToken
         }, cancellation: ct);
     }
 }

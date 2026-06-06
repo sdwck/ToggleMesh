@@ -3,16 +3,21 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using ToggleMesh.API.Features.Auth.Models;
 using ToggleMesh.API.Infrastructure;
+using ToggleMesh.API.Persistence;
 
 namespace ToggleMesh.API.Features.Auth.Endpoints;
 
-public class RegisterEndpoint : ToggleEndpoint<RegisterRequest>
+public class RegisterEndpoint : ToggleEndpoint<RegisterRequest, LoginResponse>
 {
     private readonly UserManager<ApplicationUser> _userManager;
+    private readonly IConfiguration _configuration;
+    private readonly AppDbContext _db;
 
-    public RegisterEndpoint(UserManager<ApplicationUser> userManager)
+    public RegisterEndpoint(UserManager<ApplicationUser> userManager, IConfiguration configuration, AppDbContext db)
     {
         _userManager = userManager;
+        _configuration = configuration;
+        _db = db;
     }
 
     public override void Configure()
@@ -37,10 +42,27 @@ public class RegisterEndpoint : ToggleEndpoint<RegisterRequest>
                 AddError(error.Description);
             ThrowIfAnyErrors();
         }
-        
-        if (await _userManager.Users.CountAsync(ct) == 1)
-            await _userManager.AddClaimAsync(user, new Claim("Role", "Owner"));
 
-        await Send.OkAsync(cancellation: ct);
+        if (await _userManager.Users.CountAsync(ct) == 1)
+            await _userManager.AddClaimAsync(user, new Claim("role", "Owner"));
+
+        var (accessToken, refreshToken) = await TokenGenerator.GenerateTokensAsync(user, _userManager, _configuration);
+
+        var rt = new RefreshToken
+        {
+            Token = refreshToken,
+            UserId = user.Id,
+            Expires = DateTime.UtcNow.AddDays(7),
+            Created = DateTime.UtcNow
+        };
+
+        _db.RefreshTokens.Add(rt);
+        await _db.SaveChangesAsync(ct);
+
+        await Send.OkAsync(new LoginResponse
+        {
+            Token = accessToken,
+            RefreshToken = refreshToken
+        }, cancellation: ct);
     }
 }
