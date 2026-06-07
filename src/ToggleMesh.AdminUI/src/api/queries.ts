@@ -1,0 +1,148 @@
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import api from './axios';
+import type { Project, ProjectDetails, FeatureFlag, AuditLog, PaginatedResponse, ProjectMember, UpdateFlagRequest } from './types';
+
+export const useProjects = () => {
+  return useQuery({
+    queryKey: ['projects'],
+    queryFn: async () => {
+      const { data } = await api.get<Project[]>('/projects');
+      return data;
+    },
+  });
+};
+
+export const useProjectDetails = (projectId: string) => {
+  return useQuery({
+    queryKey: ['projects', projectId],
+    queryFn: async () => {
+      const { data } = await api.get<ProjectDetails>(`/projects/${projectId}`);
+      return data;
+    },
+    enabled: !!projectId,
+  });
+};
+
+export const useCreateProject = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (name: string) => {
+      const { data } = await api.post<{ id: string }>('/projects', { name });
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+    },
+  });
+};
+
+export const useCreateEnvironment = (projectId: string) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (name: string) => {
+      const { data } = await api.post<{ id: string }>(`/projects/${projectId}/environments`, { name });
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projects', projectId] });
+    },
+  });
+};
+
+export const useRotateEnvironmentKey = (projectId: string, envId: string) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const { data } = await api.post<{ apiKey: string }>(`/projects/${projectId}/environments/${envId}/keys/rotate`);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projects', projectId] });
+    },
+  });
+};
+
+export const useFeatureFlags = (projectId: string, envId: string) => {
+  return useQuery({
+    queryKey: ['environments', envId, 'flags'],
+    queryFn: async () => {
+      const { data } = await api.get<FeatureFlag[]>(`/projects/${projectId}/environments/${envId}/flags`);
+      return data;
+    },
+    enabled: !!envId && !!projectId,
+  });
+};
+
+export const useCreateFeatureFlag = (projectId: string, envId: string) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (key: string) => {
+      const { data } = await api.post<{ id: string }>(`/projects/${projectId}/environments/${envId}/flags`, { key });
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['environments', envId, 'flags'] });
+      queryClient.invalidateQueries({ queryKey: ['environments', envId, 'audit'] });
+    },
+  });
+};
+
+export const useToggleFeatureFlag = (projectId: string, envId: string) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ flagKey, isEnabled }: { flagKey: string; isEnabled: boolean }) => {
+      await api.post(`/projects/${projectId}/environments/${envId}/flags/${flagKey}/toggle`, { isEnabled });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['environments', envId, 'flags'] });
+      queryClient.invalidateQueries({ queryKey: ['environments', envId, 'audit'] });
+    },
+  });
+};
+
+export const useAuditLogs = (envId: string, page: number = 1, pageSize: number = 20) => {
+  return useQuery({
+    queryKey: ['environments', envId, 'audit', page, pageSize],
+    queryFn: async () => {
+      const { data } = await api.get<PaginatedResponse<AuditLog>>(`/audit-logs?EnvironmentId=${envId}&Page=${page}&PageSize=${pageSize}`);
+      return data;
+    },
+    enabled: !!envId,
+  });
+};
+
+export const useUpdateFeatureFlag = (projectId: string, envId: string, flagKey: string) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (request: UpdateFlagRequest) => {
+      await api.put(`/projects/${projectId}/environments/${envId}/flags/${flagKey}`, request);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['environments', envId, 'flags'] });
+      queryClient.invalidateQueries({ queryKey: ['environments', envId, 'audit'] });
+    },
+  });
+};
+
+export const useProjectMembers = (projectId: string) => {
+  return useQuery({
+    queryKey: ['projects', projectId, 'members'],
+    queryFn: async () => {
+      const { data } = await api.get<ProjectMember[]>(`/projects/${projectId}/members`);
+      return data;
+    },
+    enabled: !!projectId,
+  });
+};
+
+export const useAddProjectMember = (projectId: string) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (request: { email: string; role: number }) => {
+      await api.post(`/projects/${projectId}/members`, request);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projects', projectId, 'members'] });
+    },
+  });
+};
