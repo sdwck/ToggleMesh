@@ -19,6 +19,7 @@ public class TestAuthHandler : AuthenticationHandler<AuthenticationSchemeOptions
     }
 
     public const string TestUserId = "00000000-0000-0000-0000-000000000001";
+    public const string TestUserEmail = "test@example.com";
 
     protected override Task<AuthenticateResult> HandleAuthenticateAsync()
     {
@@ -26,7 +27,7 @@ public class TestAuthHandler : AuthenticationHandler<AuthenticationSchemeOptions
         {
             new Claim(ClaimTypes.NameIdentifier, TestUserId),
             new Claim("sub", TestUserId),
-            new Claim(ClaimTypes.Email, "test@example.com"),
+            new Claim(ClaimTypes.Email, TestUserEmail),
             new Claim("role", "Owner")
         };
         var identity = new ClaimsIdentity(claims, AuthenticationScheme);

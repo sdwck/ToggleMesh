@@ -32,7 +32,9 @@ public class SdkGetFlagsEndpoint : ToggleEndpoint<SdkGetFlagsRequest, List<GetFl
                 x.Key, 
                 x.IsEnabled, 
                 x.Rules.Select(r => new RuleDto(r.GroupId, r.Attribute, r.Operator, r.Value)),
-                x.RolloutPercentage))
+                x.RolloutPercentage,
+                x.TrueCount,
+                x.FalseCount))
             .ToListAsync(ct);
 
         await Send.OkAsync(flags, ct);

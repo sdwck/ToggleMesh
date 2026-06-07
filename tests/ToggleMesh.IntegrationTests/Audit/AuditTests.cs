@@ -45,10 +45,10 @@ public class AuditTests : IClassFixture<TestWebApplicationFactory>
         searchResponse.EnsureSuccessStatusCode();
         var result = await searchResponse.Content.ReadFromJsonAsync<GetAuditLogsResponse>();
 
-        result!.Logs.Should().Contain(l => l.EntityName == "FeatureFlag" && l.Action == "Added");
-        var log = result.Logs.First(l => l.EntityName == "FeatureFlag" && l.Action == "Added");
+        result!.Items.Should().Contain(l => l.EntityName == "FeatureFlag" && l.Action == "Added");
+        var log = result.Items.First(l => l.EntityName == "FeatureFlag" && l.Action == "Added");
         
-        log.PerformedBy.Should().Be(TestAuthHandler.TestUserId);
+        log.PerformedBy.Should().Be(TestAuthHandler.TestUserEmail);
         log.EnvironmentId.Should().Be(env.Id);
     }
 

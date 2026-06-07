@@ -9,11 +9,17 @@ public class GetAuditLogsRequest
 {
     public Guid? ProjectId { get; set; }
     public Guid? EnvironmentId { get; set; }
+    public int Page { get; set; } = 1;
+    public int PageSize { get; set; } = 20;
 }
 
 public class GetAuditLogsResponse
 {
-    public List<AuditLogDto> Logs { get; set; } = [];
+    public List<AuditLogDto> Items { get; set; } = [];
+    public int TotalCount { get; set; }
+    public int TotalPages { get; set; }
+    public bool HasNextPage { get; set; }
+    public bool HasPreviousPage { get; set; }
 }
 
 public record AuditLogDto(
@@ -57,14 +63,29 @@ public class GetAuditLogsEndpoint : ToggleEndpoint<GetAuditLogsRequest, GetAudit
                 .Where(e => e.ProjectId == req.ProjectId)
                 .Select(e => e.Id)
                 .ToListAsync(ct);
-            
-            query = query.Where(x => x.EnvironmentId != null && envIds.Contains(x.EnvironmentId.Value));
+
+            query = query.Where(x => x.EnvironmentId != null && envIds.Contains(x.EnvironmentId.Value));        
         }
+
+        var totalCount = await query.CountAsync(ct);
+        var totalPages = (int)Math.Ceiling(totalCount / (double)req.PageSize);
 
         var logs = await query
             .OrderByDescending(x => x.Timestamp)
-            .Take(100)
-            .Select(x => new AuditLogDto(
+            .Skip((req.Page - 1) * req.PageSize)
+            .Take(req.PageSize)
+            .ToListAsync(ct);
+
+        var userIdsString = logs.Select(l => l.PerformedBy).Distinct().ToList();
+        var userIdsGuid = userIdsString.Where(id => Guid.TryParse(id, out _)).Select(Guid.Parse).ToList();
+        
+        var userEmails = await _db.Users
+            .Where(u => userIdsGuid.Contains(u.Id))
+            .ToDictionaryAsync(u => u.Id.ToString(), u => u.Email ?? "Unknown", ct);
+
+        var response = new GetAuditLogsResponse
+        {
+            Items = logs.Select(x => new AuditLogDto(
                 x.Id,
                 x.EnvironmentId,
                 x.EntityName,
@@ -72,10 +93,14 @@ public class GetAuditLogsEndpoint : ToggleEndpoint<GetAuditLogsRequest, GetAudit
                 x.Action,
                 x.OldValues,
                 x.NewValues,
-                x.PerformedBy,
-                x.Timestamp))
-            .ToListAsync(ct);
+                userEmails.GetValueOrDefault(x.PerformedBy, x.PerformedBy),
+                x.Timestamp)).ToList(),
+            TotalCount = totalCount,
+            TotalPages = totalPages,
+            HasPreviousPage = req.Page > 1,
+            HasNextPage = req.Page < totalPages
+        };
 
-        await Send.OkAsync(new GetAuditLogsResponse { Logs = logs }, ct);
+        await Send.OkAsync(response, ct);
     }
 }
