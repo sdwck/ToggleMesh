@@ -4,7 +4,7 @@ import { Register } from '@/features/auth/Register';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { ProjectsPage } from '@/features/projects/ProjectsPage';
 import { ProjectDetailsPage } from '@/features/projects/ProjectDetailsPage';
-import { EnvironmentFlagsPage } from '@/features/environments/EnvironmentFlagsPage';
+import { ProjectFlagDetailsPage } from '@/features/flags/ProjectFlagDetailsPage';
 import { GlobalError } from '@/components/GlobalError';
 
 export const router = createBrowserRouter([
@@ -36,8 +36,8 @@ export const router = createBrowserRouter([
         element: <ProjectDetailsPage />,
       },
       {
-        path: 'projects/:projectId/environments/:envId',
-        element: <EnvironmentFlagsPage />,
+        path: 'projects/:projectId/flags/:flagKey',
+        element: <ProjectFlagDetailsPage />,
       },
     ],
   },

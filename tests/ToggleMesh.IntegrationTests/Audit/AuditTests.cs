@@ -30,7 +30,7 @@ public class AuditTests : IClassFixture<TestWebApplicationFactory>
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
         var project = new Project { Name = "Audit Project" };
-        db.Projects.Add(project);
+        db.Projects.Add(project); db.ProjectMembers.Add(new ToggleMesh.API.Features.Projects.ProjectMember { Project = project, UserId = Guid.Parse(ToggleMesh.IntegrationTests.Infrastructure.TestAuthHandler.TestUserId), Role = ToggleMesh.API.Features.Projects.ProjectRole.Owner });
         var env = new ProjectEnvironment { Name = "Audit Env", Project = project };
         db.Environments.Add(env);
         await db.SaveChangesAsync();
@@ -38,7 +38,7 @@ public class AuditTests : IClassFixture<TestWebApplicationFactory>
         var request = new CreateFlagRequest { Key = "audit_performed_by_flag" };
 
         // Act
-        await _client.PostAsJsonAsync($"/api/v1/projects/{project.Id}/environments/{env.Id}/flags", request);
+        await _client.PostAsJsonAsync($"/api/v1/projects/{project.Id}/flags", request);
 
         // Assert
         var searchResponse = await _client.GetAsync($"/api/v1/audit-logs?ProjectId={project.Id}");
@@ -47,9 +47,9 @@ public class AuditTests : IClassFixture<TestWebApplicationFactory>
 
         result!.Items.Should().Contain(l => l.EntityName == "FeatureFlag" && l.Action == "Added");
         var log = result.Items.First(l => l.EntityName == "FeatureFlag" && l.Action == "Added");
-        
+
         log.PerformedBy.Should().Be(TestAuthHandler.TestUserEmail);
-        log.EnvironmentId.Should().Be(env.Id);
+        log.EnvironmentId.Should().BeNull();
     }
 
     [Fact]
@@ -60,7 +60,7 @@ public class AuditTests : IClassFixture<TestWebApplicationFactory>
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
         var project = new Project { Name = "Audit Project" };
-        db.Projects.Add(project);
+        db.Projects.Add(project); db.ProjectMembers.Add(new ToggleMesh.API.Features.Projects.ProjectMember { Project = project, UserId = Guid.Parse(ToggleMesh.IntegrationTests.Infrastructure.TestAuthHandler.TestUserId), Role = ToggleMesh.API.Features.Projects.ProjectRole.Owner });
         var env = new ProjectEnvironment { Name = "Audit Env", Project = project };
         db.Environments.Add(env);
         await db.SaveChangesAsync();
@@ -68,16 +68,15 @@ public class AuditTests : IClassFixture<TestWebApplicationFactory>
         var request = new CreateFlagRequest { Key = "audit_flag" };
 
         // Act
-        await _client.PostAsJsonAsync($"/api/v1/projects/{project.Id}/environments/{env.Id}/flags", request);
+        await _client.PostAsJsonAsync($"/api/v1/projects/{project.Id}/flags", request);
 
         // Assert
         var logs = await db.AuditLogs
-            .Where(x => x.EntityName == "FeatureFlag" && x.Action == "Added" && x.EnvironmentId == env.Id)
+            .Where(x => x.EntityName == "FlagEnvironmentState" && x.Action == "Added" && x.EnvironmentId == env.Id)
             .ToListAsync();
 
         logs.Should().HaveCount(1);
         var log = logs.First();
-        log.NewValues.Should().Contain("audit_flag");
         log.EnvironmentId.Should().Be(env.Id);
     }
 
@@ -89,12 +88,12 @@ public class AuditTests : IClassFixture<TestWebApplicationFactory>
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
         var project = new Project { Name = "Audit Project 2" };
-        db.Projects.Add(project);
+        db.Projects.Add(project); db.ProjectMembers.Add(new ToggleMesh.API.Features.Projects.ProjectMember { Project = project, UserId = Guid.Parse(ToggleMesh.IntegrationTests.Infrastructure.TestAuthHandler.TestUserId), Role = ToggleMesh.API.Features.Projects.ProjectRole.Owner });
         var env = new ProjectEnvironment { Name = "Audit Env 2", Project = project };
         db.Environments.Add(env);
         await db.SaveChangesAsync();
 
-        await _client.PostAsJsonAsync($"/api/v1/projects/{project.Id}/environments/{env.Id}/flags", new CreateFlagRequest { Key = "audit_update_flag" });
+        await _client.PostAsJsonAsync($"/api/v1/projects/{project.Id}/flags", new CreateFlagRequest { Key = "audit_update_flag" });
 
         db.AuditLogs.RemoveRange(db.AuditLogs);
         await db.SaveChangesAsync();
@@ -106,7 +105,7 @@ public class AuditTests : IClassFixture<TestWebApplicationFactory>
 
         // Assert
         var logs = await db.AuditLogs
-            .Where(x => x.EntityName == "FeatureFlag" && x.Action == "Modified" && x.EnvironmentId == env.Id)
+            .Where(x => x.EntityName == "FlagEnvironmentState" && x.Action == "Modified" && x.EnvironmentId == env.Id)
             .ToListAsync();
 
         logs.Should().HaveCount(1);

@@ -14,12 +14,14 @@ export interface Environment {
   id: string;
   name: string;
   keys: EnvironmentKey[];
+  userRole: ProjectRole;
 }
 
 export interface ProjectDetails {
   id: string;
   name: string;
   environments: Environment[];
+  userRole: ProjectRole;
 }
 
 export interface RuleDto {
@@ -37,6 +39,24 @@ export interface FeatureFlag {
   rules: RuleDto[];
   trueCount: number;
   falseCount: number;
+}
+
+export interface FlagEnvironmentStateDto {
+  environmentId: string;
+  isEnabled: boolean;
+  rolloutPercentage: number | null;
+  trueCount: number;
+  falseCount: number;
+  rulesCount: number;
+}
+
+export interface ProjectFlagDto {
+  id: string;
+  key: string;
+  name: string | null;
+  description: string | null;
+  createdAt: string;
+  environments: FlagEnvironmentStateDto[];
 }
 
 export interface PaginatedResponse<T> {
@@ -63,20 +83,32 @@ export const ProjectRole = {
   Admin: 1,
   Editor: 2,
   Viewer: 3,
+  None: 4
 } as const;
 
 export type ProjectRole = typeof ProjectRole[keyof typeof ProjectRole];
+
+export interface EnvironmentRoleDto {
+  environmentId: string;
+  role: ProjectRole;
+}
 
 export interface ProjectMember {
   id: string;
   userId: string;
   email: string;
   role: ProjectRole;
+  environmentRoles: EnvironmentRoleDto[];
 }
 
 export interface UpdateFlagRequest {
   isEnabled: boolean;
   rolloutPercentage: number | null;
   rules: RuleDto[];
+}
+
+export interface UpdateMemberRequest {
+  role: number;
+  environmentRoles: EnvironmentRoleDto[] | null;
 }
 

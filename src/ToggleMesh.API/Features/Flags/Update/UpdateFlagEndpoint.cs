@@ -36,23 +36,24 @@ public class UpdateFlagEndpoint : ToggleEndpoint<UpdateFlagRequest, GetFlagRespo
 
     public override async Task HandleAsync(UpdateFlagRequest req, CancellationToken ct)
     {
-        var projectId = Route<Guid>("projectId");
         var environmentId = Route<Guid>("environmentId");
-        var flagKey = Route<string>("Key");
-        var flag = await _db.FeatureFlags
-            .Include(x => x.Rules)
-            .FirstOrDefaultAsync(x => x.EnvironmentId == environmentId && x.Key == flagKey, ct);
+        var flagKey = Route<string>("key");
 
-        if (flag is null)
+        var state = await _db.FlagEnvironmentStates
+            .Include(x => x.FeatureFlag)
+            .Include(x => x.Rules)
+            .FirstOrDefaultAsync(x => x.EnvironmentId == environmentId && x.FeatureFlag.Key == flagKey, ct);
+
+        if (state is null)
         {
             await Send.NotFoundAsync(ct);
             return;
         }
         
-        flag.IsEnabled = req.IsEnabled;
-        flag.RolloutPercentage = req.RolloutPercentage;
+        state.IsEnabled = req.IsEnabled;
+        state.RolloutPercentage = req.RolloutPercentage;
 
-        var existingRules = flag.Rules.ToList();
+        var existingRules = state.Rules.ToList();
         foreach (var oldRule in existingRules)
         {
             if (!req.Rules.Any(r => r.GroupId == oldRule.GroupId && r.Attribute == oldRule.Attribute && r.Operator == oldRule.Operator && r.Value == oldRule.Value))
@@ -63,7 +64,7 @@ public class UpdateFlagEndpoint : ToggleEndpoint<UpdateFlagRequest, GetFlagRespo
         {
             if (!existingRules.Any(r => r.GroupId == newRule.GroupId && r.Attribute == newRule.Attribute && r.Operator == newRule.Operator && r.Value == newRule.Value))
             {
-                flag.Rules.Add(new FlagRule { 
+                state.Rules.Add(new FlagRule { 
                     GroupId = newRule.GroupId, 
                     Attribute = newRule.Attribute, 
                     Operator = newRule.Operator, 
@@ -75,10 +76,12 @@ public class UpdateFlagEndpoint : ToggleEndpoint<UpdateFlagRequest, GetFlagRespo
         await _db.SaveChangesAsync(ct);
 
         var response = new GetFlagResponse(
-            flag.Key, 
-            flag.IsEnabled, 
-            flag.Rules.Select(r => new RuleDto(r.GroupId, r.Attribute, r.Operator, r.Value)),
-            flag.RolloutPercentage);
+            state.FeatureFlag.Key, 
+            state.IsEnabled, 
+            state.Rules.Select(r => new RuleDto(r.GroupId, r.Attribute, r.Operator, r.Value)),
+            state.RolloutPercentage,
+            state.TrueCount,
+            state.FalseCount);
 
         try
         {

@@ -14,8 +14,11 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
     public DbSet<ProjectEnvironment> Environments { get; set; }
     public DbSet<EnvironmentKey> EnvironmentKeys { get; set; }
     public DbSet<FeatureFlag> FeatureFlags { get; set; }
+    public DbSet<FlagEnvironmentState> FlagEnvironmentStates { get; set; }
+    public DbSet<FlagRule> FlagRules { get; set; }
     public DbSet<AuditLog> AuditLogs { get; set; }
     public DbSet<ProjectMember> ProjectMembers { get; set; }
+    public DbSet<MemberEnvironmentRole> MemberEnvironmentRoles { get; set; }
     public DbSet<RefreshToken> RefreshTokens { get; set; }
 
     public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }

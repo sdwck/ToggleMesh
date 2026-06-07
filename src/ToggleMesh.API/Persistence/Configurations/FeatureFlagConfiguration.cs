@@ -9,13 +9,20 @@ public sealed class FeatureFlagConfiguration
 {
     public void Configure(EntityTypeBuilder<FeatureFlag> entity)
     {
+        entity.ToTable("ProjectFeatureFlags");
+
         entity.HasKey(x => x.Id);
 
         entity.Property(x => x.Key)
             .HasMaxLength(256)
             .IsRequired();
 
-        entity.HasIndex(x => new { x.EnvironmentId, x.Key })
+        entity.HasIndex(x => new { x.ProjectId, x.Key })
             .IsUnique();
+
+        entity.HasOne(x => x.Project)
+            .WithMany()
+            .HasForeignKey(x => x.ProjectId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }

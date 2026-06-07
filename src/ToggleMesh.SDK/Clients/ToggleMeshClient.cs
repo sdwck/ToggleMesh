@@ -340,21 +340,17 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService
         catch (BrokenCircuitException)
         {
             _logger.LogWarning("[ToggleMesh] Circuit breaker is open. Cannot sync state right now.");
-            throw;
         }
         catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
         {
             _logger.LogCritical("[ToggleMesh] Unauthorized (401). Invalid API Key.");
-            throw;
         }
         catch (OperationCanceledException)
         {
-            throw;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "[ToggleMesh] Failed to synchronize state with API.");
-            throw;
         }
     }
 

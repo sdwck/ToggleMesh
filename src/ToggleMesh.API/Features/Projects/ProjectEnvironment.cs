@@ -8,6 +8,6 @@ public class ProjectEnvironment
     public string Name { get; set; } = string.Empty;
     public Guid ProjectId { get; set; }
     public Project Project { get; set; } = null!;
-    public ICollection<FeatureFlag> FeatureFlags { get; set; } = [];
+    public int SortOrder { get; set; }
     public ICollection<EnvironmentKey> Keys { get; set; } = [];
 }

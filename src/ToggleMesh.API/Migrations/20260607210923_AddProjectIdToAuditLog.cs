@@ -1,19 +1,20 @@
-﻿using Microsoft.EntityFrameworkCore.Migrations;
+﻿using System;
+using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
 namespace ToggleMesh.API.Migrations
 {
     /// <inheritdoc />
-    public partial class AddRolloutPercentage : Migration
+    public partial class AddProjectIdToAuditLog : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.AddColumn<int>(
-                name: "RolloutPercentage",
-                table: "FeatureFlags",
-                type: "integer",
+            migrationBuilder.AddColumn<Guid>(
+                name: "ProjectId",
+                table: "AuditLogs",
+                type: "uuid",
                 nullable: true);
         }
 
@@ -21,8 +22,8 @@ namespace ToggleMesh.API.Migrations
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropColumn(
-                name: "RolloutPercentage",
-                table: "FeatureFlags");
+                name: "ProjectId",
+                table: "AuditLogs");
         }
     }
 }

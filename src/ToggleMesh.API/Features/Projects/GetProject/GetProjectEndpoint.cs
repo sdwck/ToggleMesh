@@ -23,18 +23,23 @@ public class GetProjectEndpoint : ToggleEndpointWithoutRequest<GetProjectRespons
     public override async Task HandleAsync(CancellationToken ct)
     {
         var projectId = Route<Guid>("projectId");
-        var isOwner = User.HasClaim(c => c is { Type: "role", Value: "Owner" });
 
-        var query = _db.Projects
+        var projectMember = await _db.ProjectMembers
+            .AsNoTracking()
+            .Include(pm => pm.EnvironmentRoles)
+            .FirstOrDefaultAsync(pm => pm.ProjectId == projectId && pm.UserId == UserId, ct);
+
+        if (projectMember == null)
+        {
+            await Send.NotFoundAsync(ct);
+            return;
+        }
+
+        var project = await _db.Projects
             .AsNoTracking()
             .Include(p => p.Environments)
             .ThenInclude(e => e.Keys)
-            .AsQueryable();
-
-        if (!isOwner)
-            query = query.Where(p => p.Members.Any(m => m.UserId == UserId));
-
-        var project = await query.FirstOrDefaultAsync(p => p.Id == projectId, ct);
+            .FirstOrDefaultAsync(p => p.Id == projectId, ct);
 
         if (project == null)
         {
@@ -42,20 +47,40 @@ public class GetProjectEndpoint : ToggleEndpointWithoutRequest<GetProjectRespons
             return;
         }
 
+        var envRoles = projectMember.EnvironmentRoles.ToDictionary(x => x.EnvironmentId, x => x.Role);
+        
+        var visibleEnvironments = project.Environments.Where(env => 
+        {
+            var effectiveRole = projectMember.Role;
+            if (envRoles.TryGetValue(env.Id, out var overrideRole))
+                effectiveRole = overrideRole;
+                
+            return effectiveRole != ProjectRole.None;
+        }).OrderBy(e => e.SortOrder).ToList();
+
         var response = new GetProjectResponse
         {
             Id = project.Id,
             Name = project.Name,
-            Environments = project.Environments.Select(e => new EnvironmentDto
+            UserRole = projectMember.Role,
+            Environments = visibleEnvironments.Select(e => 
             {
-                Id = e.Id,
-                Name = e.Name,
-                Keys = e.Keys.Where(k => k.ExpireOn == null || k.ExpireOn > DateTime.UtcNow).Select(k => new EnvironmentKeyDto
+                var effectiveRole = projectMember.Role;
+                if (envRoles.TryGetValue(e.Id, out var overrideRole))
+                    effectiveRole = overrideRole;
+                    
+                return new EnvironmentDto
                 {
-                    Id = k.Id,
-                    KeyPrefix = k.KeyPreview,
-                    CreatedAt = k.CreatedOn
-                }).ToList()
+                    Id = e.Id,
+                    Name = e.Name,
+                    UserRole = effectiveRole,
+                    Keys = e.Keys.Where(k => k.ExpireOn == null || k.ExpireOn > DateTime.UtcNow).Select(k => new EnvironmentKeyDto
+                    {
+                        Id = k.Id,
+                        KeyPrefix = k.KeyPreview,
+                        CreatedAt = k.CreatedOn
+                    }).ToList()
+                };
             }).ToList()
         };
 

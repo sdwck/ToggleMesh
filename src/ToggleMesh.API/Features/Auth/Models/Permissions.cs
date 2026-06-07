@@ -38,17 +38,18 @@ public static class Permissions
         FlagsDelete
     ];
     
-    public static readonly string[] AdminPermissions = 
+    public static readonly string[] AdminPermissions =
     [
         ProjectsView,
+        ProjectsManageMembers,
         EnvironmentsView,
-        EnvironmentsCreate, 
-        EnvironmentsDelete, 
+        EnvironmentsCreate,
+        EnvironmentsDelete,
         EnvironmentsSync,
         EnvironmentsKeysRotate,
         FlagsView,
-        FlagsCreate, 
-        FlagsEdit, 
+        FlagsCreate,
+        FlagsEdit,
         FlagsToggle,
         FlagsDelete
     ];

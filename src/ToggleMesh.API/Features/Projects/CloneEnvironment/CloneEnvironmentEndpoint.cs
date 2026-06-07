@@ -45,26 +45,55 @@ public class CloneEnvironmentEndpoint : ToggleEndpointWithoutRequest
             return;
         }
 
-        var sourceFlags = await _db.FeatureFlags
+        var sourceStates = await _db.FlagEnvironmentStates
             .Where(x => x.EnvironmentId == sourceEnvId)
             .Include(x => x.Rules)
             .AsNoTracking()
             .ToListAsync(ct);
 
-        var oldFlags = await _db.FeatureFlags
+        var targetStates = await _db.FlagEnvironmentStates
             .Where(x => x.EnvironmentId == targetEnvId)
+            .Include(x => x.Rules)
             .ToListAsync(ct);
-        _db.FeatureFlags.RemoveRange(oldFlags);
 
-        foreach (var featureFlag in sourceFlags)
+        foreach (var sourceState in sourceStates)
         {
-            featureFlag.Id = 0;
-            featureFlag.EnvironmentId = targetEnvId;
-            foreach (var rule in featureFlag.Rules)
-                rule.Id = 0;
+            var targetState = targetStates.FirstOrDefault(x => x.FeatureFlagId == sourceState.FeatureFlagId);
+            if (targetState == null)
+            {
+                targetState = new Flags.FlagEnvironmentState
+                {
+                    EnvironmentId = targetEnvId,
+                    FeatureFlagId = sourceState.FeatureFlagId
+                };
+                _db.FlagEnvironmentStates.Add(targetState);
+            }
+
+            targetState.IsEnabled = sourceState.IsEnabled;
+            targetState.RolloutPercentage = sourceState.RolloutPercentage;
+            
+            if (targetState.Rules.Count != 0)
+            {
+                _db.FlagRules.RemoveRange(targetState.Rules);
+                targetState.Rules.Clear();
+            }
+            else
+            {
+                targetState.Rules = new List<Flags.FlagRule>();
+            }
+            
+            foreach (var rule in sourceState.Rules)
+            {
+                targetState.Rules.Add(new Flags.FlagRule
+                {
+                    GroupId = rule.GroupId,
+                    Attribute = rule.Attribute,
+                    Operator = rule.Operator,
+                    Value = rule.Value
+                });
+            }
         }
 
-        _db.FeatureFlags.AddRange(sourceFlags);
         await _db.SaveChangesAsync(ct);
 
         try

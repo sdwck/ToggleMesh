@@ -25,14 +25,20 @@ public class GetMembersEndpoint : ToggleEndpointWithoutRequest<List<MemberDto>>
         var projectId = Route<Guid>("projectId");
         var members = await _db.ProjectMembers
             .AsNoTracking()
+            .Where(x => x.ProjectId == projectId)
             .Include(m => m.User)
-            .Where(m => m.ProjectId == projectId)
+            .Include(m => m.EnvironmentRoles)
             .Select(m => new MemberDto
             {
                 Id = m.Id,
                 UserId = m.UserId.ToString(),
                 Email = m.User.Email!,
-                Role = m.Role
+                Role = m.Role,
+                EnvironmentRoles = m.EnvironmentRoles.Select(er => new EnvironmentRoleDto
+                {
+                    EnvironmentId = er.EnvironmentId,
+                    Role = er.Role
+                }).ToList()
             })
             .ToListAsync(ct);
 

@@ -1,4 +1,4 @@
-﻿using System.Net;
+using System.Net;
 using System.Net.Http.Json;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
@@ -29,7 +29,7 @@ public class MetricsEndpointsTests : IClassFixture<TestWebApplicationFactory>
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
         var project = new Project { Name = "Metrics Test Project" };
-        db.Projects.Add(project);
+        db.Projects.Add(project); db.ProjectMembers.Add(new ToggleMesh.API.Features.Projects.ProjectMember { Project = project, UserId = Guid.Parse(ToggleMesh.IntegrationTests.Infrastructure.TestAuthHandler.TestUserId), Role = ToggleMesh.API.Features.Projects.ProjectRole.Owner });
 
         var environment = new ProjectEnvironment { Name = "Production", Project = project };
         db.Environments.Add(environment);
@@ -47,13 +47,20 @@ public class MetricsEndpointsTests : IClassFixture<TestWebApplicationFactory>
 
         var flag = new FeatureFlag
         {
+            Project = project,
+            Key = flagKey
+        };
+        db.FeatureFlags.Add(flag);
+
+        var state = new FlagEnvironmentState
+        {
             Environment = environment,
-            Key = flagKey,
+            FeatureFlag = flag,
             IsEnabled = true,
             TrueCount = 0,
             FalseCount = 0
         };
-        db.FeatureFlags.Add(flag);
+        db.FlagEnvironmentStates.Add(state);
 
         await db.SaveChangesAsync();
         return (environment.Id, plainKey);
@@ -88,15 +95,18 @@ public class MetricsEndpointsTests : IClassFixture<TestWebApplicationFactory>
         
         for (var i = 0; i < 10; i++)
         {
-            var flagToCheck = await db.FeatureFlags.AsNoTracking().SingleAsync(f => f.Key == flagKey);
-            if (flagToCheck.TrueCount == 25) 
+            var stateToCheck = await db.FlagEnvironmentStates
+                .Include(s => s.FeatureFlag)
+                .AsNoTracking()
+                .SingleAsync(f => f.FeatureFlag.Key == flagKey);
+            if (stateToCheck.TrueCount == 25) 
                 break;
             await Task.Delay(200);
         }
 
-        var flag = db.FeatureFlags.Single(f => f.Key == flagKey);
-        flag.TrueCount.Should().Be(25);
-        flag.FalseCount.Should().Be(7);
+        var state = db.FlagEnvironmentStates.Include(s => s.FeatureFlag).Single(f => f.FeatureFlag.Key == flagKey);
+        state.TrueCount.Should().Be(25);
+        state.FalseCount.Should().Be(7);
     }
     
     [Fact]

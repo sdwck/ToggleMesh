@@ -18,11 +18,6 @@ public sealed class ProjectEnvironmentConfiguration
             .HasMaxLength(256)
             .IsRequired();
 
-        entity.HasMany(x => x.FeatureFlags)
-            .WithOne(x => x.Environment)
-            .HasForeignKey(x => x.EnvironmentId)
-            .OnDelete(DeleteBehavior.Cascade);
-
         entity.HasMany(x => x.Keys)
             .WithOne(x => x.Environment)
             .HasForeignKey(x => x.EnvironmentId)

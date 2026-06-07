@@ -17,19 +17,13 @@ public class GetProjectsEndpoint : ToggleEndpointWithoutRequest<List<ProjectList
     {
         Get("/projects");
         Version(1);
-        Policies($"Permission:{Auth.Models.Permissions.ProjectsView}");
     }
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var isOwner = User.HasClaim(c => c is { Type: "role", Value: "Owner" });
-
-        var query = _db.Projects.AsNoTracking();
-
-        if (!isOwner)
-            query = query.Where(p => p.Members.Any(m => m.UserId == UserId));
-
-        var projects = await query
+        var projects = await _db.Projects
+            .AsNoTracking()
+            .Where(p => p.Members.Any(m => m.UserId == UserId))
             .Select(p => new ProjectListDto
             {
                 Id = p.Id,

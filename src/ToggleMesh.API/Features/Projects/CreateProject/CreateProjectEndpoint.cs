@@ -16,7 +16,6 @@ public class CreateProjectEndpoint : ToggleEndpoint<CreateProjectRequest, Create
     {
         Post("/projects");
         Version(1);
-        Policies($"Permission:{Auth.Models.Permissions.ProjectsCreate}");
     }
 
     public override async Task HandleAsync(CreateProjectRequest req, CancellationToken ct)
@@ -40,15 +39,17 @@ public class CreateProjectEndpoint : ToggleEndpoint<CreateProjectRequest, Create
 
         var devEnv = new ProjectEnvironment
         {
-            Name = "Development", 
-            Project = project, 
-            ProjectId = project.Id
+            Name = "Development",
+            Project = project,
+            ProjectId = project.Id,
+            SortOrder = 0
         };
         var prodEnv = new ProjectEnvironment
         {
-            Name = "Production", 
-            Project = project, 
-            ProjectId = project.Id
+            Name = "Production",
+            Project = project,
+            ProjectId = project.Id,
+            SortOrder = 1
         };
 
         _db.Environments.AddRange(devEnv, prodEnv);

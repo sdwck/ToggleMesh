@@ -24,19 +24,20 @@ public class SdkGetFlagsEndpoint : ToggleEndpoint<SdkGetFlagsRequest, List<GetFl
 
     public override async Task HandleAsync(SdkGetFlagsRequest req, CancellationToken ct)
     {
-        var flags = await _db.FeatureFlags
+        var states = await _db.FlagEnvironmentStates
             .AsNoTracking()
+            .Include(x => x.FeatureFlag)
             .Include(x => x.Rules)
             .Where(x => x.EnvironmentId == req.EnvId)
-            .Select(x => new GetFlagResponse(
-                x.Key, 
-                x.IsEnabled, 
-                x.Rules.Select(r => new RuleDto(r.GroupId, r.Attribute, r.Operator, r.Value)),
-                x.RolloutPercentage,
-                x.TrueCount,
-                x.FalseCount))
+            .Select(state => new GetFlagResponse(
+                state.FeatureFlag.Key, 
+                state.IsEnabled, 
+                state.Rules.Select(r => new RuleDto(r.GroupId, r.Attribute, r.Operator, r.Value)),
+                state.RolloutPercentage,
+                state.TrueCount,
+                state.FalseCount))
             .ToListAsync(ct);
 
-        await Send.OkAsync(flags, ct);
+        await Send.OkAsync(states, ct);
     }
 }

@@ -42,7 +42,7 @@ public class SecurityIntegrationTests : IClassFixture<TestWebApplicationFactory>
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
         var project = new Project { Name = "Rotation Test" };
-        db.Projects.Add(project);
+        db.Projects.Add(project); db.ProjectMembers.Add(new ToggleMesh.API.Features.Projects.ProjectMember { Project = project, UserId = Guid.Parse(ToggleMesh.IntegrationTests.Infrastructure.TestAuthHandler.TestUserId), Role = ToggleMesh.API.Features.Projects.ProjectRole.Owner });
         var env = new ProjectEnvironment { Name = "Prod", Project = project };
         db.Environments.Add(env);
         
@@ -87,11 +87,13 @@ public class SecurityIntegrationTests : IClassFixture<TestWebApplicationFactory>
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
         var project = new Project { Name = "Cache Test" };
-        db.Projects.Add(project);
+        db.Projects.Add(project); db.ProjectMembers.Add(new ToggleMesh.API.Features.Projects.ProjectMember { Project = project, UserId = Guid.Parse(ToggleMesh.IntegrationTests.Infrastructure.TestAuthHandler.TestUserId), Role = ToggleMesh.API.Features.Projects.ProjectRole.Owner });
         var env = new ProjectEnvironment { Name = "Dev", Project = project };
         db.Environments.Add(env);
-        var flag = new API.Features.Flags.FeatureFlag { Key = "cached_flag", IsEnabled = true, Environment = env };
+        var flag = new API.Features.Flags.FeatureFlag { Key = "cached_flag", Project = project };
         db.FeatureFlags.Add(flag);
+        var state = new API.Features.Flags.FlagEnvironmentState { FeatureFlag = flag, Environment = env, IsEnabled = true };
+        db.FlagEnvironmentStates.Add(state);
         await db.SaveChangesAsync();
 
         var url = $"/api/v1/projects/{project.Id}/environments/{env.Id}/flags/cached_flag";

@@ -3,9 +3,26 @@ import { LayoutDashboard, LogOut } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
+import { useMemo } from 'react';
 
 export function AppLayout() {
   const location = useLocation();
+
+  const userEmail = useMemo(() => {
+    try {
+      const token = localStorage.getItem('accessToken');
+      if (!token) return 'User';
+      const base64Url = token.split('.')[1];
+      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+      const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+          return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+      }).join(''));
+      const parsed = JSON.parse(jsonPayload);
+      return parsed.email || parsed['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress'] || 'User';
+    } catch {
+      return 'User';
+    }
+  }, []);
 
   const handleLogout = () => {
     localStorage.removeItem('accessToken');
@@ -44,10 +61,10 @@ export function AppLayout() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <Avatar className="h-8 w-8 border border-border/40">
-                <AvatarFallback className="bg-muted text-xs">U</AvatarFallback>
+                <AvatarFallback className="bg-muted text-xs">{userEmail.charAt(0).toUpperCase()}</AvatarFallback>
               </Avatar>
-              <div className="flex flex-col">
-                <span className="text-xs font-medium">User</span>
+              <div className="flex flex-col max-w-[120px]">
+                <span className="text-xs font-medium truncate" title={userEmail}>{userEmail}</span>
               </div>
             </div>
             <button

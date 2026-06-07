@@ -1,5 +1,4 @@
 using System.Net;
-using System.Net.Http.Json;
 using FluentAssertions;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.EntityFrameworkCore;
@@ -9,7 +8,6 @@ using ToggleMesh.API.Features.Projects;
 using ToggleMesh.API.Infrastructure.Security;
 using ToggleMesh.API.Persistence;
 using ToggleMesh.IntegrationTests.Infrastructure;
-using ToggleMesh.SDK.Rules;
 
 namespace ToggleMesh.IntegrationTests.Projects;
 
@@ -32,7 +30,7 @@ public class CloneEnvironmentTests : IClassFixture<TestWebApplicationFactory>
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
         var project = new Project { Name = "Clone Test Project" };
-        db.Projects.Add(project);
+        db.Projects.Add(project); db.ProjectMembers.Add(new ToggleMesh.API.Features.Projects.ProjectMember { Project = project, UserId = Guid.Parse(ToggleMesh.IntegrationTests.Infrastructure.TestAuthHandler.TestUserId), Role = ToggleMesh.API.Features.Projects.ProjectRole.Owner });
 
         var sourceEnv = new ProjectEnvironment { Name = "Source", Project = project };
         var targetEnv = new ProjectEnvironment { Name = "Target", Project = project };
@@ -49,9 +47,15 @@ public class CloneEnvironmentTests : IClassFixture<TestWebApplicationFactory>
         };
         db.EnvironmentKeys.Add(key);
 
-        var sourceFlag = new FeatureFlag
+        var flag = new FeatureFlag
         {
-            Key = "shared_feature",
+            Project = project,
+            Key = "shared_feature"
+        };
+        
+        var sourceState = new FlagEnvironmentState
+        {
+            FeatureFlag = flag,
             Environment = sourceEnv,
             IsEnabled = true,
             Rules = 
@@ -60,14 +64,15 @@ public class CloneEnvironmentTests : IClassFixture<TestWebApplicationFactory>
             ]
         };
 
-        var targetFlagOld = new FeatureFlag
+        var targetStateOld = new FlagEnvironmentState
         {
-            Key = "old_feature",
+            FeatureFlag = flag,
             Environment = targetEnv,
-            IsEnabled = true
+            IsEnabled = false
         };
 
-        db.FeatureFlags.AddRange(sourceFlag, targetFlagOld);
+        db.FeatureFlags.Add(flag);
+        db.FlagEnvironmentStates.AddRange(sourceState, targetStateOld);
         await db.SaveChangesAsync();
 
         var tcs = new TaskCompletionSource<bool>();
@@ -88,15 +93,18 @@ public class CloneEnvironmentTests : IClassFixture<TestWebApplicationFactory>
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.NoContent);
 
-        var targetFlags = await db.FeatureFlags
+        // Ensure we load fresh from DB
+        db.ChangeTracker.Clear();
+
+        var targetStates = await db.FlagEnvironmentStates
             .Where(x => x.EnvironmentId == targetEnv.Id)
             .Include(x => x.Rules)
             .ToListAsync();
 
-        targetFlags.Should().HaveCount(1);
-        targetFlags[0].Key.Should().Be("shared_feature");
-        targetFlags[0].Rules.Should().HaveCount(1);
-        targetFlags[0].Rules.First().Attribute.Should().Be("User");
+        targetStates.Should().HaveCount(1);
+        targetStates[0].IsEnabled.Should().BeTrue();
+        targetStates[0].Rules.Should().HaveCount(1);
+        targetStates[0].Rules.First().Attribute.Should().Be("User");
 
         var signalRTask = tcs.Task;
         var timeoutTask = Task.Delay(TimeSpan.FromSeconds(5), _factory.TimeProvider);

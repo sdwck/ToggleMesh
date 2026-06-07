@@ -1,17 +1,18 @@
 using ToggleMesh.API.Features.Projects;
-using ToggleMesh.API.Infrastructure;
 
 namespace ToggleMesh.API.Features.Flags;
 
-public class FeatureFlag : IHasEnvironment
+public class FeatureFlag
 {
-    public int Id { get; set; }
+    public Guid Id { get; set; }
+    public Guid ProjectId { get; set; }
+    public Project Project { get; set; } = null!;
+    
     public string Key { get; set; } = string.Empty;
-    public bool IsEnabled { get; set; }
-    public Guid EnvironmentId { get; set; }
-    public ProjectEnvironment Environment { get; set; } = null!;
-    public ICollection<FlagRule> Rules { get; set; } = new List<FlagRule>();
-    public int? RolloutPercentage { get; set; }
-    public long TrueCount { get; set; }
-    public long FalseCount { get; set; }
+    public string? Name { get; set; }
+    public string? Description { get; set; }
+    
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    public ICollection<FlagEnvironmentState> States { get; set; } = new List<FlagEnvironmentState>();
 }

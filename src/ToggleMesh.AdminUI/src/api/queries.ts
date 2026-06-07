@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from './axios';
-import type { Project, ProjectDetails, FeatureFlag, AuditLog, PaginatedResponse, ProjectMember, UpdateFlagRequest } from './types';
+import type { Project, ProjectDetails, FeatureFlag, AuditLog, PaginatedResponse, ProjectMember, UpdateFlagRequest, ProjectFlagDto } from './types';
 
 export const useProjects = () => {
   return useQuery({
@@ -49,10 +49,10 @@ export const useCreateEnvironment = (projectId: string) => {
   });
 };
 
-export const useRotateEnvironmentKey = (projectId: string, envId: string) => {
+export const useRotateEnvironmentKey = (projectId: string) => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async () => {
+    mutationFn: async (envId: string) => {
       const { data } = await api.post<{ apiKey: string }>(`/projects/${projectId}/environments/${envId}/keys/rotate`);
       return data;
     },
@@ -62,38 +62,50 @@ export const useRotateEnvironmentKey = (projectId: string, envId: string) => {
   });
 };
 
-export const useFeatureFlags = (projectId: string, envId: string) => {
+export const useProjectFlags = (projectId: string) => {
   return useQuery({
-    queryKey: ['environments', envId, 'flags'],
+    queryKey: ['projects', projectId, 'flags'],
     queryFn: async () => {
-      const { data } = await api.get<FeatureFlag[]>(`/projects/${projectId}/environments/${envId}/flags`);
+      const { data } = await api.get<ProjectFlagDto[]>(`/projects/${projectId}/flags`);
       return data;
     },
-    enabled: !!envId && !!projectId,
+    enabled: !!projectId,
   });
 };
 
-export const useCreateFeatureFlag = (projectId: string, envId: string) => {
+export const useFeatureFlag = (projectId: string, envId: string, flagKey: string) => {
+  return useQuery({
+    queryKey: ['environments', envId, 'flags', flagKey],
+    queryFn: async () => {
+      const { data } = await api.get<FeatureFlag>(`/projects/${projectId}/environments/${envId}/flags/${flagKey}`);
+      return data;
+    },
+    enabled: !!envId && !!projectId && !!flagKey,
+  });
+};
+
+export const useCreateFeatureFlag = (projectId: string) => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (key: string) => {
-      const { data } = await api.post<{ id: string }>(`/projects/${projectId}/environments/${envId}/flags`, { key });
+      const { data } = await api.post<{ id: string }>(`/projects/${projectId}/flags`, { key });
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['environments', envId, 'flags'] });
-      queryClient.invalidateQueries({ queryKey: ['environments', envId, 'audit'] });
+      queryClient.invalidateQueries({ queryKey: ['projects', projectId, 'flags'] });
     },
   });
 };
 
-export const useToggleFeatureFlag = (projectId: string, envId: string) => {
+export const useToggleFeatureFlag = (projectId: string) => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ flagKey, isEnabled }: { flagKey: string; isEnabled: boolean }) => {
+    mutationFn: async ({ envId, flagKey, isEnabled }: { envId: string; flagKey: string; isEnabled: boolean }) => {
       await api.post(`/projects/${projectId}/environments/${envId}/flags/${flagKey}/toggle`, { isEnabled });
+      return envId;
     },
-    onSuccess: () => {
+    onSuccess: (envId) => {
+      queryClient.invalidateQueries({ queryKey: ['projects', projectId, 'flags'] });
       queryClient.invalidateQueries({ queryKey: ['environments', envId, 'flags'] });
       queryClient.invalidateQueries({ queryKey: ['environments', envId, 'audit'] });
     },
@@ -111,6 +123,17 @@ export const useAuditLogs = (envId: string, page: number = 1, pageSize: number =
   });
 };
 
+export const useProjectAuditLogs = (projectId: string, page: number = 1, pageSize: number = 20) => {
+  return useQuery({
+    queryKey: ['projects', projectId, 'audit', page, pageSize],
+    queryFn: async () => {
+      const { data } = await api.get<PaginatedResponse<AuditLog>>(`/audit-logs?ProjectId=${projectId}&Page=${page}&PageSize=${pageSize}`);
+      return data;
+    },
+    enabled: !!projectId,
+  });
+};
+
 export const useUpdateFeatureFlag = (projectId: string, envId: string, flagKey: string) => {
   const queryClient = useQueryClient();
   return useMutation({
@@ -118,8 +141,46 @@ export const useUpdateFeatureFlag = (projectId: string, envId: string, flagKey: 
       await api.put(`/projects/${projectId}/environments/${envId}/flags/${flagKey}`, request);
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projects', projectId, 'flags'] });
       queryClient.invalidateQueries({ queryKey: ['environments', envId, 'flags'] });
       queryClient.invalidateQueries({ queryKey: ['environments', envId, 'audit'] });
+    },
+  });
+};
+
+export const useUpdateProjectMember = (projectId: string) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ userId, role, environmentRoles }: { userId: string; role: number; environmentRoles: { environmentId: string; role: number }[] | null }) => {
+      await api.put(`/projects/${projectId}/members/${userId}`, { role, environmentRoles });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projects', projectId, 'members'] });
+    },
+  });
+};
+
+export const useRemoveProjectMember = (projectId: string) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (userId: string) => {
+      await api.delete(`/projects/${projectId}/members/${userId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projects', projectId, 'members'] });
+    },
+  });
+};
+
+export const useCloneEnvironment = (projectId: string) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ sourceEnvId, targetEnvId }: { sourceEnvId: string; targetEnvId: string }) => {
+      await api.post(`/projects/${projectId}/environments/${sourceEnvId}/clone-to/${targetEnvId}`);
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['projects', projectId, 'flags'] });
+      queryClient.invalidateQueries({ queryKey: ['environments', variables.targetEnvId] });
     },
   });
 };

@@ -1,3 +1,4 @@
+using System.IdentityModel.Tokens.Jwt;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -25,8 +26,7 @@ public class TestAuthHandler : AuthenticationHandler<AuthenticationSchemeOptions
     {
         var claims = new[]
         {
-            new Claim(ClaimTypes.NameIdentifier, TestUserId),
-            new Claim("sub", TestUserId),
+            new Claim(JwtRegisteredClaimNames.Sub, TestUserId),
             new Claim(ClaimTypes.Email, TestUserEmail),
             new Claim("role", "Owner")
         };

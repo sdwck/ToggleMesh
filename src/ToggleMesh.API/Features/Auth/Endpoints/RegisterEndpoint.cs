@@ -43,9 +43,6 @@ public class RegisterEndpoint : ToggleEndpoint<RegisterRequest, LoginResponse>
             ThrowIfAnyErrors();
         }
 
-        if (await _userManager.Users.CountAsync(ct) == 1)
-            await _userManager.AddClaimAsync(user, new Claim("role", "Owner"));
-
         var (accessToken, refreshToken) = await TokenGenerator.GenerateTokensAsync(user, _userManager, _configuration);
 
         var rt = new RefreshToken

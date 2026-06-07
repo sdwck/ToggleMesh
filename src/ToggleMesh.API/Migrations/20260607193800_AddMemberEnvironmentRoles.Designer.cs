@@ -12,8 +12,8 @@ using ToggleMesh.API.Persistence;
 namespace ToggleMesh.API.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260605144607_HashApiKeys")]
-    partial class HashApiKeys
+    [Migration("20260607193800_AddMemberEnvironmentRoles")]
+    partial class AddMemberEnvironmentRoles
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -267,13 +267,75 @@ namespace ToggleMesh.API.Migrations
                     b.ToTable("AspNetUsers", (string)null);
                 });
 
+            modelBuilder.Entity("ToggleMesh.API.Features.Auth.Models.RefreshToken", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("Created")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("Expires")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("Revoked")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Token")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Token")
+                        .IsUnique();
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("RefreshTokens");
+                });
+
             modelBuilder.Entity("ToggleMesh.API.Features.Flags.FeatureFlag", b =>
                 {
-                    b.Property<int>("Id")
+                    b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
+                        .HasColumnType("uuid");
 
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("Name")
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectId", "Key")
+                        .IsUnique();
+
+                    b.ToTable("ProjectFeatureFlags", (string)null);
+                });
+
+            modelBuilder.Entity("ToggleMesh.API.Features.Flags.FlagEnvironmentState", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
 
                     b.Property<Guid>("EnvironmentId")
                         .HasColumnType("uuid");
@@ -281,13 +343,11 @@ namespace ToggleMesh.API.Migrations
                     b.Property<long>("FalseCount")
                         .HasColumnType("bigint");
 
+                    b.Property<Guid>("FeatureFlagId")
+                        .HasColumnType("uuid");
+
                     b.Property<bool>("IsEnabled")
                         .HasColumnType("boolean");
-
-                    b.Property<string>("Key")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
 
                     b.Property<int?>("RolloutPercentage")
                         .HasColumnType("integer");
@@ -297,27 +357,27 @@ namespace ToggleMesh.API.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("EnvironmentId", "Key")
+                    b.HasIndex("EnvironmentId");
+
+                    b.HasIndex("FeatureFlagId", "EnvironmentId")
                         .IsUnique();
 
-                    b.ToTable("FeatureFlags");
+                    b.ToTable("FlagEnvironmentStates");
                 });
 
             modelBuilder.Entity("ToggleMesh.API.Features.Flags.FlagRule", b =>
                 {
-                    b.Property<int>("Id")
+                    b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+                        .HasColumnType("uuid");
 
                     b.Property<string>("Attribute")
                         .IsRequired()
                         .HasMaxLength(128)
                         .HasColumnType("character varying(128)");
 
-                    b.Property<int>("FeatureFlagId")
-                        .HasColumnType("integer");
+                    b.Property<Guid>("FlagEnvironmentStateId")
+                        .HasColumnType("uuid");
 
                     b.Property<int>("GroupId")
                         .HasColumnType("integer");
@@ -334,9 +394,9 @@ namespace ToggleMesh.API.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("FeatureFlagId");
+                    b.HasIndex("FlagEnvironmentStateId");
 
-                    b.ToTable("FlagRule");
+                    b.ToTable("ProjectFlagRules", (string)null);
                 });
 
             modelBuilder.Entity("ToggleMesh.API.Features.Projects.EnvironmentKey", b =>
@@ -372,6 +432,31 @@ namespace ToggleMesh.API.Migrations
                         .IsUnique();
 
                     b.ToTable("EnvironmentKeys");
+                });
+
+            modelBuilder.Entity("ToggleMesh.API.Features.Projects.MemberEnvironmentRole", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("EnvironmentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ProjectMemberId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Role")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EnvironmentId");
+
+                    b.HasIndex("ProjectMemberId", "EnvironmentId")
+                        .IsUnique();
+
+                    b.ToTable("MemberEnvironmentRoles");
                 });
 
             modelBuilder.Entity("ToggleMesh.API.Features.Projects.Project", b =>
@@ -487,26 +572,56 @@ namespace ToggleMesh.API.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("ToggleMesh.API.Features.Auth.Models.RefreshToken", b =>
+                {
+                    b.HasOne("ToggleMesh.API.Features.Auth.Models.ApplicationUser", "User")
+                        .WithMany("RefreshTokens")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("ToggleMesh.API.Features.Flags.FeatureFlag", b =>
                 {
+                    b.HasOne("ToggleMesh.API.Features.Projects.Project", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Project");
+                });
+
+            modelBuilder.Entity("ToggleMesh.API.Features.Flags.FlagEnvironmentState", b =>
+                {
                     b.HasOne("ToggleMesh.API.Features.Projects.ProjectEnvironment", "Environment")
-                        .WithMany("FeatureFlags")
+                        .WithMany()
                         .HasForeignKey("EnvironmentId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("Environment");
-                });
-
-            modelBuilder.Entity("ToggleMesh.API.Features.Flags.FlagRule", b =>
-                {
                     b.HasOne("ToggleMesh.API.Features.Flags.FeatureFlag", "FeatureFlag")
-                        .WithMany("Rules")
+                        .WithMany("States")
                         .HasForeignKey("FeatureFlagId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.Navigation("Environment");
+
                     b.Navigation("FeatureFlag");
+                });
+
+            modelBuilder.Entity("ToggleMesh.API.Features.Flags.FlagRule", b =>
+                {
+                    b.HasOne("ToggleMesh.API.Features.Flags.FlagEnvironmentState", "FlagEnvironmentState")
+                        .WithMany("Rules")
+                        .HasForeignKey("FlagEnvironmentStateId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("FlagEnvironmentState");
                 });
 
             modelBuilder.Entity("ToggleMesh.API.Features.Projects.EnvironmentKey", b =>
@@ -518,6 +633,25 @@ namespace ToggleMesh.API.Migrations
                         .IsRequired();
 
                     b.Navigation("Environment");
+                });
+
+            modelBuilder.Entity("ToggleMesh.API.Features.Projects.MemberEnvironmentRole", b =>
+                {
+                    b.HasOne("ToggleMesh.API.Features.Projects.ProjectEnvironment", "Environment")
+                        .WithMany()
+                        .HasForeignKey("EnvironmentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ToggleMesh.API.Features.Projects.ProjectMember", "ProjectMember")
+                        .WithMany("EnvironmentRoles")
+                        .HasForeignKey("ProjectMemberId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Environment");
+
+                    b.Navigation("ProjectMember");
                 });
 
             modelBuilder.Entity("ToggleMesh.API.Features.Projects.ProjectEnvironment", b =>
@@ -553,9 +687,16 @@ namespace ToggleMesh.API.Migrations
             modelBuilder.Entity("ToggleMesh.API.Features.Auth.Models.ApplicationUser", b =>
                 {
                     b.Navigation("ProjectMembers");
+
+                    b.Navigation("RefreshTokens");
                 });
 
             modelBuilder.Entity("ToggleMesh.API.Features.Flags.FeatureFlag", b =>
+                {
+                    b.Navigation("States");
+                });
+
+            modelBuilder.Entity("ToggleMesh.API.Features.Flags.FlagEnvironmentState", b =>
                 {
                     b.Navigation("Rules");
                 });
@@ -569,9 +710,12 @@ namespace ToggleMesh.API.Migrations
 
             modelBuilder.Entity("ToggleMesh.API.Features.Projects.ProjectEnvironment", b =>
                 {
-                    b.Navigation("FeatureFlags");
-
                     b.Navigation("Keys");
+                });
+
+            modelBuilder.Entity("ToggleMesh.API.Features.Projects.ProjectMember", b =>
+                {
+                    b.Navigation("EnvironmentRoles");
                 });
 #pragma warning restore 612, 618
         }

@@ -9,6 +9,8 @@ public sealed class FlagRuleConfiguration
 {
     public void Configure(EntityTypeBuilder<FlagRule> entity)
     {
+        entity.ToTable("ProjectFlagRules");
+
         entity.HasKey(x => x.Id);
 
         entity.Property(x => x.Attribute)
@@ -23,9 +25,9 @@ public sealed class FlagRuleConfiguration
             .HasMaxLength(1024)
             .IsRequired();
 
-        entity.HasOne<FeatureFlag>(x => x.FeatureFlag)
+        entity.HasOne(x => x.FlagEnvironmentState)
             .WithMany(x => x.Rules)
-            .HasForeignKey(x => x.FeatureFlagId)
+            .HasForeignKey(x => x.FlagEnvironmentStateId)
             .OnDelete(DeleteBehavior.Cascade);
     }
 }

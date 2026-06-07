@@ -32,13 +32,30 @@ public class CreateEnvironmentEndpoint : ToggleEndpoint<CreateEnvironmentRequest
             return;
         }
 
+        var maxSortOrder = await _db.Environments
+            .Where(e => e.ProjectId == projectId)
+            .MaxAsync(e => (int?)e.SortOrder, ct) ?? -1;
+
         var env = new ProjectEnvironment
         {
             ProjectId = projectId,
-            Name = req.Name
+            Name = req.Name,
+            SortOrder = maxSortOrder + 1
         };
 
         _db.Environments.Add(env);
+        
+        var existingFlags = await _db.FeatureFlags.Where(f => f.ProjectId == projectId).ToListAsync(ct);
+        foreach (var flag in existingFlags)
+        {
+            _db.FlagEnvironmentStates.Add(new Flags.FlagEnvironmentState
+            {
+                FeatureFlag = flag,
+                Environment = env,
+                IsEnabled = false
+            });
+        }
+        
         await _db.SaveChangesAsync(ct);
 
         await Send.OkAsync(new CreateEnvironmentResponse

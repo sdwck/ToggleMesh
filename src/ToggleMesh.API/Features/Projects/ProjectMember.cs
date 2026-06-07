@@ -12,4 +12,6 @@ public class ProjectMember
     public ApplicationUser User { get; set; } = null!;
 
     public ProjectRole Role { get; set; }
+    
+    public ICollection<MemberEnvironmentRole> EnvironmentRoles { get; set; } = new List<MemberEnvironmentRole>();
 }

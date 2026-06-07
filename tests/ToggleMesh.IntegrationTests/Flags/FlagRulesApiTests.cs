@@ -29,7 +29,7 @@ public class FlagRulesApiTests : IClassFixture<TestWebApplicationFactory>
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
         var project = new Project { Name = "Test Project - Rules" };
-        db.Projects.Add(project);
+        db.Projects.Add(project); db.ProjectMembers.Add(new ToggleMesh.API.Features.Projects.ProjectMember { Project = project, UserId = Guid.Parse(ToggleMesh.IntegrationTests.Infrastructure.TestAuthHandler.TestUserId), Role = ToggleMesh.API.Features.Projects.ProjectRole.Owner });
 
         var environment = new ProjectEnvironment { Name = "Staging", Project = project };
         db.Environments.Add(environment);
@@ -53,7 +53,7 @@ public class FlagRulesApiTests : IClassFixture<TestWebApplicationFactory>
     public async Task CreateFlag_WithRules_ShouldReturnRulesInResponse()
     {
         // Arrange
-        var (projectId, envId, _) = await SeedEnvironmentAsync();
+        var (projectId, _, _) = await SeedEnvironmentAsync();
         var request = new CreateFlagRequest
         {
             Key = "rule_flag_1",
@@ -65,7 +65,7 @@ public class FlagRulesApiTests : IClassFixture<TestWebApplicationFactory>
         };
 
         // Act
-        var response = await _client.PostAsJsonAsync($"/api/v1/projects/{projectId}/environments/{envId}/flags", request);
+        var response = await _client.PostAsJsonAsync($"/api/v1/projects/{projectId}/flags", request);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Created);
@@ -88,7 +88,7 @@ public class FlagRulesApiTests : IClassFixture<TestWebApplicationFactory>
             Key = "rule_flag_update",
             Rules = [new RuleDto(0, "Age", "GreaterThan", "18")]
         };
-        await _client.PostAsJsonAsync($"/api/v1/projects/{projectId}/environments/{envId}/flags", createRequest);
+        await _client.PostAsJsonAsync($"/api/v1/projects/{projectId}/flags", createRequest);
 
         var updateRequest = new UpdateFlagRequest
         {

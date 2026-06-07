@@ -1,9 +1,10 @@
-﻿namespace ToggleMesh.API.Features.Audit;
+namespace ToggleMesh.API.Features.Audit;
 
 public class AuditLog
 {
     public Guid Id { get; set; }
-    public Guid? EnvironmentId { get; set; } 
+    public Guid? ProjectId { get; set; }
+    public Guid? EnvironmentId { get; set; }
     public string EntityName { get; set; } = string.Empty;
     public string EntityId { get; set; } = string.Empty;
     public string Action { get; set; } = string.Empty;

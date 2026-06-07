@@ -3,7 +3,6 @@ using System.Net.Http.Json;
 using FluentAssertions;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.DependencyInjection;
-using ToggleMesh.API.Features.Flags;
 using ToggleMesh.API.Features.Flags.Create;
 using ToggleMesh.API.Features.Flags.Get;
 using ToggleMesh.API.Features.Flags.Toggle;
@@ -31,7 +30,7 @@ public class FlagsEndpointsTests : IClassFixture<TestWebApplicationFactory>
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
         var project = new Project { Name = "Test Project" };
-        db.Projects.Add(project);
+        db.Projects.Add(project); db.ProjectMembers.Add(new ToggleMesh.API.Features.Projects.ProjectMember { Project = project, UserId = Guid.Parse(ToggleMesh.IntegrationTests.Infrastructure.TestAuthHandler.TestUserId), Role = ToggleMesh.API.Features.Projects.ProjectRole.Owner });
 
         var environment = new ProjectEnvironment { Name = "Development", Project = project };
         db.Environments.Add(environment);
@@ -55,16 +54,16 @@ public class FlagsEndpointsTests : IClassFixture<TestWebApplicationFactory>
     public async Task CreateFlag_WithValidData_ShouldReturn201Created()
     {
         // Arrange
-        var (projectId, envId, _) = await SeedEnvironmentAsync();
+        var (projectId, _, _) = await SeedEnvironmentAsync();
         var request = new CreateFlagRequest { Key = "test_feature_1" };
 
         // Act
-        var response = await _client.PostAsJsonAsync($"/api/v1/projects/{projectId}/environments/{envId}/flags", request);
+        var response = await _client.PostAsJsonAsync($"/api/v1/projects/{projectId}/flags", request);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Created);
 
-        var result = await response.Content.ReadFromJsonAsync<FeatureFlag>();
+        var result = await response.Content.ReadFromJsonAsync<GetFlagResponse>();
         result.Should().NotBeNull();
         result.Key.Should().Be("test_feature_1");
         result.IsEnabled.Should().BeFalse();
@@ -74,11 +73,11 @@ public class FlagsEndpointsTests : IClassFixture<TestWebApplicationFactory>
     public async Task CreateFlag_WithInvalidData_ShouldReturn400BadRequest()
     {
         // Arrange
-        var (projectId, envId, _) = await SeedEnvironmentAsync();
+        var (projectId, _, _) = await SeedEnvironmentAsync();
         var request = new CreateFlagRequest { Key = "" };
 
         // Act
-        var response = await _client.PostAsJsonAsync($"/api/v1/projects/{projectId}/environments/{envId}/flags", request);
+        var response = await _client.PostAsJsonAsync($"/api/v1/projects/{projectId}/flags", request);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
@@ -90,7 +89,7 @@ public class FlagsEndpointsTests : IClassFixture<TestWebApplicationFactory>
         // Arrange
         var (projectId, envId, apiKey) = await SeedEnvironmentAsync();
         var flagKey = "signalr_test_flag";
-        await _client.PostAsJsonAsync($"/api/v1/projects/{projectId}/environments/{envId}/flags", new CreateFlagRequest { Key = flagKey });
+        await _client.PostAsJsonAsync($"/api/v1/projects/{projectId}/flags", new CreateFlagRequest { Key = flagKey });
 
         var tcs = new TaskCompletionSource<GetFlagResponse>();
 

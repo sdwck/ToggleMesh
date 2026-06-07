@@ -25,7 +25,6 @@ public class GetFlagEndpoint : ToggleEndpointWithoutRequest<GetFlagResponse>
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var projectId = Route<Guid>("projectId");
         var environmentId = Route<Guid>("environmentId");
         var flagKey = Route<string>("flagKey");
         if (flagKey is null)
@@ -47,22 +46,25 @@ public class GetFlagEndpoint : ToggleEndpointWithoutRequest<GetFlagResponse>
             }
         }
 
-        var flag = await _db.FeatureFlags
+        var state = await _db.FlagEnvironmentStates
             .AsNoTracking()
+            .Include(x => x.FeatureFlag)
             .Include(x => x.Rules)
-            .FirstOrDefaultAsync(x => x.EnvironmentId == environmentId && x.Key == flagKey, ct);
+            .FirstOrDefaultAsync(x => x.EnvironmentId == environmentId && x.FeatureFlag.Key == flagKey, ct);
 
-        if (flag is null)
+        if (state is null)
         {
             await Send.NotFoundAsync(ct);
             return;
         }
 
         var response = new GetFlagResponse(
-            flag.Key, 
-            flag.IsEnabled, 
-            flag.Rules.Select(r => new RuleDto(r.GroupId, r.Attribute, r.Operator, r.Value)),
-            flag.RolloutPercentage);
+            state.FeatureFlag.Key, 
+            state.IsEnabled, 
+            state.Rules.Select(r => new RuleDto(r.GroupId, r.Attribute, r.Operator, r.Value)),
+            state.RolloutPercentage,
+            state.TrueCount,
+            state.FalseCount);
 
         await _redis.StringSetAsync(cacheKey, System.Text.Json.JsonSerializer.Serialize(response), TimeSpan.FromMinutes(10));
         await Send.OkAsync(response, ct);

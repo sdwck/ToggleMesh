@@ -1,3 +1,5 @@
+using System.IdentityModel.Tokens.Jwt;
+using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using ToggleMesh.API.Features.Auth.Models;
 using ToggleMesh.API.Features.Projects;
@@ -7,13 +9,15 @@ using StackExchange.Redis;
 
 namespace ToggleMesh.API.Features.Auth.Authorization;
 
+public record CachedMemberState(ProjectRole Role, Dictionary<Guid, ProjectRole> EnvironmentRoles);
+
 public class PermissionAuthorizationHandler : AuthorizationHandler<PermissionRequirement>
 {
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly AppDbContext _dbContext;
     private readonly IDatabase _redis;
 
-    public PermissionAuthorizationHandler(IHttpContextAccessor httpContextAccessor, AppDbContext dbContext, IConnectionMultiplexer redis)     
+    public PermissionAuthorizationHandler(IHttpContextAccessor httpContextAccessor, AppDbContext dbContext, IConnectionMultiplexer redis)
     {
         _httpContextAccessor = httpContextAccessor;
         _dbContext = dbContext;
@@ -23,18 +27,12 @@ public class PermissionAuthorizationHandler : AuthorizationHandler<PermissionReq
     protected override async Task HandleRequirementAsync(AuthorizationHandlerContext context, PermissionRequirement requirement)
     {
         if (context.User.Identity?.IsAuthenticated != true)
-        {
             return;
-        }
 
-        var isOwner = context.User.HasClaim(c => c is { Type: "role", Value: "Owner" });
-        if (isOwner)
+        if (requirement.Permission == Permissions.ProjectsCreate || requirement.Permission == Permissions.ProjectsView)
         {
-            if (Permissions.OwnerPermissions.Contains(requirement.Permission))
-            {
-                context.Succeed(requirement);
-                return;
-            }
+            context.Succeed(requirement);
+            return;
         }
 
         var httpContext = _httpContextAccessor.HttpContext;
@@ -42,42 +40,58 @@ public class PermissionAuthorizationHandler : AuthorizationHandler<PermissionReq
             return;
 
         var routeData = httpContext.Request.RouteValues;
-        Guid? projectId;
+        Guid? projectId = null;
+        Guid? environmentId = null;
 
         if (routeData.TryGetValue("projectId", out var projectIdValue) && Guid.TryParse(projectIdValue?.ToString(), out var parsedId))
             projectId = parsedId;
-        else
+
+        if (routeData.TryGetValue("environmentId", out var envIdValue) && Guid.TryParse(envIdValue?.ToString(), out var parsedEnvId))
+            environmentId = parsedEnvId;
+
+        if (!projectId.HasValue)
             return;
 
-        var userIdString = context.User.Claims.FirstOrDefault(c => c.Type == "id")?.Value
+        var userIdString = context.User.Claims.FirstOrDefault(c => c.Type == JwtRegisteredClaimNames.Sub)?.Value
                      ?? context.User.Claims.FirstOrDefault(c => c.Type == System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
 
         if (userIdString == null || !Guid.TryParse(userIdString, out var userId))
             return;
 
-        ProjectRole role;
-        var cacheKey = $"project-role:{projectId.Value}:{userId}";
-        var cachedRole = await _redis.StringGetAsync(cacheKey);
+        CachedMemberState memberState;
+        var cacheKey = $"project-member-state:{projectId.Value}:{userId}";
+        var cachedStateJson = await _redis.StringGetAsync(cacheKey);
 
-        if (cachedRole.HasValue && Enum.TryParse<ProjectRole>(cachedRole.ToString(), out var parsedRole))
+        if (cachedStateJson.HasValue)
         {
-            role = parsedRole;
+            memberState = JsonSerializer.Deserialize<CachedMemberState>(cachedStateJson.ToString())!;
         }
         else
         {
             var projectMember = await _dbContext.ProjectMembers
                 .AsNoTracking()
+                .Include(pm => pm.EnvironmentRoles)
                 .FirstOrDefaultAsync(pm => pm.ProjectId == projectId.Value && pm.UserId == userId);
 
             if (projectMember == null)
                 return;
 
-            role = projectMember.Role;
-            await _redis.StringSetAsync(cacheKey, role.ToString(), TimeSpan.FromMinutes(5));
+            var envRoles = projectMember.EnvironmentRoles.ToDictionary(er => er.EnvironmentId, er => er.Role);
+            memberState = new CachedMemberState(projectMember.Role, envRoles);
+            await _redis.StringSetAsync(cacheKey, JsonSerializer.Serialize(memberState), TimeSpan.FromMinutes(5));
+        }
+
+        var effectiveRole = memberState.Role;
+        if (environmentId.HasValue && memberState.EnvironmentRoles != null && memberState.Role != ProjectRole.Owner && memberState.Role != ProjectRole.Admin)
+        {
+            if (memberState.EnvironmentRoles.TryGetValue(environmentId.Value, out var envRoleOverride))
+            {
+                effectiveRole = envRoleOverride;
+            }
         }
 
         var hasPermission = false;
-        switch (role)
+        switch (effectiveRole)
         {
             case ProjectRole.Owner:
                 hasPermission = Permissions.OwnerPermissions.Contains(requirement.Permission);
@@ -90,6 +104,9 @@ public class PermissionAuthorizationHandler : AuthorizationHandler<PermissionReq
                 break;
             case ProjectRole.Viewer:
                 hasPermission = Permissions.ViewerPermissions.Contains(requirement.Permission);
+                break;
+            case ProjectRole.None:
+                hasPermission = false;
                 break;
         }
 

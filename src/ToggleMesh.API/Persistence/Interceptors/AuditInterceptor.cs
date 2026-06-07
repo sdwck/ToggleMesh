@@ -42,7 +42,7 @@ public class AuditInterceptor : SaveChangesInterceptor
         var auditEntries = new List<AuditLog>();
         foreach (var entry in context.ChangeTracker.Entries())
         {
-            if (entry.Entity is AuditLog || entry.State is EntityState.Detached or EntityState.Unchanged)
+            if (entry.Entity is AuditLog || entry.Entity is ToggleMesh.API.Features.Projects.EnvironmentKey || entry.State is EntityState.Detached or EntityState.Unchanged)
                 continue;
 
             var performedBy = string.Empty;
@@ -59,16 +59,41 @@ public class AuditInterceptor : SaveChangesInterceptor
                 PerformedBy = performedBy
             };
 
+            var projectIdProp = entry.Properties.FirstOrDefault(p => p.Metadata.Name == "ProjectId");
+            if (projectIdProp != null && projectIdProp.CurrentValue is Guid pid)
+                auditLog.ProjectId = pid;
+
             if (entry.Entity is IHasEnvironment envEntity)
                 auditLog.EnvironmentId = envEntity.EnvironmentId;
             else if (entry.Entity is FlagRule rule)
             {
-                var parentEntry = context.ChangeTracker.Entries<FeatureFlag>()
+                var parentEntry = context.ChangeTracker.Entries<FlagEnvironmentState>()
                     .FirstOrDefault(f =>
-                        f.Entity == rule.FeatureFlag ||
-                        (rule.FeatureFlagId != 0 && f.Entity.Id == rule.FeatureFlagId));
+                        f.Entity == rule.FlagEnvironmentState ||
+                        (rule.FlagEnvironmentStateId != Guid.Empty && f.Entity.Id == rule.FlagEnvironmentStateId));
                 if (parentEntry != null)
+                {
                     auditLog.EnvironmentId = parentEntry.Entity.EnvironmentId;
+                    if (parentEntry.Entity.FeatureFlag != null)
+                        auditLog.ProjectId = parentEntry.Entity.FeatureFlag.ProjectId;
+                }
+            }
+            else if (entry.Entity is FlagEnvironmentState state)
+            {
+                if (state.FeatureFlag != null)
+                    auditLog.ProjectId = state.FeatureFlag.ProjectId;
+                else
+                {
+                    var flagEntry = context.ChangeTracker.Entries<FeatureFlag>().FirstOrDefault(f => f.Entity.Id == state.FeatureFlagId);
+                    if (flagEntry != null)
+                        auditLog.ProjectId = flagEntry.Entity.ProjectId;
+                }
+            }
+            else if (entry.Entity is ToggleMesh.API.Features.Projects.Project)
+            {
+                var idProp = entry.Properties.FirstOrDefault(p => p.Metadata.Name == "Id");
+                if (idProp != null && idProp.CurrentValue is Guid pidVal)
+                    auditLog.ProjectId = pidVal;
             }
 
             var primaryKey = entry.Metadata.FindPrimaryKey();

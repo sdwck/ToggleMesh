@@ -37,25 +37,29 @@ public class ToggleFlagEndpoint : ToggleEndpoint<ToggleFlagRequest>
     public override async Task HandleAsync(ToggleFlagRequest req, CancellationToken ct)
     {
         var environmentId = Route<Guid>("environmentId");
-        var flagKey = Route<string>("Key");
-        var flag = await _db.FeatureFlags
-            .Include(x => x.Rules)
-            .FirstOrDefaultAsync(x => x.EnvironmentId == environmentId && x.Key == flagKey, ct);
+        var flagKey = Route<string>("key");
 
-        if (flag is null)
+        var state = await _db.FlagEnvironmentStates
+            .Include(x => x.FeatureFlag)
+            .Include(x => x.Rules)
+            .FirstOrDefaultAsync(x => x.EnvironmentId == environmentId && x.FeatureFlag.Key == flagKey, ct);
+
+        if (state is null)
         {
             await Send.NotFoundAsync(ct);
             return;
         }
 
-        flag.IsEnabled = req.IsEnabled;
+        state.IsEnabled = req.IsEnabled;
         await _db.SaveChangesAsync(ct);
 
         var response = new GetFlagResponse(
-            flag.Key, 
-            flag.IsEnabled, 
-            flag.Rules.Select(r => new RuleDto(r.GroupId, r.Attribute, r.Operator, r.Value)),
-            flag.RolloutPercentage);
+            state.FeatureFlag.Key, 
+            state.IsEnabled, 
+            state.Rules.Select(r => new RuleDto(r.GroupId, r.Attribute, r.Operator, r.Value)),
+            state.RolloutPercentage,
+            state.TrueCount,
+            state.FalseCount);
 
         try
         {

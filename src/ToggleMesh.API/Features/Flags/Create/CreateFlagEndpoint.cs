@@ -1,11 +1,11 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using ToggleMesh.API.Features.Flags.Get;
 using ToggleMesh.API.Infrastructure;
 using ToggleMesh.API.Persistence;
 
 namespace ToggleMesh.API.Features.Flags.Create;
 
-public class CreateFlagEndpoint : ToggleEndpoint<CreateFlagRequest>
+public class CreateFlagEndpoint : ToggleEndpoint<CreateFlagRequest, GetFlagResponse>
 {
     private readonly AppDbContext _db;
 
@@ -16,51 +16,71 @@ public class CreateFlagEndpoint : ToggleEndpoint<CreateFlagRequest>
 
     public override void Configure()
     {
-        Post("/projects/{projectId}/environments/{environmentId}/flags");
+        Post("/projects/{projectId}/flags");
         Version(1);
         Policies($"Permission:{Auth.Models.Permissions.FlagsCreate}");
     }
 
     public override async Task HandleAsync(CreateFlagRequest req, CancellationToken ct)
     {
-        var environmentId = Route<Guid>("environmentId");
+        var projectId = Route<Guid>("projectId");
         
         var exists = await _db.FeatureFlags
-            .AnyAsync(x => x.EnvironmentId == environmentId && x.Key == req.Key, ct);
+            .AnyAsync(x => x.ProjectId == projectId && x.Key == req.Key, ct);
+        
         if (exists)
         {
             AddError(x => x.Key, 
-                "A feature flag with this key already exists.");
+                "A feature flag with this key already exists in this project.");
             await Send.ErrorsAsync(cancellation: ct);
             return;
         }
 
         var newFlag = new FeatureFlag
         {
-            EnvironmentId = environmentId,
+            ProjectId = projectId,
             Key = req.Key,
-            IsEnabled = false,
-            RolloutPercentage = req.RolloutPercentage,
-            Rules = req.Rules.Select(r => new FlagRule
-            {
-                GroupId = r.GroupId,
-                Attribute = r.Attribute,
-                Operator = r.Operator,
-                Value = r.Value
-            }).ToList()
+            CreatedAt = DateTime.UtcNow
         };
         
         _db.FeatureFlags.Add(newFlag);
+        
+        var environments = await _db.Environments
+            .Where(e => e.ProjectId == projectId)
+            .Select(e => e.Id)
+            .ToListAsync(ct);
+        
+        var safeRules = req.Rules;
+        
+        foreach(var envId in environments)
+        {
+            var state = new FlagEnvironmentState
+            {
+                FeatureFlag = newFlag,
+                EnvironmentId = envId,
+                IsEnabled = false,
+                RolloutPercentage = req.RolloutPercentage,
+                Rules = safeRules.Select(r => new FlagRule
+                {
+                    GroupId = r.GroupId,
+                    Attribute = r.Attribute,
+                    Operator = r.Operator,
+                    Value = r.Value
+                }).ToList()
+            };
+            _db.FlagEnvironmentStates.Add(state);
+        }
+        
         await _db.SaveChangesAsync(ct);
         
         var response = new GetFlagResponse(
             newFlag.Key, 
-            newFlag.IsEnabled, 
-            newFlag.Rules.Select(r => new RuleDto(r.GroupId, r.Attribute, r.Operator, r.Value)),
-            newFlag.RolloutPercentage);
+            false, 
+            safeRules,
+            req.RolloutPercentage);
 
-        await Send.CreatedAtAsync<GetFlagEndpoint>(
-            routeValues: new { id = newFlag.Id },
+        await Send.CreatedAtAsync<GetAll.GetFlagsEndpoint>(
+            routeValues: new { projectId },
             responseBody: response,
             cancellation: ct);
     }

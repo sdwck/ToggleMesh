@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
 using ToggleMesh.API.Features.Projects.GetMembers;
 using ToggleMesh.API.Infrastructure;
@@ -32,9 +33,26 @@ public class AddMemberEndpoint : ToggleEndpoint<AddMemberRequest, MemberDto>
             return;
         }
 
+        var currentUserId = User.FindFirstValue(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub);
+        var currentUserMember = await _db.ProjectMembers
+            .FirstOrDefaultAsync(x => x.ProjectId == projectId && x.UserId == Guid.Parse(currentUserId!), ct);
+
+        if (currentUserMember == null || currentUserMember.Role > ProjectRole.Admin)
+        {
+            await Send.ForbiddenAsync(ct);
+            return;
+        }
+
+        if (currentUserMember.Role == ProjectRole.Admin && (req.Role == ProjectRole.Owner || req.Role == ProjectRole.Admin))
+        {
+            AddError("Admins cannot grant Owner or Admin roles.");
+            await Send.ErrorsAsync(403, cancellation: ct);
+            return;
+        }
+
         var existingMember = await _db.ProjectMembers
-            .FirstOrDefaultAsync(m => 
-                m.ProjectId == projectId && 
+            .FirstOrDefaultAsync(m =>
+                m.ProjectId == projectId &&
                 m.UserId == user.Id, ct);
             
         if (existingMember != null)

@@ -74,8 +74,8 @@ public class MetricsWorker : BackgroundService
                 var trueToAdd = kvp.Value.True;
                 var falseToAdd = kvp.Value.False;
 
-                await db.FeatureFlags
-                    .Where(f => f.EnvironmentId == envId && f.Key == flagKey)
+                await db.FlagEnvironmentStates
+                    .Where(f => f.EnvironmentId == envId && f.FeatureFlag.Key == flagKey)
                     .ExecuteUpdateAsync(f => f
                         .SetProperty(p => p.TrueCount, p => p.TrueCount + trueToAdd)
                         .SetProperty(p => p.FalseCount, p => p.FalseCount + falseToAdd), ct);

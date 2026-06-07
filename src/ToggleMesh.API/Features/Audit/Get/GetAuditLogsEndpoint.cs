@@ -46,11 +46,52 @@ public class GetAuditLogsEndpoint : ToggleEndpoint<GetAuditLogsRequest, GetAudit
     {
         Get("/audit-logs");
         Version(1);
-        Policies($"Permission:{Auth.Models.Permissions.ProjectsView}"); // Users who can view projects can view audit logs
     }
 
     public override async Task HandleAsync(GetAuditLogsRequest req, CancellationToken ct)
     {
+        if (!req.ProjectId.HasValue && !req.EnvironmentId.HasValue)
+        {
+            await Send.ForbiddenAsync(ct);
+            return;
+        }
+
+        Guid projectIdToCheck = req.ProjectId ?? Guid.Empty;
+        if (req.EnvironmentId.HasValue)
+        {
+            var env = await _db.Environments.FirstOrDefaultAsync(e => e.Id == req.EnvironmentId.Value, ct);
+            if (env == null)
+            {
+                await Send.NotFoundAsync(ct);
+                return;
+            }
+            projectIdToCheck = env.ProjectId;
+        }
+
+        var projectMember = await _db.ProjectMembers
+            .Include(pm => pm.EnvironmentRoles)
+            .FirstOrDefaultAsync(pm => pm.ProjectId == projectIdToCheck && pm.UserId == UserId, ct);
+
+        if (projectMember == null)
+        {
+            await Send.ForbiddenAsync(ct);
+            return;
+        }
+
+        var effectiveRole = projectMember.Role;
+        if (req.EnvironmentId.HasValue)
+        {
+            var envRoleOverride = projectMember.EnvironmentRoles.FirstOrDefault(er => er.EnvironmentId == req.EnvironmentId.Value);
+            if (envRoleOverride != null)
+                effectiveRole = envRoleOverride.Role;
+        }
+
+        if (effectiveRole == Projects.ProjectRole.None)
+        {
+            await Send.ForbiddenAsync(ct);
+            return;
+        }
+
         var query = _db.AuditLogs.AsNoTracking();
 
         if (req.EnvironmentId.HasValue)
@@ -59,12 +100,7 @@ public class GetAuditLogsEndpoint : ToggleEndpoint<GetAuditLogsRequest, GetAudit
         }
         else if (req.ProjectId.HasValue)
         {
-            var envIds = await _db.Environments
-                .Where(e => e.ProjectId == req.ProjectId)
-                .Select(e => e.Id)
-                .ToListAsync(ct);
-
-            query = query.Where(x => x.EnvironmentId != null && envIds.Contains(x.EnvironmentId.Value));        
+            query = query.Where(x => x.ProjectId == req.ProjectId && x.EnvironmentId == null);
         }
 
         var totalCount = await query.CountAsync(ct);

@@ -1,4 +1,5 @@
-﻿using System.Security.Claims;
+﻿using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Http;
 
 namespace ToggleMesh.SDK.Contexts;
@@ -23,7 +24,7 @@ public class HttpContextToggleContextProvider : IToggleMeshContextProvider
         
         if (string.Equals(key, "UserId", StringComparison.OrdinalIgnoreCase))
         {
-            value = user.FindFirst("sub")?.Value
+            value = user.FindFirst(JwtRegisteredClaimNames.Sub)?.Value
                     ?? user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             return value != null;
         }
