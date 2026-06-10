@@ -31,7 +31,7 @@ public class EnvironmentApiTests : IClassFixture<TestWebApplicationFactory>
         var request = new CreateEnvironmentRequest { Name = "Staging" };
 
         // Act
-        var response = await _client.PostAsJsonAsync($"/api/v1/projects/{project.Id}/environments", request);
+        var response = await _client.PostAsJsonAsync($"/api/v1/projects/{project!.Id}/environments", request);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -57,7 +57,7 @@ public class EnvironmentApiTests : IClassFixture<TestWebApplicationFactory>
         var envResponse = await _client.PostAsJsonAsync($"/api/v1/projects/{project!.Id}/environments", new CreateEnvironmentRequest { Name = "Prod" });
         var env = await envResponse.Content.ReadFromJsonAsync<CreateEnvironmentResponse>();
         
-        var keyResponse1 = await _client.PostAsJsonAsync($"/api/v1/projects/{project.Id}/environments/{env.Id}/keys/rotate", new {});
+        var keyResponse1 = await _client.PostAsJsonAsync($"/api/v1/projects/{project.Id}/environments/{env!.Id}/keys/rotate", new {});
         var key1 = await keyResponse1.Content.ReadFromJsonAsync<RotateEnvironmentKeyResponse>();
 
         // Act

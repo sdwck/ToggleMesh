@@ -4,12 +4,12 @@ using ToggleMesh.ConsoleClient;
 using ToggleMesh.SDK.Extensions;
 
 var builder = Host.CreateDefaultBuilder(args);
-builder.ConfigureServices((_, services) =>
+builder.ConfigureServices((context, services) =>
 {
     services.AddToggleMeshClient(options =>
     {
-        options.EndpointUrl = "http://localhost:5264";
-        options.ApiKey = "tm_5yzdu8pHVpPXmbpNtEmBbWdgwogwNqPHzA7akURWq8";
+        options.EndpointUrl = context.Configuration["ToggleMesh:Address"] ?? throw new Exception("ToggleMesh__Address is missing");
+        options.ApiKey = context.Configuration["ToggleMesh:ApiKey"] ?? throw new Exception("ToggleMesh__ApiKey is missing");
     });
     services.AddHostedService<Worker>();
 });
