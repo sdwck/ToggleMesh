@@ -15,6 +15,7 @@ using ToggleMesh.API.Features.Auth.Models;
 using ToggleMesh.API.Features.Metrics;
 using ToggleMesh.API.Hubs;
 using ToggleMesh.API.Infrastructure;
+using ToggleMesh.API.Infrastructure.Caching;
 using ToggleMesh.API.Persistence;
 using ToggleMesh.API.Persistence.Interceptors;
 using ToggleMesh.Common.Rules;
@@ -51,6 +52,7 @@ builder.Services.AddSingleton<IRuleEngine, RuleEngine>();
 
 builder.Services.AddScoped<IApiKeyCacheService, ApiKeyCacheService>();
 builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddMemoryCache();
 builder.Services.AddFastEndpoints();
 builder.Services.AddSingleton<AuditInterceptor>();
 builder.Services.AddDbContext<AppDbContext>((serviceProvider, options) =>
@@ -114,13 +116,14 @@ builder.Services.AddAuthorization();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddSingleton<IAuthorizationPolicyProvider, PermissionPolicyProvider>();
 builder.Services.AddScoped<IAuthorizationHandler, PermissionAuthorizationHandler>();
+builder.Services.AddSingleton<ICacheInvalidator, RedisCacheInvalidator>();
+builder.Services.AddHostedService<CacheInvalidationWorker>();
 
 var app = builder.Build();
 
-app.UseHttpsRedirection();
-
 if (app.Environment.IsStaging() || app.Environment.IsProduction())
 {
+    app.UseHttpsRedirection();
     app.UseExceptionHandler();
 }
 

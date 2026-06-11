@@ -1,9 +1,11 @@
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using StackExchange.Redis;
 using ToggleMesh.API.Features.Flags.Get;
 using ToggleMesh.API.Hubs;
 using ToggleMesh.API.Infrastructure;
+using ToggleMesh.API.Infrastructure.Caching;
 using ToggleMesh.API.Persistence;
 
 namespace ToggleMesh.API.Features.Flags.Update;
@@ -14,17 +16,20 @@ public class UpdateFlagEndpoint : ToggleEndpoint<UpdateFlagRequest, GetFlagRespo
     private readonly IHubContext<ToggleHub> _hubContext;
     private readonly IDatabase _redis;
     private readonly ILogger<UpdateFlagEndpoint> _logger;
+    private readonly ICacheInvalidator _cacheInvalidator;
 
     public UpdateFlagEndpoint(
         AppDbContext db, 
         IHubContext<ToggleHub> hubContext, 
         IConnectionMultiplexer redis,
-        ILogger<UpdateFlagEndpoint> logger)
+        ILogger<UpdateFlagEndpoint> logger, 
+        ICacheInvalidator cacheInvalidator)
     {
         _db = db;
         _hubContext = hubContext;
         _redis = redis.GetDatabase();
         _logger = logger;
+        _cacheInvalidator = cacheInvalidator;
     }
 
     public override void Configure()
@@ -87,6 +92,8 @@ public class UpdateFlagEndpoint : ToggleEndpoint<UpdateFlagRequest, GetFlagRespo
         {
             var cacheKey = $"flags:{environmentId}:{flagKey}";
             await _redis.StringSetAsync(cacheKey, System.Text.Json.JsonSerializer.Serialize(response), TimeSpan.FromMinutes(10));
+            
+            await _cacheInvalidator.InvalidateEnvironmentCacheAsync(environmentId);
         }
         catch (Exception e)
         {

@@ -1,6 +1,9 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
+using StackExchange.Redis;
 using ToggleMesh.API.Features.Flags.Get;
 using ToggleMesh.API.Infrastructure;
+using ToggleMesh.API.Infrastructure.Caching;
 using ToggleMesh.API.Persistence;
 
 namespace ToggleMesh.API.Features.Flags.Create;
@@ -8,10 +11,14 @@ namespace ToggleMesh.API.Features.Flags.Create;
 public class CreateFlagEndpoint : ToggleEndpoint<CreateFlagRequest, GetFlagResponse>
 {
     private readonly AppDbContext _db;
+    private readonly ICacheInvalidator _cacheInvalidator;
 
-    public CreateFlagEndpoint(AppDbContext db)
+    public CreateFlagEndpoint(
+        AppDbContext db,
+        ICacheInvalidator cacheInvalidator)
     {
         _db = db;
+        _cacheInvalidator = cacheInvalidator;
     }
 
     public override void Configure()
@@ -73,6 +80,9 @@ public class CreateFlagEndpoint : ToggleEndpoint<CreateFlagRequest, GetFlagRespo
         
         await _db.SaveChangesAsync(ct);
         
+        foreach (var envId in environments)
+            await _cacheInvalidator.InvalidateEnvironmentCacheAsync(envId);
+
         var response = new GetFlagResponse(
             newFlag.Key, 
             false, 

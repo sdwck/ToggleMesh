@@ -1,26 +1,25 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using StackExchange.Redis;
-using ToggleMesh.API.Features.Client.SdkEvaluateFlag;
-using ToggleMesh.API.Features.Flags;
+using ToggleMesh.API.Features.Client.SdkEvaluateFlags;
 using ToggleMesh.API.Features.Projects;
 using ToggleMesh.API.Infrastructure;
 using ToggleMesh.API.Persistence;
 using ToggleMesh.Common.Contexts;
 using ToggleMesh.Common.Rules;
 
-namespace ToggleMesh.API.Features.Client.SdkEvaluateFlags;
+namespace ToggleMesh.API.Features.Client.SdkEvaluateFlag;
 
-public class SdkEvaluateFlagsEndpoint : ToggleEndpoint<SdkEvaluateFlagsRequest, List<SdkEvaluateFlagResponse>>  
+public class SdkEvaluateFlagEndpoint : ToggleEndpoint<SdkEvaluateFlagsRequest, SdkEvaluateFlagResponse>
 {
     private readonly AppDbContext _db;
     private readonly IRuleEngine _ruleEngine;
     private readonly IDatabase _redis;
     private readonly IMemoryCache _memoryCache;
-    private static readonly List<string> DefaultIdentityKeys
+    private static readonly List<string> DefaultIdentityKeys 
         = ["UserId", "sub", "Email", "SessionId", "DeviceId", "Id"];
 
-    public SdkEvaluateFlagsEndpoint(AppDbContext db, IRuleEngine ruleEngine, IConnectionMultiplexer redis, IMemoryCache memoryCache)
+    public SdkEvaluateFlagEndpoint(AppDbContext db, IRuleEngine ruleEngine, IConnectionMultiplexer redis, IMemoryCache memoryCache)
     {
         _db = db;
         _ruleEngine = ruleEngine;
@@ -30,7 +29,7 @@ public class SdkEvaluateFlagsEndpoint : ToggleEndpoint<SdkEvaluateFlagsRequest, 
 
     public override void Configure()
     {
-        Post("/sdk/evaluate");
+        Post("/sdk/evaluate/{flagKey}");
         Version(1);
         AllowAnonymous();
         PreProcessor<ApiKeyPreProcessor<SdkEvaluateFlagsRequest>>();
@@ -38,6 +37,13 @@ public class SdkEvaluateFlagsEndpoint : ToggleEndpoint<SdkEvaluateFlagsRequest, 
 
     public override async Task HandleAsync(SdkEvaluateFlagsRequest req, CancellationToken ct)
     {
+        var flagKey = Route<string>("flagKey");
+        if (string.IsNullOrEmpty(flagKey))
+        {
+            await Send.NotFoundAsync(ct);
+            return;
+        }
+
         var isClientSideRequest = req.KeyType == KeyType.Client;
         var memoryCacheKey = $"sdk:compiled_rules:{req.EnvId}";
 
@@ -50,7 +56,9 @@ public class SdkEvaluateFlagsEndpoint : ToggleEndpoint<SdkEvaluateFlagsRequest, 
             var cachedValue = await _redis.StringGetAsync(cacheKey);
 
             if (cachedValue.HasValue)
+            {
                 dtoList = System.Text.Json.JsonSerializer.Deserialize<List<FlagStateDto>>((string)cachedValue!);
+            }
 
             if (dtoList is null)
             {
@@ -89,43 +97,37 @@ public class SdkEvaluateFlagsEndpoint : ToggleEndpoint<SdkEvaluateFlagsRequest, 
             return result;
         });
 
-        if (compiledStates is null)
+        var state = compiledStates?.FirstOrDefault(x => x.Key == flagKey);
+
+        if (state is null || (isClientSideRequest && !state.IsClientSideExposed))
         {
-            await Send.OkAsync([], ct);
+            await Send.NotFoundAsync(ct);
+            return;
+        }
+
+        if (!state.IsEnabled)
+        {
+            await Send.OkAsync(new SdkEvaluateFlagResponse(flagKey, false), ct);
             return;
         }
 
         var accessor = new ContextAccessor<Dictionary<string, string>>(req.Context);
         var evalContext = new EvaluationContext<ContextAccessor<Dictionary<string, string>>>(
-            accessor,
-            [],
+            accessor, 
+            [], 
             DefaultIdentityKeys);
 
-        var response = new List<SdkEvaluateFlagResponse>(compiledStates.Count);
-
-        foreach (var state in compiledStates)
+        if (!_ruleEngine.Evaluate(state.Groups, ref evalContext))
         {
-            if (isClientSideRequest && !state.IsClientSideExposed)
-                continue;
-
-            if (!state.IsEnabled)
-            {
-                response.Add(new SdkEvaluateFlagResponse(state.Key, false));
-                continue;
-            }
-
-            if (!_ruleEngine.Evaluate(state.Groups, ref evalContext))
-            {
-                response.Add(new SdkEvaluateFlagResponse(state.Key, false));
-                continue;
-            }
-
-            var actualIdentity = evalContext.GetIdentity(req.Identity);
-            var result = RolloutEvaluator.Evaluate(state.RolloutPercentage, state.Key, actualIdentity);
-
-            response.Add(new SdkEvaluateFlagResponse(state.Key, result));
+            await Send.OkAsync(new SdkEvaluateFlagResponse(flagKey, false), ct);
+            return;
         }
 
-        await Send.OkAsync(response, ct);
+        var actualIdentity = evalContext.GetIdentity(req.Identity);
+        var result = RolloutEvaluator.Evaluate(state.RolloutPercentage, flagKey, actualIdentity);
+        
+        await Send.OkAsync(new SdkEvaluateFlagResponse(flagKey, result), ct);
     }
 }
+
+public record FlagStateDto(string Key, bool IsEnabled, int? RolloutPercentage, bool IsClientSideExposed, List<RuleDto> Rules);
