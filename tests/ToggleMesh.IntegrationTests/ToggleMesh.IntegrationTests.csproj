@@ -28,6 +28,7 @@
     <ItemGroup>
       <ProjectReference Include="..\..\src\ToggleMesh.API\ToggleMesh.API.csproj" />
       <ProjectReference Include="..\..\src\ToggleMesh.SDK\ToggleMesh.SDK.csproj" />
+      <ProjectReference Include="..\..\src\ToggleMesh.Common\ToggleMesh.Common.csproj" />
     </ItemGroup>
 
 </Project>

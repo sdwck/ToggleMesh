@@ -49,6 +49,7 @@ public class GetFlagsEndpoint : ToggleEndpointWithoutRequest<List<ProjectFlagDto
             x.Key,
             x.Name,
             x.Description,
+            x.IsClientSideExposed,
             x.CreatedAt,
             x.States.Where(s => 
             {

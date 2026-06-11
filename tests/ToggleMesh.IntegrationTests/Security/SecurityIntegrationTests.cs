@@ -62,7 +62,7 @@ public class SecurityIntegrationTests : IClassFixture<TestWebApplicationFactory>
         initialResponse.StatusCode.Should().Be(HttpStatusCode.OK);
 
         // Act
-        var rotateResponse = await _client.PostAsJsonAsync($"/api/v1/projects/{project.Id}/environments/{env.Id}/keys/rotate", new { });
+        var rotateResponse = await _client.PostAsJsonAsync($"/api/v1/projects/{project.Id}/environments/{env!.Id}/keys/server/rotate", new { });
         rotateResponse.StatusCode.Should().Be(HttpStatusCode.OK);
         var rotateResult = await rotateResponse.Content.ReadFromJsonAsync<RotateEnvironmentKeyResponse>();
         var newPlainKey = rotateResult!.ApiKey;

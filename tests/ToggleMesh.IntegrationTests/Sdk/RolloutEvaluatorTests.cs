@@ -1,5 +1,5 @@
 using FluentAssertions;
-using ToggleMesh.SDK.Rules;
+using ToggleMesh.Common.Rules;
 
 namespace ToggleMesh.IntegrationTests.Sdk;
 

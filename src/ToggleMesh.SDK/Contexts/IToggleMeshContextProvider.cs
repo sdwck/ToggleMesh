@@ -1,6 +1,0 @@
-﻿namespace ToggleMesh.SDK.Contexts;
-
-public interface IToggleMeshContextProvider
-{
-    bool TryGetValue(string key, out string? value);
-}

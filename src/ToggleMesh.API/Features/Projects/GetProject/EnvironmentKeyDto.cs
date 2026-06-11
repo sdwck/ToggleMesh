@@ -4,5 +4,6 @@ public class EnvironmentKeyDto
 {
     public Guid Id { get; set; }
     public string KeyPrefix { get; set; } = string.Empty;
+    public KeyType KeyType { get; set; }
     public DateTime CreatedAt { get; set; }
 }

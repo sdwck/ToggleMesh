@@ -52,8 +52,8 @@ export const useCreateEnvironment = (projectId: string) => {
 export const useRotateEnvironmentKey = (projectId: string) => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (envId: string) => {
-      const { data } = await api.post<{ apiKey: string }>(`/projects/${projectId}/environments/${envId}/keys/rotate`);
+    mutationFn: async ({ envId, keyType }: { envId: string, keyType: 'server' | 'client' }) => {
+      const { data } = await api.post<{ apiKey: string }>(`/projects/${projectId}/environments/${envId}/keys/${keyType}/rotate`);
       return data;
     },
     onSuccess: () => {
@@ -90,6 +90,19 @@ export const useCreateFeatureFlag = (projectId: string) => {
     mutationFn: async (key: string) => {
       const { data } = await api.post<{ id: string }>(`/projects/${projectId}/flags`, { key });
       return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projects', projectId, 'flags'] });
+    },
+  });
+};
+
+export const useUpdateFlagPrivacy = (projectId: string) => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ flagKey, isClientSideExposed }: { flagKey: string; isClientSideExposed: boolean }) => {
+      await api.patch(`/projects/${projectId}/flags/${flagKey}/privacy`, { isClientSideExposed });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects', projectId, 'flags'] });

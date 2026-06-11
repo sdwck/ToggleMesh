@@ -13,9 +13,9 @@ public class MetricsWorker : BackgroundService
     private readonly TimeProvider _timeProvider;
 
     public MetricsWorker(
-        Channel<MetricQueueItem> channel, 
-        IServiceProvider serviceProvider, 
-        ILogger<MetricsWorker> logger, 
+        Channel<MetricQueueItem> channel,
+        IServiceProvider serviceProvider,
+        ILogger<MetricsWorker> logger,
         TimeProvider timeProvider)
     {
         _channel = channel;
@@ -26,8 +26,8 @@ public class MetricsWorker : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var batch = new Dictionary<(Guid, string), (long TrueCount, long FalseCount)>();
-        var lastFlush = _timeProvider.GetUtcNow(); 
+        var batch = new Dictionary<(Guid, string, bool), (long TrueCount, long FalseCount)>();
+        var lastFlush = _timeProvider.GetUtcNow();
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -48,19 +48,20 @@ public class MetricsWorker : BackgroundService
             if (completedTask == delayTask)
                 continue;
 
-            if (!await readTask) 
+            if (!await readTask)
                 continue;
-            
+
             while (batch.Count < 100 && _channel.Reader.TryRead(out var item))
             {
-                var dictKey = (item.EnvironmentId, item.Key);
+                var dictKey = (item.EnvironmentId, item.Key, IsClientSide: item.IsClientSideExposed);
                 batch.TryGetValue(dictKey, out var current);
                 batch[dictKey] = (current.TrueCount + item.TrueCount, current.FalseCount + item.FalseCount);
             }
         }
     }
 
-    private async Task<bool> FlushToDatabaseAsync(Dictionary<(Guid, string), (long True, long False)> batch, CancellationToken ct)
+    private async Task<bool> FlushToDatabaseAsync(Dictionary<(Guid, string, bool), (long True, long False)> batch,
+        CancellationToken ct)
     {
         using var scope = _serviceProvider.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -71,16 +72,23 @@ public class MetricsWorker : BackgroundService
             {
                 var envId = kvp.Key.Item1;
                 var flagKey = kvp.Key.Item2;
+                var isClientSide = kvp.Key.Item3;
                 var trueToAdd = kvp.Value.True;
                 var falseToAdd = kvp.Value.False;
 
-                await db.FlagEnvironmentStates
-                    .Where(f => f.EnvironmentId == envId && f.FeatureFlag.Key == flagKey)
+                var query = db.FlagEnvironmentStates
+                    .Where(f => f.EnvironmentId == envId && f.FeatureFlag.Key == flagKey);
+
+                if (isClientSide)
+                    query = query
+                        .Where(x => x.FeatureFlag.IsClientSideExposed);
+                        
+                await query
                     .ExecuteUpdateAsync(f => f
                         .SetProperty(p => p.TrueCount, p => p.TrueCount + trueToAdd)
                         .SetProperty(p => p.FalseCount, p => p.FalseCount + falseToAdd), ct);
             }
-            
+
             return true;
         }
         catch (Exception ex)

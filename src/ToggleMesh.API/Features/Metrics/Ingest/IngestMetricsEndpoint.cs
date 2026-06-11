@@ -1,4 +1,5 @@
 ﻿using System.Threading.Channels;
+using ToggleMesh.API.Features.Projects;
 using ToggleMesh.API.Infrastructure;
 
 namespace ToggleMesh.API.Features.Metrics.Ingest;
@@ -33,6 +34,7 @@ public class IngestMetricsEndpoint : ToggleEndpoint<IngestMetricsRequest>
             var item = new MetricQueueItem(
                 req.EnvId, 
                 metric.Key, 
+                req.KeyType == KeyType.Client,
                 metric.TrueCount, 
                 metric.FalseCount);
             

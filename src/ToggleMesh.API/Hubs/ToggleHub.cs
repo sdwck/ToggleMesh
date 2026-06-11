@@ -28,18 +28,18 @@ public class ToggleHub : Hub
             return;
         }
         
-        var envId = await _apiKeyCache.GetEnvironmentIdAsync(apiKey);
+        var keyInfo = await _apiKeyCache.GetKeyInfoAsync(apiKey);
 
-        if (envId is null)
+        if (keyInfo is null)
         {
             _logger.LogWarning("Connection aborted: Invalid or expired API key {ApiKey}", apiKey);
             Context.Abort();
             return;
         }
-        
-        var groupName = envId.Value.ToString();
-        await Groups.AddToGroupAsync(Context.ConnectionId, groupName);
-        _logger.LogInformation("Client {ConnectionId} added to group {GroupName}", Context.ConnectionId, groupName);
+
+        var envIdStr = keyInfo.EnvironmentId.ToString();
+        await Groups.AddToGroupAsync(Context.ConnectionId, envIdStr);
+        _logger.LogInformation("Client {ConnectionId} added to group {GroupName}", Context.ConnectionId, envIdStr);
         await base.OnConnectedAsync();
     }
 }

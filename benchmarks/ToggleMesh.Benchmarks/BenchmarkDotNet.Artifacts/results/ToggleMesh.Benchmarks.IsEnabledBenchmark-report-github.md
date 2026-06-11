@@ -10,4 +10,4 @@ Toolchain=InProcessNoEmitToolchain
 ```
 | Method              | Mean     | Error    | StdDev   | Allocated |
 |-------------------- |---------:|---------:|---------:|----------:|
-| IsEnabled_WithRules | 37.73 ns | 0.325 ns | 0.304 ns |         - |
+| IsEnabled_WithRules | 41.56 ns | 0.623 ns | 0.583 ns |         - |

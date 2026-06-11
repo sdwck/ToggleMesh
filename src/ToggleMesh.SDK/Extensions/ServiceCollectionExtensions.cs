@@ -1,10 +1,11 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using ToggleMesh.Common.Contexts;
+using ToggleMesh.Common.Rules;
+using ToggleMesh.Common.Rules.Operators;
 using ToggleMesh.SDK.Clients;
 using ToggleMesh.SDK.Contexts;
 using ToggleMesh.SDK.Options;
-using ToggleMesh.SDK.Rules;
-using ToggleMesh.SDK.Rules.Operators;
 
 namespace ToggleMesh.SDK.Extensions;
 

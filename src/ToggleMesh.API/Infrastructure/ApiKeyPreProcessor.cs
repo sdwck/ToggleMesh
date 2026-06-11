@@ -16,14 +16,15 @@ public class ApiKeyPreProcessor<TRequest> : IPreProcessor<TRequest>
         }
         
         var apiKeyCache = context.HttpContext.RequestServices.GetRequiredService<IApiKeyCacheService>();
-        var envId = await apiKeyCache.GetEnvironmentIdAsync(req.ApiKey, ct);
+        var keyInfo = await apiKeyCache.GetKeyInfoAsync(req.ApiKey, ct);
 
-        if (envId is null)
+        if (keyInfo is null)
         {
             await context.HttpContext.Response.SendUnauthorizedAsync(ct);
             return;
         }
 
-        req.EnvId = envId.Value;
+        req.EnvId = keyInfo.EnvironmentId;
+        req.KeyType = keyInfo.KeyType;
     }
 }

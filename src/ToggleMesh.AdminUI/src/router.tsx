@@ -5,6 +5,7 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { ProjectsPage } from '@/features/projects/ProjectsPage';
 import { ProjectDetailsPage } from '@/features/projects/ProjectDetailsPage';
 import { ProjectFlagDetailsPage } from '@/features/flags/ProjectFlagDetailsPage';
+import { EnvironmentDetailsPage } from '@/features/environments/EnvironmentDetailsPage';
 import { GlobalError } from '@/components/GlobalError';
 
 export const router = createBrowserRouter([
@@ -34,6 +35,10 @@ export const router = createBrowserRouter([
       {
         path: 'projects/:projectId',
         element: <ProjectDetailsPage />,
+      },
+      {
+        path: 'projects/:projectId/environments/:environmentId',
+        element: <EnvironmentDetailsPage />,
       },
       {
         path: 'projects/:projectId/flags/:flagKey',

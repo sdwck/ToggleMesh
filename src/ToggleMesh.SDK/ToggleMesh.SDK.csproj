@@ -26,4 +26,8 @@
         </AssemblyAttribute>
     </ItemGroup>
 
+    <ItemGroup>
+      <ProjectReference Include="..\ToggleMesh.Common\ToggleMesh.Common.csproj" />
+    </ItemGroup>
+
 </Project>

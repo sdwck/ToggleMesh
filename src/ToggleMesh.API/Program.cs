@@ -17,6 +17,8 @@ using ToggleMesh.API.Hubs;
 using ToggleMesh.API.Infrastructure;
 using ToggleMesh.API.Persistence;
 using ToggleMesh.API.Persistence.Interceptors;
+using ToggleMesh.Common.Rules;
+using ToggleMesh.Common.Rules.Operators;
 
 JwtSecurityTokenHandler.DefaultInboundClaimTypeMap.Clear();
 var builder = WebApplication.CreateBuilder(args);
@@ -26,6 +28,26 @@ builder.Services.AddSignalR()
 
 builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
     ConnectionMultiplexer.Connect(builder.Configuration.GetConnectionString("Redis")!));
+
+builder.Services.AddSingleton<IRuleOperator, ContainsOperator>();
+builder.Services.AddSingleton<IRuleOperator, DateAfterOperator>();
+builder.Services.AddSingleton<IRuleOperator, DateBeforeOperator>();
+builder.Services.AddSingleton<IRuleOperator, EndsWithOperator>();
+builder.Services.AddSingleton<IRuleOperator, EqualsOperator>();
+builder.Services.AddSingleton<IRuleOperator, GreaterThanOperator>();
+builder.Services.AddSingleton<IRuleOperator, GreaterThanOrEqualOperator>();
+builder.Services.AddSingleton<IRuleOperator, InListOperator>();
+builder.Services.AddSingleton<IRuleOperator, LessThanOperator>();
+builder.Services.AddSingleton<IRuleOperator, LessThanOrEqualOperator>();
+builder.Services.AddSingleton<IRuleOperator, NotEqualsOperator>();
+builder.Services.AddSingleton<IRuleOperator, RegexOperator>();
+builder.Services.AddSingleton<IRuleOperator, SemVerEqualOperator>();
+builder.Services.AddSingleton<IRuleOperator, SemVerGreaterThanOperator>();
+builder.Services.AddSingleton<IRuleOperator, SemVerGreaterThanOrEqualOperator>();
+builder.Services.AddSingleton<IRuleOperator, SemVerLessThanOperator>();
+builder.Services.AddSingleton<IRuleOperator, SemVerLessThanOrEqualOperator>();
+builder.Services.AddSingleton<IRuleOperator, StartsWithOperator>();
+builder.Services.AddSingleton<IRuleEngine, RuleEngine>();
 
 builder.Services.AddScoped<IApiKeyCacheService, ApiKeyCacheService>();
 builder.Services.AddSingleton(TimeProvider.System);

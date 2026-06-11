@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using ToggleMesh.API.Features.Projects;
 using ToggleMesh.API.Features.Projects.CreateEnvironment;
 using ToggleMesh.API.Features.Projects.CreateProject;
 using ToggleMesh.API.Features.Projects.RotateEnvironmentKey;
@@ -57,11 +58,11 @@ public class EnvironmentApiTests : IClassFixture<TestWebApplicationFactory>
         var envResponse = await _client.PostAsJsonAsync($"/api/v1/projects/{project!.Id}/environments", new CreateEnvironmentRequest { Name = "Prod" });
         var env = await envResponse.Content.ReadFromJsonAsync<CreateEnvironmentResponse>();
         
-        var keyResponse1 = await _client.PostAsJsonAsync($"/api/v1/projects/{project.Id}/environments/{env!.Id}/keys/rotate", new {});
+        var keyResponse1 = await _client.PostAsJsonAsync($"/api/v1/projects/{project.Id}/environments/{env!.Id}/keys/server/rotate", new {});
         var key1 = await keyResponse1.Content.ReadFromJsonAsync<RotateEnvironmentKeyResponse>();
 
         // Act
-        var keyResponse2 = await _client.PostAsJsonAsync($"/api/v1/projects/{project.Id}/environments/{env.Id}/keys/rotate", new {});
+        var keyResponse2 = await _client.PostAsJsonAsync($"/api/v1/projects/{project.Id}/environments/{env.Id}/keys/server/rotate", new {});
 
         // Assert
         keyResponse2.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -79,5 +80,41 @@ public class EnvironmentApiTests : IClassFixture<TestWebApplicationFactory>
         dbKeys.Should().HaveCount(2);
         dbKeys.Should().ContainSingle(k => k.ExpireOn == null);
         dbKeys.Should().ContainSingle(k => k.ExpireOn != null);
+    }
+    
+    [Fact]
+    public async Task RotateClientEnvironmentKey_ShouldNotRotateServerKey_AndRevokeOldClientKey()
+    {
+        // Arrange
+        var createResponse = await _client.PostAsJsonAsync("/api/v1/projects", new CreateProjectRequest { Name = "Key Test Project" });
+        var project = await createResponse.Content.ReadFromJsonAsync<CreateProjectResponse>();
+        
+        var envResponse = await _client.PostAsJsonAsync($"/api/v1/projects/{project!.Id}/environments", new CreateEnvironmentRequest { Name = "Prod" });
+        var env = await envResponse.Content.ReadFromJsonAsync<CreateEnvironmentResponse>();
+        
+        var keyResponse1 = await _client.PostAsJsonAsync($"/api/v1/projects/{project.Id}/environments/{env!.Id}/keys/server/rotate", new {});
+        var key1 = await keyResponse1.Content.ReadFromJsonAsync<RotateEnvironmentKeyResponse>();
+
+        // Act
+        var keyResponse2 = await _client.PostAsJsonAsync($"/api/v1/projects/{project.Id}/environments/{env.Id}/keys/client/rotate", new {});
+
+        // Assert
+        keyResponse2.StatusCode.Should().Be(HttpStatusCode.OK);
+        var key2 = await keyResponse2.Content.ReadFromJsonAsync<RotateEnvironmentKeyResponse>();
+        
+        key2.Should().NotBeNull();
+        key2.ApiKey.Should().NotBeNullOrEmpty();
+        key2.ApiKey.Should().NotBe(key1!.ApiKey);
+        key2.ApiKey.Should().StartWith("tm_c_");
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var clientKeys = await db.EnvironmentKeys.Where(k => k.EnvironmentId == env.Id && k.KeyType == KeyType.Client).ToListAsync();
+        var serverKeys = await db.EnvironmentKeys.Where(k => k.EnvironmentId == env.Id && k.KeyType == KeyType.Server).ToListAsync();
+        
+        clientKeys.Should().HaveCount(1);
+        clientKeys.Should().ContainSingle(k => k.ExpireOn == null);
+        serverKeys.Should().HaveCount(1);
+        serverKeys.Should().ContainSingle(k => k.ExpireOn == null);
     }
 }

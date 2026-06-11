@@ -11,5 +11,6 @@ public class EnvironmentKey : IHasEnvironment
     public Guid EnvironmentId { get; set; }
     public ProjectEnvironment Environment { get; set; } = null!;
     public DateTime CreatedOn { get; set; } = DateTime.UtcNow;
-    public DateTime? ExpireOn { get; set; } = null;
+    public DateTime? ExpireOn { get; set; }
+    public KeyType KeyType { get; set; }
 }

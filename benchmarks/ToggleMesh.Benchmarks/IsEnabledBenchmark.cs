@@ -7,9 +7,10 @@ using Microsoft.Extensions.Options;
 using Moq;
 using ToggleMesh.SDK.Clients;
 using ToggleMesh.SDK.Options;
-using ToggleMesh.SDK.Rules;
-using ToggleMesh.SDK.Rules.Operators;
 using System.Reflection;
+using ToggleMesh.Common;
+using ToggleMesh.Common.Rules;
+using ToggleMesh.Common.Rules.Operators;
 
 namespace ToggleMesh.Benchmarks;
 
@@ -43,7 +44,7 @@ public class IsEnabledBenchmark
             engine, 
             []);
         
-        var dtoType = typeof(ToggleMeshClient).GetNestedType("FeatureFlagDto", BindingFlags.Public | BindingFlags.NonPublic);
+        var dtoType = typeof(FeatureFlagDto);
         
         var flagData = new { 
             Key = "bench-flag", 
@@ -54,7 +55,7 @@ public class IsEnabledBenchmark
 
         var dto = System.Text.Json.JsonSerializer.Deserialize(
             System.Text.Json.JsonSerializer.Serialize(flagData), 
-            dtoType!,
+            dtoType,
             new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
         var cacheFlagMethod = typeof(ToggleMeshClient).GetMethod("CacheFlag", BindingFlags.NonPublic | BindingFlags.Instance);

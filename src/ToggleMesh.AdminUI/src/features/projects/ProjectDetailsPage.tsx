@@ -1,4 +1,4 @@
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { useProjectDetails } from '@/api/queries';
 import { Button } from '@/components/ui/button';
@@ -14,7 +14,14 @@ import { ProjectAuditTab } from './components/ProjectAuditTab';
 export function ProjectDetailsPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { data: project, isLoading } = useProjectDetails(projectId!);
+
+  const activeTab = searchParams.get('tab') || 'flags';
+
+  const handleTabChange = (value: string) => {
+    setSearchParams({ tab: value }, { replace: true });
+  };
 
   if (isLoading) {
     return (
@@ -54,7 +61,7 @@ export function ProjectDetailsPage() {
         </div>
       </div>
 
-      <Tabs defaultValue="flags" className="space-y-6">
+      <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
         <TabsList>
           <TabsTrigger value="flags">Feature Flags</TabsTrigger>
           <TabsTrigger value="environments">Environments</TabsTrigger>

@@ -312,6 +312,9 @@ namespace ToggleMesh.API.Migrations
                     b.Property<string>("Description")
                         .HasColumnType("text");
 
+                    b.Property<bool>("IsClientSideExposed")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("Key")
                         .IsRequired()
                         .HasMaxLength(256)
@@ -423,6 +426,9 @@ namespace ToggleMesh.API.Migrations
                         .IsRequired()
                         .HasMaxLength(32)
                         .HasColumnType("character varying(32)");
+
+                    b.Property<int>("KeyType")
+                        .HasColumnType("integer");
 
                     b.HasKey("Id");
 

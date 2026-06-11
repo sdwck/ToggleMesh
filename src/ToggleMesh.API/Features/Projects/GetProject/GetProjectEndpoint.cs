@@ -78,6 +78,7 @@ public class GetProjectEndpoint : ToggleEndpointWithoutRequest<GetProjectRespons
                     {
                         Id = k.Id,
                         KeyPrefix = k.KeyPreview,
+                        KeyType = k.KeyType,
                         CreatedAt = k.CreatedOn
                     }).ToList()
                 };

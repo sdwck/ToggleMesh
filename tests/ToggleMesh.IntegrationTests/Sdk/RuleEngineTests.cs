@@ -1,8 +1,8 @@
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
-using ToggleMesh.SDK.Contexts;
-using ToggleMesh.SDK.Rules;
-using ToggleMesh.SDK.Rules.Operators;
+using ToggleMesh.Common.Contexts;
+using ToggleMesh.Common.Rules;
+using ToggleMesh.Common.Rules.Operators;
 
 namespace ToggleMesh.IntegrationTests.Sdk;
 

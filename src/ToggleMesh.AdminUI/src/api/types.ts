@@ -4,9 +4,17 @@ export interface Project {
   environmentCount: number;
 }
 
+export const KeyType = {
+  Server: 0,
+  Client: 1
+} as const;
+
+export type KeyType = typeof KeyType[keyof typeof KeyType];
+
 export interface EnvironmentKey {
   id: string;
   keyPrefix: string;
+  keyType: KeyType;
   createdAt: string;
 }
 
@@ -55,6 +63,7 @@ export interface ProjectFlagDto {
   key: string;
   name: string | null;
   description: string | null;
+  isClientSideExposed: boolean;
   createdAt: string;
   environments: FlagEnvironmentStateDto[];
 }

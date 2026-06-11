@@ -8,10 +8,11 @@ using Microsoft.Extensions.Options;
 using Polly;
 using Polly.CircuitBreaker;
 using Polly.Retry;
-using ToggleMesh.SDK.Contexts;
+using ToggleMesh.Common;
+using ToggleMesh.Common.Contexts;
+using ToggleMesh.Common.Rules;
 using ToggleMesh.SDK.Models;
 using ToggleMesh.SDK.Options;
-using ToggleMesh.SDK.Rules;
 
 namespace ToggleMesh.SDK.Clients;
 
@@ -410,7 +411,4 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService
             _logger.LogError(ex, "[ToggleMesh] Failed to write fallback file to {Path}. Offline capabilities will be limited.", _fallbackFilePath);
         }
     }
-    
-    // ReSharper disable once ClassNeverInstantiated.Global
-    internal sealed record FeatureFlagDto(string Key, bool IsEnabled, IEnumerable<RuleDto> Rules, int? RolloutPercentage = null);
 }

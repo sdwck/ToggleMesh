@@ -5,6 +5,7 @@ public record ProjectFlagDto(
     string Key,
     string? Name,
     string? Description,
+    bool IsClientSideExposed,
     DateTime CreatedAt,
     IEnumerable<FlagEnvironmentStateDto> Environments
 );

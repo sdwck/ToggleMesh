@@ -9,6 +9,7 @@
 
     <ItemGroup>
       <ProjectReference Include="..\..\src\ToggleMesh.SDK\ToggleMesh.SDK.csproj" />
+      <ProjectReference Include="..\..\src\ToggleMesh.Common\ToggleMesh.Common.csproj" />
     </ItemGroup>
 
     <ItemGroup>

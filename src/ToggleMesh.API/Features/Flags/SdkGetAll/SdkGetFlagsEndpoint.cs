@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using ToggleMesh.API.Features.Flags.Get;
+using ToggleMesh.API.Features.Projects;
 using ToggleMesh.API.Infrastructure;
 using ToggleMesh.API.Persistence;
 
@@ -24,6 +25,13 @@ public class SdkGetFlagsEndpoint : ToggleEndpoint<SdkGetFlagsRequest, List<GetFl
 
     public override async Task HandleAsync(SdkGetFlagsRequest req, CancellationToken ct)
     {
+        if (req.KeyType == KeyType.Client)
+        {
+            AddError("Client keys are not supported.");
+            await Send.ErrorsAsync(cancellation: ct);
+            return;
+        }
+        
         var states = await _db.FlagEnvironmentStates
             .AsNoTracking()
             .Include(x => x.FeatureFlag)
