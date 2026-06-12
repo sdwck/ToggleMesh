@@ -45,18 +45,53 @@ public class AuditInterceptor : SaveChangesInterceptor
             if (entry.Entity is AuditLog || entry.Entity is ToggleMesh.API.Features.Projects.EnvironmentKey || entry.State is EntityState.Detached or EntityState.Unchanged)
                 continue;
 
-            var performedBy = string.Empty;
-            if (_httpContextAccessor.HttpContext?.User is not null && 
-                _httpContextAccessor.HttpContext.User.TryGetUserId(out var userId))
-                performedBy = userId.ToString();
+            Guid? performedById = null;
+            string performedByEmail = "System";
+
+            if (_httpContextAccessor.HttpContext?.User is not null)
+            {
+                var user = _httpContextAccessor.HttpContext.User;
+                if (user.TryGetUserId(out var userId))
+                {
+                    performedById = userId;
+                }
+
+                var email = user.FindFirst("email")?.Value 
+                    ?? user.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value;
+                if (!string.IsNullOrEmpty(email))
+                {
+                    performedByEmail = email;
+                }
+                else if (performedById.HasValue)
+                {
+                    performedByEmail = "Unknown Email";
+                }
+            }
+
+            var entityFriendlyName = string.Empty;
+            var keyProp = entry.Metadata.FindProperty("Key");
+            if (keyProp != null)
+            {
+                entityFriendlyName = entry.Property(keyProp.Name).CurrentValue?.ToString() ?? string.Empty;
+            }
+            else
+            {
+                var nameProp = entry.Metadata.FindProperty("Name");
+                if (nameProp != null)
+                {
+                    entityFriendlyName = entry.Property(nameProp.Name).CurrentValue?.ToString() ?? string.Empty;
+                }
+            }
 
             var auditLog = new AuditLog
             {
                 Id = Guid.CreateVersion7(),
                 EntityName = entry.Entity.GetType().Name,
+                EntityFriendlyName = entityFriendlyName,
                 Action = entry.State.ToString(),
                 Timestamp = DateTime.UtcNow,
-                PerformedBy = performedBy
+                PerformedById = performedById,
+                PerformedByEmail = performedByEmail
             };
 
             var projectIdProp = entry.Properties.FirstOrDefault(p => p.Metadata.Name == "ProjectId");

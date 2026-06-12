@@ -26,6 +26,7 @@ public record AuditLogDto(
     Guid Id,
     Guid? EnvironmentId,
     string EntityName,
+    string EntityFriendlyName,
     string EntityId,
     string Action,
     string OldValues,
@@ -112,24 +113,18 @@ public class GetAuditLogsEndpoint : ToggleEndpoint<GetAuditLogsRequest, GetAudit
             .Take(req.PageSize)
             .ToListAsync(ct);
 
-        var userIdsString = logs.Select(l => l.PerformedBy).Distinct().ToList();
-        var userIdsGuid = userIdsString.Where(id => Guid.TryParse(id, out _)).Select(Guid.Parse).ToList();
-        
-        var userEmails = await _db.Users
-            .Where(u => userIdsGuid.Contains(u.Id))
-            .ToDictionaryAsync(u => u.Id.ToString(), u => u.Email ?? "Unknown", ct);
-
         var response = new GetAuditLogsResponse
         {
             Items = logs.Select(x => new AuditLogDto(
                 x.Id,
                 x.EnvironmentId,
                 x.EntityName,
+                x.EntityFriendlyName,
                 x.EntityId,
                 x.Action,
                 x.OldValues,
                 x.NewValues,
-                userEmails.GetValueOrDefault(x.PerformedBy, x.PerformedBy),
+                x.PerformedByEmail,
                 x.Timestamp)).ToList(),
             TotalCount = totalCount,
             TotalPages = totalPages,

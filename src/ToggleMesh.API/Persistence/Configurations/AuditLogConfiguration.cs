@@ -15,6 +15,10 @@ public sealed class AuditLogConfiguration
             .HasMaxLength(128)
             .IsRequired();
         
+        entity.Property(x => x.EntityFriendlyName)
+            .HasMaxLength(256)
+            .IsRequired();
+        
         entity.Property(x => x.EntityId)
             .HasMaxLength(128)
             .IsRequired();
@@ -23,8 +27,11 @@ public sealed class AuditLogConfiguration
             .HasMaxLength(64)
             .IsRequired();
         
-        entity.Property(x => x.PerformedBy)
-            .HasMaxLength(256);
+        entity.Property(x => x.PerformedByEmail)
+            .HasMaxLength(256)
+            .IsRequired();
+
+        entity.HasIndex(x => x.PerformedById);
         
         entity.Property(x => x.OldValues)
             .HasColumnType("jsonb")

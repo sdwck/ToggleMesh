@@ -18,6 +18,10 @@ public sealed class EnvironmentKeyConfiguration
             .HasMaxLength(64)
             .IsRequired();
 
+        entity.Property(x => x.Name)
+            .HasMaxLength(128)
+            .IsRequired();
+
         entity.HasIndex(x => x.KeyHash)
             .IsUnique();
         

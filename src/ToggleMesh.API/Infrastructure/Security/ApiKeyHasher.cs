@@ -14,8 +14,25 @@ public static class ApiKeyHasher
 
     public static string GeneratePreview(string plainKey)
     {
-        if (plainKey.Length < 12)
-            return "...";
-        return plainKey[..7] + "..." + plainKey[^4..];
+        var lastIndex = plainKey.LastIndexOf('_');
+        if (lastIndex < 0)
+        {
+            if (plainKey.Length < 12)
+                return "...";
+            return plainKey[..7] + "***" + plainKey[^4..];
+        }
+
+        var prefix = plainKey[..(lastIndex + 1)];
+        var suffixStart = lastIndex + 1;
+        var remaining = plainKey[suffixStart..];
+
+        if (remaining.Length < 7)
+        {
+            return prefix + "***";
+        }
+
+        var nextThree = remaining[..3];
+        var lastFour = remaining[^4..];
+        return $"{prefix}{nextThree}***{lastFour}";
     }
 }

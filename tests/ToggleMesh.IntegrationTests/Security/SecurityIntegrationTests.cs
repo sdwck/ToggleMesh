@@ -4,8 +4,7 @@ using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using ToggleMesh.API.Features.Flags.Get;
 using ToggleMesh.API.Features.Projects;
-using ToggleMesh.API.Features.Projects.RotateEnvironmentKey;
-using ToggleMesh.API.Infrastructure.Security;
+using ToggleMesh.API.Features.Projects.EnvironmentKeys;
 using ToggleMesh.API.Persistence;
 using ToggleMesh.IntegrationTests.Infrastructure;
 
@@ -35,48 +34,45 @@ public class SecurityIntegrationTests : IClassFixture<TestWebApplicationFactory>
     }
 
     [Fact]
-    public async Task RotateKey_ShouldInvalidateOldKey_AndEnableNewKey()
+    public async Task CreateAndRevokeKey_ShouldWorkCorrectly()
     {
         // Arrange
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
-        var project = new Project { Name = "Rotation Test" };
+        var project = new Project { Name = "Key CRUD Test" };
         db.Projects.Add(project); db.ProjectMembers.Add(new ToggleMesh.API.Features.Projects.ProjectMember { Project = project, UserId = Guid.Parse(ToggleMesh.IntegrationTests.Infrastructure.TestAuthHandler.TestUserId), Role = ToggleMesh.API.Features.Projects.ProjectRole.Owner });
         var env = new ProjectEnvironment { Name = "Prod", Project = project };
         db.Environments.Add(env);
-        
-        var oldPlainKey = "tm_old_key_12345";
-        var oldHash = ApiKeyHasher.Hash(oldPlainKey);
-        db.EnvironmentKeys.Add(new EnvironmentKey 
-        { 
-            Environment = env, 
-            KeyHash = oldHash, 
-            KeyPreview = ApiKeyHasher.GeneratePreview(oldPlainKey) 
-        });
         await db.SaveChangesAsync();
 
-        var sdkRequestOld = new HttpRequestMessage(HttpMethod.Get, "/api/v1/sdk/flags");
-        sdkRequestOld.Headers.Add("x-api-key", oldPlainKey);
-        var initialResponse = await _client.SendAsync(sdkRequestOld);
-        initialResponse.StatusCode.Should().Be(HttpStatusCode.OK);
-
         // Act
-        var rotateResponse = await _client.PostAsJsonAsync($"/api/v1/projects/{project.Id}/environments/{env!.Id}/keys/server/rotate", new { });
-        rotateResponse.StatusCode.Should().Be(HttpStatusCode.OK);
-        var rotateResult = await rotateResponse.Content.ReadFromJsonAsync<RotateEnvironmentKeyResponse>();
-        var newPlainKey = rotateResult!.ApiKey;
+        var createResponse = await _client.PostAsJsonAsync(
+            $"/api/v1/projects/{project.Id}/environments/{env.Id}/keys", 
+            new CreateKeyRequest 
+            { 
+                Name = "Server Key", 
+                Type = KeyType.Server 
+            });
+        
+        createResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        var createResult = await createResponse.Content.ReadFromJsonAsync<CreateKeyResponse>();
+        createResult.Should().NotBeNull();
+        createResult.PlainKey.Should().StartWith("tm_server_");
 
         // Assert
+        var sdkRequest = new HttpRequestMessage(HttpMethod.Get, "/api/v1/sdk/flags");
+        sdkRequest.Headers.Add("x-api-key", createResult.PlainKey);
+        var accessResponse = await _client.SendAsync(sdkRequest);
+        accessResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var revokeResponse = await _client.DeleteAsync($"/api/v1/projects/{project.Id}/environments/{env.Id}/keys/{createResult.Id}");
+        revokeResponse.StatusCode.Should().Be(HttpStatusCode.NoContent);
+
         var sdkRequestExpired = new HttpRequestMessage(HttpMethod.Get, "/api/v1/sdk/flags");
-        sdkRequestExpired.Headers.Add("x-api-key", oldPlainKey);
+        sdkRequestExpired.Headers.Add("x-api-key", createResult.PlainKey);
         var expiredResponse = await _client.SendAsync(sdkRequestExpired);
         expiredResponse.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-
-        var sdkRequestNew = new HttpRequestMessage(HttpMethod.Get, "/api/v1/sdk/flags");
-        sdkRequestNew.Headers.Add("x-api-key", newPlainKey);
-        var newResponse = await _client.SendAsync(sdkRequestNew);
-        newResponse.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
     [Fact]
