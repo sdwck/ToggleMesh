@@ -5,8 +5,9 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using ToggleMesh.API.Features.Projects;
 using ToggleMesh.API.Features.Projects.CreateEnvironment;
+using ToggleMesh.API.Features.Projects.CreateKey;
 using ToggleMesh.API.Features.Projects.CreateProject;
-using ToggleMesh.API.Features.Projects.EnvironmentKeys;
+using ToggleMesh.API.Features.Projects.GetKeys;
 using ToggleMesh.API.Persistence;
 using ToggleMesh.IntegrationTests.Infrastructure;
 

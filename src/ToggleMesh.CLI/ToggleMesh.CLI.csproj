@@ -9,6 +9,14 @@
         <InvariantGlobalization>true</InvariantGlobalization>
         <StackTraceSupport>false</StackTraceSupport>
         <NoWarn>IL2026;IL3050</NoWarn>
+        <PackAsTool>true</PackAsTool>
+        <ToolCommandName>togglemesh</ToolCommandName>
+        <PackageId>ToggleMesh.CLI</PackageId>
+        <Authors>sdwck</Authors>
+        <Description>Enterprise-Grade, Zero-Allocation Feature Flag &amp; Configuration Engine CLI Tool.</Description>
+        <PackageTags>feature-flags;dotnet-tool;cli</PackageTags>
+        <PackageLicenseExpression>MIT</PackageLicenseExpression>
+        <RepositoryUrl>https://github.com/sdwck/ToggleMesh</RepositoryUrl>
     </PropertyGroup>
 
     <ItemGroup>

@@ -57,12 +57,14 @@ public class ToggleFlagEndpoint : ToggleEndpoint<ToggleFlagRequest>
         }
 
         state.IsEnabled = req.IsEnabled;
+        state.FeatureFlag.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync(ct);
 
         var response = new GetFlagResponse(
             state.FeatureFlag.Key, 
             state.IsEnabled, 
             state.Rules.Select(r => new RuleDto(r.GroupId, r.Attribute, r.Operator, r.Value)),
+            state.FeatureFlag.Tags,
             state.RolloutPercentage,
             state.TrueCount,
             state.FalseCount);

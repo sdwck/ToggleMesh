@@ -6,8 +6,6 @@ namespace ToggleMesh.API.Features.Metrics.Ingest;
 
 public class IngestMetricsRequest : ISdkRequest
 {
-    [FromHeader("x-api-key")] 
-    public string ApiKey { get; set; } = string.Empty;
     [HideFromDocs]
     public Guid EnvId { get; set; }
     [HideFromDocs]

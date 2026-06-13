@@ -23,12 +23,20 @@ public class GetProjectsEndpoint : ToggleEndpointWithoutRequest<List<ProjectList
     {
         var projects = await _db.Projects
             .AsNoTracking()
-            .Where(p => p.Members.Any(m => m.UserId == UserId))
+            .Where(p => p.Members
+                .Any(m => m.UserId == UserId))
             .Select(p => new ProjectListDto
             {
                 Id = p.Id,
                 Name = p.Name,
-                EnvironmentCount = p.Environments.Count
+                EnvironmentCount = p.Environments.Count,
+                Environments = p.Environments
+                    .OrderBy(e => e.SortOrder)
+                    .Select(e => new ProjectEnvironmentDto
+                    {
+                        Id = e.Id,
+                        Name = e.Name
+                    }).ToList()
             })
             .ToListAsync(ct);
 

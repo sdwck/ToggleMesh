@@ -48,7 +48,8 @@ public class CreateFlagEndpoint : ToggleEndpoint<CreateFlagRequest, GetFlagRespo
         {
             ProjectId = projectId,
             Key = req.Key,
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = DateTime.UtcNow,
+            Tags = req.Tags.ToArray() ?? []
         };
         
         _db.FeatureFlags.Add(newFlag);
@@ -88,6 +89,7 @@ public class CreateFlagEndpoint : ToggleEndpoint<CreateFlagRequest, GetFlagRespo
             newFlag.Key, 
             false, 
             safeRules,
+            newFlag.Tags,
             req.RolloutPercentage);
 
         await Send.CreatedAtAsync<GetAll.GetFlagsEndpoint>(

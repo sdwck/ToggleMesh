@@ -2,6 +2,9 @@ using System.Net;
 using System.Net.Http.Json;
 using FluentAssertions;
 using ToggleMesh.API.Features.Auth.Endpoints;
+using ToggleMesh.API.Features.Auth.Endpoints.Login;
+using ToggleMesh.API.Features.Auth.Endpoints.Refresh;
+using ToggleMesh.API.Features.Auth.Endpoints.Register;
 using ToggleMesh.IntegrationTests.Infrastructure;
 
 namespace ToggleMesh.IntegrationTests.Auth;

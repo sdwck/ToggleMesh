@@ -1,38 +1,8 @@
-using FastEndpoints;
 using Microsoft.EntityFrameworkCore;
 using ToggleMesh.API.Infrastructure;
 using ToggleMesh.API.Persistence;
 
 namespace ToggleMesh.API.Features.Audit.Get;
-
-public class GetAuditLogsRequest
-{
-    public Guid? ProjectId { get; set; }
-    public Guid? EnvironmentId { get; set; }
-    public int Page { get; set; } = 1;
-    public int PageSize { get; set; } = 20;
-}
-
-public class GetAuditLogsResponse
-{
-    public List<AuditLogDto> Items { get; set; } = [];
-    public int TotalCount { get; set; }
-    public int TotalPages { get; set; }
-    public bool HasNextPage { get; set; }
-    public bool HasPreviousPage { get; set; }
-}
-
-public record AuditLogDto(
-    Guid Id,
-    Guid? EnvironmentId,
-    string EntityName,
-    string EntityFriendlyName,
-    string EntityId,
-    string Action,
-    string OldValues,
-    string NewValues,
-    string PerformedBy,
-    DateTime Timestamp);
 
 public class GetAuditLogsEndpoint : ToggleEndpoint<GetAuditLogsRequest, GetAuditLogsResponse>
 {
@@ -51,21 +21,18 @@ public class GetAuditLogsEndpoint : ToggleEndpoint<GetAuditLogsRequest, GetAudit
 
     public override async Task HandleAsync(GetAuditLogsRequest req, CancellationToken ct)
     {
-        if (!req.ProjectId.HasValue && !req.EnvironmentId.HasValue)
-        {
-            await Send.ForbiddenAsync(ct);
-            return;
-        }
-
-        Guid projectIdToCheck = req.ProjectId ?? Guid.Empty;
+        var projectIdToCheck = req.ProjectId ?? Guid.Empty;
         if (req.EnvironmentId.HasValue)
         {
-            var env = await _db.Environments.FirstOrDefaultAsync(e => e.Id == req.EnvironmentId.Value, ct);
+            var env = await _db.Environments
+                .FirstOrDefaultAsync(e =>
+                    e.Id == req.EnvironmentId.Value, ct);
             if (env == null)
             {
                 await Send.NotFoundAsync(ct);
                 return;
             }
+
             projectIdToCheck = env.ProjectId;
         }
 
@@ -82,7 +49,8 @@ public class GetAuditLogsEndpoint : ToggleEndpoint<GetAuditLogsRequest, GetAudit
         var effectiveRole = projectMember.Role;
         if (req.EnvironmentId.HasValue)
         {
-            var envRoleOverride = projectMember.EnvironmentRoles.FirstOrDefault(er => er.EnvironmentId == req.EnvironmentId.Value);
+            var envRoleOverride =
+                projectMember.EnvironmentRoles.FirstOrDefault(er => er.EnvironmentId == req.EnvironmentId.Value);
             if (envRoleOverride != null)
                 effectiveRole = envRoleOverride.Role;
         }
@@ -92,23 +60,55 @@ public class GetAuditLogsEndpoint : ToggleEndpoint<GetAuditLogsRequest, GetAudit
             await Send.ForbiddenAsync(ct);
             return;
         }
+        
+        DateTime? dateFrom = null;
+        if (req.DateFrom.HasValue)
+            dateFrom = req.DateFrom.Value.Kind == DateTimeKind.Local 
+                ? req.DateFrom.Value.ToUniversalTime() 
+                : DateTime.SpecifyKind(req.DateFrom.Value, DateTimeKind.Utc);
+        
+
+        DateTime? dateTo = null;
+        if (req.DateTo.HasValue)
+        {
+            dateTo = req.DateTo.Value.Kind == DateTimeKind.Local 
+                ? req.DateTo.Value.ToUniversalTime() 
+                : DateTime.SpecifyKind(req.DateTo.Value, DateTimeKind.Utc);
+
+            if (dateTo.Value.TimeOfDay == TimeSpan.Zero)
+                dateTo = dateTo.Value.AddDays(1).AddTicks(-1);
+        }
 
         var query = _db.AuditLogs.AsNoTracking();
 
         if (req.EnvironmentId.HasValue)
-        {
             query = query.Where(x => x.EnvironmentId == req.EnvironmentId);
-        }
+
         else if (req.ProjectId.HasValue)
-        {
             query = query.Where(x => x.ProjectId == req.ProjectId && x.EnvironmentId == null);
-        }
+
+        if (!string.IsNullOrWhiteSpace(req.Action) && req.Action != "all")
+            query = query.Where(x => 
+                EF.Functions.ILike(x.Action, req.Action));
+
+        if (!string.IsNullOrWhiteSpace(req.EntityName) && req.EntityName != "all")
+            query = query.Where(x => 
+                EF.Functions.ILike(x.EntityName, req.EntityName));
+        
+        if (dateFrom.HasValue)
+            query = query.Where(x => x.Timestamp >= dateFrom.Value);
+
+        if (dateTo.HasValue)
+            query = query.Where(x => x.Timestamp <= dateTo.Value);
+
+        query = req.SortOrder?.ToLower() == "desc"
+            ? query.OrderByDescending(x => x.Timestamp)
+            : query.OrderBy(x => x.Timestamp);
 
         var totalCount = await query.CountAsync(ct);
         var totalPages = (int)Math.Ceiling(totalCount / (double)req.PageSize);
 
         var logs = await query
-            .OrderByDescending(x => x.Timestamp)
             .Skip((req.Page - 1) * req.PageSize)
             .Take(req.PageSize)
             .ToListAsync(ct);

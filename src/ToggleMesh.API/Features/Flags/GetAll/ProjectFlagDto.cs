@@ -7,5 +7,7 @@ public record ProjectFlagDto(
     string? Description,
     bool IsClientSideExposed,
     DateTime CreatedAt,
-    IEnumerable<FlagEnvironmentStateDto> Environments
+    DateTime UpdatedAt,
+    IEnumerable<FlagEnvironmentStateDto> Environments,
+    string[] Tags
 );

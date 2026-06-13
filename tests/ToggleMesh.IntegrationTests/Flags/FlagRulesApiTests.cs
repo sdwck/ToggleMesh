@@ -113,4 +113,61 @@ public class FlagRulesApiTests : IClassFixture<TestWebApplicationFactory>
         result.Rules.Should().NotContain(r => r.Attribute == "Age");
         result.Rules.Should().Contain(r => r.Attribute == "Country" && r.Value == "CA");
     }
+    
+    [Fact]
+    public async Task CreateFlag_WithTags_ShouldReturnTagsInResponse()
+    {
+        // Arrange
+        var (projectId, _, _) = await SeedEnvironmentAsync();
+        var request = new CreateFlagRequest
+        {
+            Key = "tagged_flag_test",
+            Tags = ["billing", "api", "v2"]
+        };
+
+        // Act
+        var response = await _client.PostAsJsonAsync($"/api/v1/projects/{projectId}/flags", request);
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
+
+        var result = await response.Content.ReadFromJsonAsync<GetFlagResponse>();
+        result.Should().NotBeNull();
+        result.Tags.Should().HaveCount(3);
+        result.Tags.Should().Contain(["billing", "api", "v2"]);
+    }
+    
+    [Fact]
+    public async Task UpdateFlag_WithNewTags_ShouldReplaceExistingTags()
+    {
+        // Arrange
+        var (projectId, envId, _) = await SeedEnvironmentAsync();
+
+        var createRequest = new CreateFlagRequest
+        {
+            Key = "tag_update_flag",
+            Tags = ["old"]
+        };
+        await _client.PostAsJsonAsync($"/api/v1/projects/{projectId}/flags", createRequest);
+
+        var updateRequest = new UpdateFlagRequest
+        {
+            IsEnabled = true,
+            Tags = ["new1", "new2"]
+        };
+
+        // Act
+        var updateResponse = await _client.PutAsJsonAsync(
+            $"/api/v1/projects/{projectId}/environments/{envId}/flags/tag_update_flag", 
+            updateRequest);
+
+        // Assert
+        updateResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var result = await updateResponse.Content.ReadFromJsonAsync<GetFlagResponse>();
+        result.Should().NotBeNull();
+        result.Tags.Should().HaveCount(2);
+        result.Tags.Should().NotContain("old");
+        result.Tags.Should().Contain(["new1", "new2"]);
+    }
 }

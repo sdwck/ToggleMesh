@@ -4,11 +4,13 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Time.Testing;
 using StackExchange.Redis;
 using Testcontainers.PostgreSql;
 using Testcontainers.Redis;
 using ToggleMesh.API.Persistence;
+using ToggleMesh.API.Persistence.Interceptors;
 
 namespace ToggleMesh.IntegrationTests.Infrastructure;
 
@@ -31,26 +33,33 @@ public class TestWebApplicationFactory : WebApplicationFactory<Program>, IAsyncL
     {
         builder.ConfigureTestServices(services =>
         {
+            services.AddSingleton<IStartupFilter, TestAuthStartupFilter>();
             services.AddAuthentication(defaultScheme: TestAuthHandler.AuthenticationScheme)
                 .AddScheme<AuthenticationSchemeOptions, TestAuthHandler>(
-                    TestAuthHandler.AuthenticationScheme, options => { });
+                    TestAuthHandler.AuthenticationScheme, _ => { });
         });
 
         builder.ConfigureServices(services =>
         {
             services.AddSingleton<TimeProvider>(TimeProvider);
 
-            var dbDescriptor = services.SingleOrDefault(
-                d => d.ServiceType == typeof(DbContextOptions<AppDbContext>));
+            var dbDescriptor = services.SingleOrDefault(d => d.ServiceType == typeof(DbContextOptions<AppDbContext>));
             if (dbDescriptor is not null)
                 services.Remove(dbDescriptor);
 
-            var redisDescriptor = services.SingleOrDefault(
-                d => d.ServiceType == typeof(IConnectionMultiplexer));
+            var redisDescriptor = services.SingleOrDefault(d => d.ServiceType == typeof(IConnectionMultiplexer));
             if (redisDescriptor is not null)
                 services.Remove(redisDescriptor);
+            
+            var webhookServiceDescriptor = services.FirstOrDefault(d => 
+                d.ServiceType == typeof(IHostedService) && 
+                d.ImplementationType == typeof(ToggleMesh.API.BackgroundServices.Webhooks.WebhookDispatcherService));
+            if (webhookServiceDescriptor != null)
+                services.Remove(webhookServiceDescriptor);
 
-            services.AddDbContext<AppDbContext>((sp, options) =>
+            services.AddSingleton<AuditInterceptor>();
+
+            services.AddDbContext<AppDbContext>((_, options) =>
             {
                 options.UseNpgsql(_db.GetConnectionString());
             });

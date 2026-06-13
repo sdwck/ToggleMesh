@@ -5,6 +5,7 @@ using ToggleMesh.API.Features.Audit;
 using ToggleMesh.API.Features.Auth.Models;
 using ToggleMesh.API.Features.Flags;
 using ToggleMesh.API.Features.Projects;
+using ToggleMesh.API.Features.Webhooks;
 
 namespace ToggleMesh.API.Persistence;
 
@@ -20,6 +21,8 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
     public DbSet<ProjectMember> ProjectMembers { get; set; }
     public DbSet<MemberEnvironmentRole> MemberEnvironmentRoles { get; set; }
     public DbSet<RefreshToken> RefreshTokens { get; set; }
+    public DbSet<Webhook> Webhooks { get; set; }
+    public DbSet<PersonalAccessToken> PersonalAccessTokens { get; set; }
 
     public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
 

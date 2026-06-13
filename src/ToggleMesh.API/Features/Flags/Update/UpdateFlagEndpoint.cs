@@ -58,33 +58,43 @@ public class UpdateFlagEndpoint : ToggleEndpoint<UpdateFlagRequest, GetFlagRespo
         
         state.IsEnabled = req.IsEnabled;
         state.RolloutPercentage = req.RolloutPercentage;
+        state.FeatureFlag.Tags = req.Tags.ToArray();
 
         var existingRules = state.Rules.ToList();
         foreach (var oldRule in existingRules)
-        {
-            if (!req.Rules.Any(r => r.GroupId == oldRule.GroupId && r.Attribute == oldRule.Attribute && r.Operator == oldRule.Operator && r.Value == oldRule.Value))
+            if (!req.Rules.Any(r => 
+                    r.GroupId == oldRule.GroupId 
+                    && r.Attribute == oldRule.Attribute 
+                    && r.Operator == oldRule.Operator 
+                    && r.Value == oldRule.Value))
                 _db.Remove(oldRule);
-        }
         
         foreach (var newRule in req.Rules)
-        {
-            if (!existingRules.Any(r => r.GroupId == newRule.GroupId && r.Attribute == newRule.Attribute && r.Operator == newRule.Operator && r.Value == newRule.Value))
-            {
+            if (!existingRules.Any(r => 
+                    r.GroupId == newRule.GroupId 
+                    && r.Attribute == newRule.Attribute 
+                    && r.Operator == newRule.Operator 
+                    && r.Value == newRule.Value))
                 state.Rules.Add(new FlagRule { 
                     GroupId = newRule.GroupId, 
                     Attribute = newRule.Attribute, 
                     Operator = newRule.Operator, 
                     Value = newRule.Value 
                 });
-            }
-        }
 
+        state.FeatureFlag.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync(ct);
 
         var response = new GetFlagResponse(
             state.FeatureFlag.Key, 
             state.IsEnabled, 
-            state.Rules.Select(r => new RuleDto(r.GroupId, r.Attribute, r.Operator, r.Value)),
+            state.Rules.Select(r => 
+                new RuleDto(
+                    r.GroupId, 
+                    r.Attribute, 
+                    r.Operator, 
+                    r.Value)),
+            state.FeatureFlag.Tags,
             state.RolloutPercentage,
             state.TrueCount,
             state.FalseCount);

@@ -12,9 +12,13 @@ public class ApiClient
         _httpClient = httpClient;
     }
 
-    public async Task<List<FlagDto>> GetAllFlagsAsync(CancellationToken ct = default)
+    public async Task<List<FlagDto>> GetAllFlagsAsync(string? projectId = null, CancellationToken ct = default)
     {
-        var response = await _httpClient.GetAsync("api/v1/sdk/flags", ct);
+        var url = !string.IsNullOrWhiteSpace(projectId) 
+            ? $"api/v1/projects/{projectId}/flags" 
+            : "api/v1/sdk/flags";
+        
+        var response = await _httpClient.GetAsync(url, ct);
         
         if (response.IsSuccessStatusCode) 
             return await response.Content.ReadFromJsonAsync<List<FlagDto>>(

@@ -13,7 +13,9 @@ public class FeatureFlag
     public string? Description { get; set; }
     
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
     public ICollection<FlagEnvironmentState> States { get; set; } = new List<FlagEnvironmentState>();
     public bool IsClientSideExposed { get; set; }
+    public string[] Tags { get; set; } = [];
 }

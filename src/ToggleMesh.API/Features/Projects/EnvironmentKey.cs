@@ -14,4 +14,5 @@ public class EnvironmentKey : IHasEnvironment
     public DateTime CreatedOn { get; set; } = DateTime.UtcNow;
     public DateTime? ExpireOn { get; set; }
     public KeyType KeyType { get; set; }
+    public DateTime? LastUsedAt { get; set; }
 }

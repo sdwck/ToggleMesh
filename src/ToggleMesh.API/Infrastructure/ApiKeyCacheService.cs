@@ -47,6 +47,12 @@ public class ApiKeyCacheService : IApiKeyCacheService
                 if (envKey == null)
                     return null;
 
+                await _db.EnvironmentKeys
+                    .Where(x => x.Id == envKey.Id)
+                    .ExecuteUpdateAsync(s => 
+                        s.SetProperty(k => 
+                            k.LastUsedAt, DateTime.UtcNow), ct1);
+
                 var info = new CachedKeyInfo(envKey.EnvironmentId, envKey.KeyType);
 
                 if (envKey.ExpireOn.HasValue)

@@ -1,6 +1,7 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Threading.Channels;
 using FastEndpoints;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
@@ -12,11 +13,13 @@ using StackExchange.Redis;
 using ToggleMesh.API.BackgroundServices;
 using ToggleMesh.API.BackgroundServices.Caching;
 using ToggleMesh.API.BackgroundServices.Metrics;
+using ToggleMesh.API.BackgroundServices.Webhooks;
 using ToggleMesh.API.Exceptions;
 using ToggleMesh.API.Features.Auth.Authorization;
 using ToggleMesh.API.Features.Auth.Models;
 using ToggleMesh.API.Features.Client;
 using ToggleMesh.API.Features.Metrics;
+using ToggleMesh.API.Features.Webhooks;
 using ToggleMesh.API.Hubs;
 using ToggleMesh.API.Infrastructure;
 using ToggleMesh.API.Infrastructure.Caching;
@@ -88,7 +91,22 @@ builder.Services.AddIdentityCore<ApplicationUser>(options =>
     .AddEntityFrameworkStores<AppDbContext>()
     .AddDefaultTokenProviders();
 
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+builder.Services.AddAuthentication(options =>
+    {
+        options.DefaultAuthenticateScheme = "MixedAuth";
+        options.DefaultChallengeScheme = "MixedAuth";
+    })
+    .AddPolicyScheme("MixedAuth", "JWT or PAT", options =>
+    {
+        options.ForwardDefaultSelector = context =>
+        {
+            if (context.Request.Headers.ContainsKey("x-pat-token"))
+                return "PAT";
+            
+            return JwtBearerDefaults.AuthenticationScheme;
+        };
+    })
+    .AddScheme<AuthenticationSchemeOptions, PatAuthenticationHandler>("PAT", _ => { })
     .AddJwtBearer(options =>
     {
         options.MapInboundClaims = false;
@@ -144,6 +162,18 @@ builder.Services.AddHybridCache(options =>
         LocalCacheExpiration = TimeSpan.FromMinutes(5)
     };
 });
+builder.Services.AddHttpClient("WebhookClient", client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(10);
+});
+
+builder.Services.AddSingleton(Channel.CreateBounded<WebhookEvent>(
+    new BoundedChannelOptions(100_000)
+    {
+        FullMode = BoundedChannelFullMode.DropOldest
+    }));
+
+builder.Services.AddHostedService<WebhookDispatcherService>();
 
 var app = builder.Build();
 

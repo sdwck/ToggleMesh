@@ -4,7 +4,8 @@ using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using ToggleMesh.API.Features.Flags.Get;
 using ToggleMesh.API.Features.Projects;
-using ToggleMesh.API.Features.Projects.EnvironmentKeys;
+using ToggleMesh.API.Features.Projects.CreateKey;
+using ToggleMesh.API.Infrastructure.Security;
 using ToggleMesh.API.Persistence;
 using ToggleMesh.IntegrationTests.Infrastructure;
 
@@ -41,7 +42,7 @@ public class SecurityIntegrationTests : IClassFixture<TestWebApplicationFactory>
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
         var project = new Project { Name = "Key CRUD Test" };
-        db.Projects.Add(project); db.ProjectMembers.Add(new ToggleMesh.API.Features.Projects.ProjectMember { Project = project, UserId = Guid.Parse(ToggleMesh.IntegrationTests.Infrastructure.TestAuthHandler.TestUserId), Role = ToggleMesh.API.Features.Projects.ProjectRole.Owner });
+        db.Projects.Add(project); db.ProjectMembers.Add(new ProjectMember { Project = project, UserId = Guid.Parse(TestAuthHandler.TestUserId), Role = ProjectRole.Owner });
         var env = new ProjectEnvironment { Name = "Prod", Project = project };
         db.Environments.Add(env);
         await db.SaveChangesAsync();
@@ -83,7 +84,7 @@ public class SecurityIntegrationTests : IClassFixture<TestWebApplicationFactory>
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
         var project = new Project { Name = "Cache Test" };
-        db.Projects.Add(project); db.ProjectMembers.Add(new ToggleMesh.API.Features.Projects.ProjectMember { Project = project, UserId = Guid.Parse(ToggleMesh.IntegrationTests.Infrastructure.TestAuthHandler.TestUserId), Role = ToggleMesh.API.Features.Projects.ProjectRole.Owner });
+        db.Projects.Add(project); db.ProjectMembers.Add(new ProjectMember { Project = project, UserId = Guid.Parse(TestAuthHandler.TestUserId), Role = ProjectRole.Owner });
         var env = new ProjectEnvironment { Name = "Dev", Project = project };
         db.Environments.Add(env);
         var flag = new API.Features.Flags.FeatureFlag { Key = "cached_flag", Project = project };
@@ -103,5 +104,47 @@ public class SecurityIntegrationTests : IClassFixture<TestWebApplicationFactory>
         var result = await resp2.Content.ReadFromJsonAsync<GetFlagResponse>();
         result!.Key.Should().Be("cached_flag");
         result.IsEnabled.Should().BeTrue();
+    }
+    
+    [Fact]
+    public async Task ApiKey_Use_ShouldUpdateLastUsedAt()
+    {
+        // Arrange
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        var project = new Project { Name = "LastUsedAt Test Project" };
+        db.Projects.Add(project);
+        db.ProjectMembers.Add(new ProjectMember { Project = project, UserId = Guid.Parse(TestAuthHandler.TestUserId), Role = ProjectRole.Owner });
+        var env = new ProjectEnvironment { Name = "Staging LastUsed", Project = project };
+        db.Environments.Add(env);
+        
+        var plainKey = Guid.NewGuid().ToString("N");
+        var keyHash = ApiKeyHasher.Hash(plainKey);
+        var key = new EnvironmentKey
+        {
+            Id = Guid.CreateVersion7(),
+            Environment = env,
+            KeyHash = keyHash,
+            KeyPreview = ApiKeyHasher.GeneratePreview(keyHash),
+            CreatedOn = DateTime.UtcNow,
+            KeyType = KeyType.Server
+        };
+        db.EnvironmentKeys.Add(key);
+        await db.SaveChangesAsync();
+
+        key.LastUsedAt.Should().BeNull("Key should not have a LastUsedAt timestamp initially.");
+        
+        // Act
+        var sdkRequest = new HttpRequestMessage(HttpMethod.Get, "/api/v1/sdk/flags");
+        sdkRequest.Headers.Add("x-api-key", plainKey);
+        var response = await _client.SendAsync(sdkRequest);
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        
+        // Assert
+        db.ChangeTracker.Clear();
+        var dbKey = await db.EnvironmentKeys.FindAsync(key.Id);
+        dbKey!.LastUsedAt.Should().NotBeNull();
+        dbKey.LastUsedAt.Value.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
     }
 }

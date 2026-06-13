@@ -81,10 +81,12 @@ public class RolloutEvaluatorTests
         var text = flagKey + identity;
         const uint offsetBasis = 2166136261;
         const uint prime = 16777619;
-        uint hash = offsetBasis;
-        foreach (char c in text)
+        var hash = offsetBasis;
+    
+        var bytes = System.Text.Encoding.UTF8.GetBytes(text);
+        foreach (var b in bytes)
         {
-            hash ^= c;
+            hash ^= b;
             hash *= prime;
         }
         return (int)(hash % 100);

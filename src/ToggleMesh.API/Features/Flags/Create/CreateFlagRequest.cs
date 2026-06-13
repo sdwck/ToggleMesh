@@ -7,4 +7,5 @@ public class CreateFlagRequest
     public string Key { get; set; } = string.Empty;
     public List<RuleDto> Rules { get; set; } = [];
     public int? RolloutPercentage { get; set; }
+    public List<string> Tags { get; set; } = [];
 }
