@@ -116,7 +116,11 @@ export function ProjectMembersTab({ project }: { project: ProjectDetails }) {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-end">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight">Members</h2>
+          <p className="text-muted-foreground">Manage team members for this project.</p>
+        </div>
         <Dialog open={isAddMemberOpen} onOpenChange={setIsAddMemberOpen}>
           <DialogTrigger asChild>
             <Button>
@@ -124,7 +128,7 @@ export function ProjectMembersTab({ project }: { project: ProjectDetails }) {
               Add Member
             </Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="border-border/40 bg-zinc-950">
             <DialogHeader>
               <DialogTitle>Add Team Member</DialogTitle>
               <DialogDescription>

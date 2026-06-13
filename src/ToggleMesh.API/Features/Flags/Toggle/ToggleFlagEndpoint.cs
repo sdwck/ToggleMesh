@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using StackExchange.Redis;
+using ToggleMesh.API.Extensions;
 using ToggleMesh.API.Features.Flags.Get;
 using ToggleMesh.API.Hubs;
 using ToggleMesh.API.Infrastructure;
@@ -36,7 +37,7 @@ public class ToggleFlagEndpoint : ToggleEndpoint<ToggleFlagRequest>
     {
         Post("/projects/{projectId}/environments/{environmentId}/flags/{key}/toggle");
         Version(1);
-        Policies($"Permission:{Auth.Models.Permissions.FlagsToggle}");
+        this.RequirePermission(Auth.Models.Permissions.FlagsToggle);
     }
 
     public override async Task HandleAsync(ToggleFlagRequest req, CancellationToken ct)

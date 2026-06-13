@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
+using ToggleMesh.API.Extensions;
 using ToggleMesh.API.Features.Projects.GetMembers;
 using ToggleMesh.API.Infrastructure;
 using ToggleMesh.API.Persistence;
@@ -19,7 +20,7 @@ public class AddMemberEndpoint : ToggleEndpoint<AddMemberRequest, MemberDto>
     {
         Post("/projects/{projectId}/members");
         Version(1);
-        Policies($"Permission:{Auth.Models.Permissions.ProjectsManageMembers}");
+        this.RequirePermission(Auth.Models.Permissions.ProjectsManageMembers);
     }
 
     public override async Task HandleAsync(AddMemberRequest req, CancellationToken ct)

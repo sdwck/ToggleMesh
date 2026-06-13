@@ -2,6 +2,7 @@
 
 namespace ToggleMesh.API.Infrastructure;
 
+// ReSharper disable once ClassNeverInstantiated.Global
 public class ApiKeyPreProcessor<TRequest> : IPreProcessor<TRequest> 
     where TRequest : ISdkRequest
 {

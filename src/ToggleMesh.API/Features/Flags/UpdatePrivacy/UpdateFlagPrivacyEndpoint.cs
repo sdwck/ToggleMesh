@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using ToggleMesh.API.Extensions;
 using ToggleMesh.API.Persistence;
 using ToggleMesh.API.Infrastructure;
 
@@ -17,7 +18,7 @@ public class UpdateFlagPrivacyEndpoint : ToggleEndpoint<UpdateFlagPrivacyRequest
     {
         Patch("/projects/{projectId:guid}/flags/{flagKey}/privacy");
         Version(1);
-        Policies($"Permission:{Auth.Models.Permissions.FlagsEdit}");
+        this.RequirePermission(Auth.Models.Permissions.FlagsEdit);
     }
 
     public override async Task HandleAsync(UpdateFlagPrivacyRequest req, CancellationToken ct)

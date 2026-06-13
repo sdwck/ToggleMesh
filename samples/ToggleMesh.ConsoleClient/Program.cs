@@ -8,7 +8,7 @@ builder.ConfigureServices((context, services) =>
 {
     services.AddToggleMeshClient(options =>
     {
-        options.EndpointUrl = context.Configuration["ToggleMesh:Address"] ?? throw new Exception("ToggleMesh__Address is missing");
+        options.BaseUrl = context.Configuration["ToggleMesh:BaseUrl"] ?? throw new Exception("ToggleMesh__Address is missing");
         options.ApiKey = context.Configuration["ToggleMesh:ApiKey"] ?? throw new Exception("ToggleMesh__ApiKey is missing");
     });
     services.AddHostedService<Worker>();

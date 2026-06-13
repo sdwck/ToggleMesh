@@ -2,6 +2,6 @@
 
 public class ContainsOperator : RuleOperatorBase
 {
-    public override bool Evaluate(string userValue, string ruleValue) => 
-        userValue.Contains(ruleValue, StringComparison.OrdinalIgnoreCase);
+    public override bool Evaluate(string userValue, object? compiledRuleValue) => 
+        compiledRuleValue is string str && userValue.Contains(str, StringComparison.OrdinalIgnoreCase);
 }

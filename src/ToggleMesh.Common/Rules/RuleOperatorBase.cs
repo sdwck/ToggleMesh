@@ -15,5 +15,6 @@ public abstract class RuleOperatorBase : IRuleOperator
 
     public string Name { get; }
 
-    public abstract bool Evaluate(string userValue, string ruleValue);
+    public virtual object? Compile(string ruleValue) => ruleValue;
+    public abstract bool Evaluate(string userValue, object? compiledRuleValue);
 }

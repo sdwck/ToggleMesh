@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using ToggleMesh.API.Extensions;
 using ToggleMesh.API.Infrastructure;
 using ToggleMesh.API.Persistence;
 
@@ -17,7 +18,7 @@ public class GetMembersEndpoint : ToggleEndpointWithoutRequest<List<MemberDto>>
     {
         Get("/projects/{projectId}/members");
         Version(1);
-        Policies($"Permission:{Auth.Models.Permissions.ProjectsManageMembers}");
+        this.RequirePermission(Auth.Models.Permissions.ProjectsManageMembers);
     }
 
     public override async Task HandleAsync(CancellationToken ct)

@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using FastEndpoints;
+using ToggleMesh.API.Extensions;
 using ToggleMesh.API.Persistence;
 using ToggleMesh.API.Infrastructure;
 
@@ -18,7 +19,7 @@ public class GetKeysEndpoint : ToggleEndpointWithoutRequest<List<GetKeysResponse
     {
         Get("/projects/{projectId:guid}/environments/{environmentId:guid}/keys");
         Version(1);
-        Policies($"Permission:{Auth.Models.Permissions.EnvironmentsKeysRotate}");
+        this.RequirePermission(Auth.Models.Permissions.EnvironmentsKeysRotate);
     }
 
     public override async Task HandleAsync(CancellationToken ct)

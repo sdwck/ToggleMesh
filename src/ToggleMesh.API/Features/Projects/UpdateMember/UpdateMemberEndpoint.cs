@@ -2,6 +2,7 @@ using StackExchange.Redis;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
+using ToggleMesh.API.Extensions;
 using ToggleMesh.API.Infrastructure;
 using ToggleMesh.API.Persistence;
 
@@ -22,7 +23,7 @@ public class UpdateMemberEndpoint : ToggleEndpoint<UpdateMemberRequest>
     {
         Put("/projects/{projectId:guid}/members/{userId:guid}");
         Version(1);
-        Policies($"Permission:{Auth.Models.Permissions.ProjectsManageMembers}");
+        this.RequirePermission(Auth.Models.Permissions.ProjectsManageMembers);
     }
 
     public override async Task HandleAsync(UpdateMemberRequest req, CancellationToken ct)

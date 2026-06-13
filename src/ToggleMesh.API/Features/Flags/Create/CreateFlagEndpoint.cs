@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using StackExchange.Redis;
+using ToggleMesh.API.Extensions;
 using ToggleMesh.API.Features.Flags.Get;
 using ToggleMesh.API.Infrastructure;
 using ToggleMesh.API.Infrastructure.Caching;
@@ -25,7 +26,7 @@ public class CreateFlagEndpoint : ToggleEndpoint<CreateFlagRequest, GetFlagRespo
     {
         Post("/projects/{projectId}/flags");
         Version(1);
-        Policies($"Permission:{Auth.Models.Permissions.FlagsCreate}");
+        this.RequirePermission(Auth.Models.Permissions.FlagsCreate);
     }
 
     public override async Task HandleAsync(CreateFlagRequest req, CancellationToken ct)

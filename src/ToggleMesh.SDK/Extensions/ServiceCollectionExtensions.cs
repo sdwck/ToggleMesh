@@ -20,7 +20,7 @@ public static class ServiceCollectionExtensions
         
         services.AddHttpClient("ToggleMesh", (sp, client) => {
             var o = sp.GetRequiredService<IOptions<ToggleMeshOptions>>().Value;
-            client.BaseAddress = new Uri(o.EndpointUrl);
+            client.BaseAddress = new Uri(o.BaseUrl);
             client.DefaultRequestHeaders.Add("x-api-key", o.ApiKey);
         }).RemoveAllLoggers();
 

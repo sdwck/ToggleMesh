@@ -79,12 +79,38 @@ export interface PaginatedResponse<T> {
 export interface AuditLog {
   id: string;
   entityName: string;
+  entityFriendlyName: string;
   entityId: string;
   action: string;
   timestamp: string;
+  performedById: string | null;
+  performedByEmail: string;
   performedBy: string;
   oldValues: string | null;
   newValues: string | null;
+}
+
+export interface CreateKeyRequest {
+  name: string;
+  type: KeyType;
+}
+
+export interface CreateKeyResponse {
+  id: string;
+  name: string;
+  keyType: KeyType;
+  keyPreview: string;
+  createdOn: string;
+  plainKey: string;
+}
+
+export interface GetKeysResponse {
+  id: string;
+  name: string;
+  keyType: KeyType;
+  keyPreview: string;
+  createdOn: string;
+  expireOn: string | null;
 }
 
 export const ProjectRole = {

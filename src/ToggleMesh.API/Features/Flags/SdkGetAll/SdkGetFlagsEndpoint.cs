@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Hybrid;
 using ToggleMesh.API.Features.Flags.Get;
 using ToggleMesh.API.Features.Projects;
 using ToggleMesh.API.Infrastructure;
@@ -9,10 +10,12 @@ namespace ToggleMesh.API.Features.Flags.SdkGetAll;
 public class SdkGetFlagsEndpoint : ToggleEndpoint<SdkGetFlagsRequest, List<GetFlagResponse>>
 {
     private readonly AppDbContext _db;
+    private readonly HybridCache _cache;
 
-    public SdkGetFlagsEndpoint(AppDbContext db)
+    public SdkGetFlagsEndpoint(AppDbContext db, HybridCache cache)
     {
         _db = db;
+        _cache = cache;
     }
 
     public override void Configure()
@@ -31,20 +34,25 @@ public class SdkGetFlagsEndpoint : ToggleEndpoint<SdkGetFlagsRequest, List<GetFl
             await Send.ErrorsAsync(cancellation: ct);
             return;
         }
-        
-        var states = await _db.FlagEnvironmentStates
-            .AsNoTracking()
-            .Include(x => x.FeatureFlag)
-            .Include(x => x.Rules)
-            .Where(x => x.EnvironmentId == req.EnvId)
-            .Select(state => new GetFlagResponse(
-                state.FeatureFlag.Key, 
-                state.IsEnabled, 
-                state.Rules.Select(r => new RuleDto(r.GroupId, r.Attribute, r.Operator, r.Value)),
-                state.RolloutPercentage,
-                state.TrueCount,
-                state.FalseCount))
-            .ToListAsync(ct);
+
+        var cacheKey = $"sdk:flags:states:{req.EnvId}";
+
+        var states = await _cache.GetOrCreateAsync(cacheKey, async ct1 =>
+        {
+            return await _db.FlagEnvironmentStates
+                .AsNoTracking()
+                .Include(x => x.FeatureFlag)
+                .Include(x => x.Rules)
+                .Where(x => x.EnvironmentId == req.EnvId)
+                .Select(state => new GetFlagResponse(
+                    state.FeatureFlag.Key,
+                    state.IsEnabled,
+                    state.Rules.Select(r => new RuleDto(r.GroupId, r.Attribute, r.Operator, r.Value)),
+                    state.RolloutPercentage,
+                    state.TrueCount,
+                    state.FalseCount))
+                .ToListAsync(ct1);
+        }, cancellationToken: ct);
 
         await Send.OkAsync(states, ct);
     }

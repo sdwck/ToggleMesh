@@ -4,12 +4,12 @@ public readonly struct CompiledRule
 {
     public string Attribute { get; }
     public IRuleOperator Operator { get; }
-    public string Value { get; }
+    public object? CompiledValue { get; }
 
-    public CompiledRule(string attribute, IRuleOperator op, string value)
+    public CompiledRule(string attribute, IRuleOperator op, object? compiledValue)
     {
         Attribute = attribute;
         Operator = op;
-        Value = value;
+        CompiledValue = compiledValue;
     }
 }

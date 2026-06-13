@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
+using ToggleMesh.API.Extensions;
 using ToggleMesh.API.Hubs;
 using ToggleMesh.API.Infrastructure;
 using ToggleMesh.API.Persistence;
@@ -26,7 +27,7 @@ public class CloneEnvironmentEndpoint : ToggleEndpointWithoutRequest
     {
         Post("/projects/{projectId:guid}/environments/{sourceEnvId:guid}/clone-to/{targetEnvId:guid}");
         Version(1);
-        Policies($"Permission:{Auth.Models.Permissions.EnvironmentsSync}");
+        this.RequirePermission(Auth.Models.Permissions.EnvironmentsSync);
     }
 
     public override async Task HandleAsync(CancellationToken ct)

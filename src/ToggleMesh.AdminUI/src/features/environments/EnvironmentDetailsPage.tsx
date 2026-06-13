@@ -1,29 +1,59 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useProjectDetails, useRotateEnvironmentKey } from '@/api/queries';
+import { useProjectDetails, useEnvironmentKeys, useCreateEnvironmentKey, useRevokeEnvironmentKey } from '@/api/queries';
 import { ProjectRole, KeyType } from '@/api/types';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { ArrowLeft, Key, RefreshCw, Copy } from 'lucide-react';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { ArrowLeft, Key, Plus, Copy, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+
+const formatDate = (dateString: string) => {
+  const date = new Date(dateString);
+  const pad = (num: number) => String(num).padStart(2, '0');
+  
+  const year = date.getFullYear();
+  const month = pad(date.getMonth() + 1);
+  const day = pad(date.getDate());
+  const hours = pad(date.getHours());
+  const minutes = pad(date.getMinutes());
+  const seconds = pad(date.getSeconds());
+  
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+};
 
 export function EnvironmentDetailsPage() {
   const { projectId, environmentId } = useParams<{ projectId: string; environmentId: string }>();
   const navigate = useNavigate();
-  const { data: project, isLoading } = useProjectDetails(projectId!);
-  const rotateKey = useRotateEnvironmentKey(projectId!);
 
-  const [isRotateConfirmOpen, setIsRotateConfirmOpen] = useState(false);
-  const [rotatingKeyType, setRotatingKeyType] = useState<'server' | 'client' | null>(null);
-  
-  const [isKeyDialogOpen, setIsKeyDialogOpen] = useState(false);
-  const [keyToCopy, setKeyToCopy] = useState<string | null>(null);
+  const { data: project, isLoading: isProjectLoading } = useProjectDetails(projectId!);
+  const { data: keys, isLoading: isKeysLoading } = useEnvironmentKeys(projectId!, environmentId!);
 
-  if (isLoading) {
-    return <div className="p-8 space-y-6"><Skeleton className="h-10 w-1/3" /><Skeleton className="h-64 w-full" /></div>;
+  const createKey = useCreateEnvironmentKey(projectId!, environmentId!);
+  const revokeKey = useRevokeEnvironmentKey(projectId!, environmentId!);
+
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [keyName, setKeyName] = useState('');
+  const [keyType, setKeyType] = useState<KeyType>(KeyType.Server);
+
+  const [isRevealOpen, setIsRevealOpen] = useState(false);
+  const [plainKeyRevealed, setPlainKeyReveal] = useState('');
+
+  const [isRevokeConfirmOpen, setIsRevokeConfirmOpen] = useState(false);
+  const [keyIdToRevoke, setKeyIdToRevoke] = useState<string | null>(null);
+
+  if (isProjectLoading || isKeysLoading) {
+    return (
+      <div className="p-8 space-y-6">
+        <Skeleton className="h-10 w-1/3" />
+        <Skeleton className="h-64 w-full" />
+      </div>
+    );
   }
 
   if (!project) {
@@ -38,129 +68,214 @@ export function EnvironmentDetailsPage() {
 
   const canManageKeys = project.userRole === ProjectRole.Owner || project.userRole === ProjectRole.Admin;
 
-  const confirmRotateKey = (type: 'server' | 'client') => {
-    setRotatingKeyType(type);
-    setIsRotateConfirmOpen(true);
+  const handleCreateKeySubmit = async () => {
+    if (!keyName.trim()) {
+      toast.error('Key name is required');
+      return;
+    }
+
+    try {
+      const response = await createKey.mutateAsync({ name: keyName, type: keyType });
+      setIsCreateOpen(false);
+      setKeyName('');
+      setPlainKeyReveal(response.plainKey);
+      setIsRevealOpen(true);
+      toast.success('API Key created successfully');
+    } catch {
+      toast.error('Failed to create API Key');
+    }
   };
 
-  const executeRotateKey = async () => {
-    if (!rotatingKeyType) return;
+  const handleRevokeConfirm = (keyId: string) => {
+    setKeyIdToRevoke(keyId);
+    setIsRevokeConfirmOpen(true);
+  };
+
+  const executeRevoke = async () => {
+    if (!keyIdToRevoke) return;
+
     try {
-      const response = await rotateKey.mutateAsync({ envId: environment.id, keyType: rotatingKeyType });
-      setIsRotateConfirmOpen(false);
-      setKeyToCopy(response.apiKey);
-      setIsKeyDialogOpen(true);
-      toast.success(`${rotatingKeyType === 'server' ? 'Server' : 'Client'} API Key rotated`);
+      await revokeKey.mutateAsync(keyIdToRevoke);
+      setIsRevokeConfirmOpen(false);
+      setKeyIdToRevoke(null);
+      toast.success('API Key revoked successfully');
     } catch {
-      toast.error(`Failed to rotate API Key`);
-    } finally {
-      setRotatingKeyType(null);
+      toast.error('Failed to revoke API Key');
     }
   };
 
   const copyToClipboard = () => {
-    if (keyToCopy) {
-      navigator.clipboard.writeText(keyToCopy);
+    if (plainKeyRevealed) {
+      navigator.clipboard.writeText(plainKeyRevealed);
       toast.success('API Key copied to clipboard');
     }
   };
 
-  const serverKey = environment.keys.find(k => k.keyType === KeyType.Server);
-  const clientKey = environment.keys.find(k => k.keyType === KeyType.Client);
-
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => navigate(`/projects/${projectId}?tab=environments`)}>
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">{environment.name}</h1>
-          <p className="text-muted-foreground">Environment Details & Settings</p>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <Button variant="ghost" size="icon" onClick={() => navigate(`/projects/${projectId}/environments`)}>
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">{environment.name}</h1>
+            <p className="text-muted-foreground">Manage keys and credentials for this environment</p>
+          </div>
         </div>
+
+        {canManageKeys && (
+          <Button onClick={() => setIsCreateOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Create Key
+          </Button>
+        )}
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2">
-        <Card className="flex flex-col h-full">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Key className="h-5 w-5" />
-              Server API Key
-            </CardTitle>
-            <CardDescription>
-              Used in backend SDKs. Grants full access to evaluate feature flags. Keep this secure.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4 mt-auto">
-            <div className="bg-muted p-3 rounded-md font-mono text-sm flex items-center justify-between">
-              <span>{serverKey ? serverKey.keyPrefix : 'No active server key'}</span>
-            </div>
-            {canManageKeys && (
-              <Button variant="outline" className="w-full" onClick={() => confirmRotateKey('server')}>
-                <RefreshCw className="mr-2 h-4 w-4" />
-                Rotate Server Key
-              </Button>
-            )}
-          </CardContent>
-        </Card>
+      <Card className="border-border/40 bg-zinc-950/20">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <Key className="h-5 w-5 text-primary" />
+            Environment API Keys
+          </CardTitle>
+          <CardDescription>
+            Use Server keys in backend environments, and Client keys in frontend SDKs.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow className="border-border/40">
+                <TableHead>Name</TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead>Preview</TableHead>
+                <TableHead>Created At</TableHead>
+                {canManageKeys && <TableHead className="text-right">Actions</TableHead>}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {keys && keys.length > 0 ? (
+                keys.map((key) => (
+                  <TableRow key={key.id} className="border-border/40">
+                    <TableCell className="font-medium">{key.name}</TableCell>
+                    <TableCell>
+                      <Badge variant={key.keyType === KeyType.Server ? 'default' : 'secondary'}>
+                        {key.keyType === KeyType.Server ? 'Server' : 'Client'}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="font-mono text-xs">{key.keyPreview}</TableCell>
+                    <TableCell className="text-muted-foreground text-xs font-mono">
+                      {formatDate(key.createdOn)}
+                    </TableCell>
+                    {canManageKeys && (
+                      <TableCell className="text-right">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                          onClick={() => handleRevokeConfirm(key.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                    )}
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={canManageKeys ? 5 : 4} className="h-24 text-center text-muted-foreground">
+                    No active API keys found. Create a key to get started.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
 
-        <Card className="flex flex-col h-full">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Key className="h-5 w-5" />
-              Client API Key
-            </CardTitle>
-            <CardDescription>
-              Used in frontend/mobile SDKs. Only evaluates flags marked as "Client-Side Exposed".
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4 mt-auto">
-            <div className="bg-muted p-3 rounded-md font-mono text-sm flex items-center justify-between">
-              <span>{clientKey ? clientKey.keyPrefix : 'No active client key'}</span>
-            </div>
-            {canManageKeys && (
-              <Button variant="outline" className="w-full" onClick={() => confirmRotateKey('client')}>
-                <RefreshCw className="mr-2 h-4 w-4" />
-                Rotate Client Key
-              </Button>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      <Dialog open={isRotateConfirmOpen} onOpenChange={setIsRotateConfirmOpen}>
-        <DialogContent>
+      <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+        <DialogContent className="border-border/40 bg-zinc-950">
           <DialogHeader>
-            <DialogTitle>Rotate API Key</DialogTitle>
+            <DialogTitle>Create API Key</DialogTitle>
             <DialogDescription>
-              Are you sure? The old API key for this environment will be instantly invalidated and any applications using it will be disconnected.
+              Assign a name and select a key scope type.
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter className="mt-4">
-            <Button variant="outline" onClick={() => setIsRotateConfirmOpen(false)}>Cancel</Button>
-            <Button variant="destructive" onClick={executeRotateKey} disabled={rotateKey.isPending}>
-              {rotateKey.isPending ? 'Rotating...' : 'Yes, Rotate Key'}
+
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Name</label>
+              <Input
+                placeholder="e.g. Production Backend"
+                value={keyName}
+                onChange={(e) => setKeyName(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Scope Type</label>
+              <Select
+                value={keyType.toString()}
+                onValueChange={(val) => setKeyType(parseInt(val, 10) as KeyType)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select key type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={KeyType.Server.toString()}>Server (Backend Evaluation)</SelectItem>
+                  <SelectItem value={KeyType.Client.toString()}>Client (Frontend Evaluation)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsCreateOpen(false)}>Cancel</Button>
+            <Button onClick={handleCreateKeySubmit} disabled={createKey.isPending}>
+              {createKey.isPending ? 'Creating...' : 'Create Key'}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <Dialog open={isKeyDialogOpen} onOpenChange={setIsKeyDialogOpen}>
-        <DialogContent>
+      <Dialog open={isRevealOpen} onOpenChange={setIsRevealOpen}>
+        <DialogContent className="border-border/40 bg-zinc-950">
           <DialogHeader>
-            <DialogTitle>New API Key Generated</DialogTitle>
-            <DialogDescription className="text-destructive font-medium mt-2">
-              Please copy this key immediately. You will not be able to see it again.
+            <DialogTitle>API Key Generated</DialogTitle>
+            <DialogDescription className="text-destructive font-semibold mt-2">
+              Warning: Copy this key now! You will never be shown this key again.
             </DialogDescription>
           </DialogHeader>
+
           <div className="flex items-center gap-2 mt-4">
-            <Input value={keyToCopy || ''} readOnly className="font-mono text-sm bg-muted/50" />
-            <Button variant="secondary" onClick={copyToClipboard}>
+            <Input value={plainKeyRevealed} readOnly className="font-mono text-sm bg-muted/50" />
+            <Button variant="secondary" size="icon" onClick={copyToClipboard}>
               <Copy className="h-4 w-4" />
             </Button>
           </div>
+
           <DialogFooter className="mt-6">
-            <Button onClick={() => setIsKeyDialogOpen(false)}>I have copied the key</Button>
+            <Button className="w-full" onClick={() => setIsRevealOpen(false)}>
+              I have safely copied this key
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isRevokeConfirmOpen} onOpenChange={setIsRevokeConfirmOpen}>
+        <DialogContent className="border-border/40 bg-zinc-950">
+          <DialogHeader>
+            <DialogTitle className="text-destructive">Revoke API Key</DialogTitle>
+            <DialogDescription>
+              Are you sure? This action cannot be undone. Any applications using this key will immediately lose access.
+            </DialogDescription>
+          </DialogHeader>
+
+          <DialogFooter className="mt-4">
+            <Button variant="outline" onClick={() => setIsRevokeConfirmOpen(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={executeRevoke} disabled={revokeKey.isPending}>
+              {revokeKey.isPending ? 'Revoking...' : 'Yes, Revoke Key'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

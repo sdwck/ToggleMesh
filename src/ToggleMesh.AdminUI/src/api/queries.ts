@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from './axios';
-import type { Project, ProjectDetails, FeatureFlag, AuditLog, PaginatedResponse, ProjectMember, UpdateFlagRequest, ProjectFlagDto } from './types';
+import type { Project, ProjectDetails, FeatureFlag, AuditLog, PaginatedResponse, ProjectMember, UpdateFlagRequest, ProjectFlagDto, CreateKeyRequest, CreateKeyResponse, GetKeysResponse } from './types';
 
 export const useProjects = () => {
   return useQuery({
@@ -49,15 +49,38 @@ export const useCreateEnvironment = (projectId: string) => {
   });
 };
 
-export const useRotateEnvironmentKey = (projectId: string) => {
+export const useEnvironmentKeys = (projectId: string, envId: string) => {
+  return useQuery({
+    queryKey: ['projects', projectId, 'environments', envId, 'keys'],
+    queryFn: async () => {
+      const { data } = await api.get<GetKeysResponse[]>(`/projects/${projectId}/environments/${envId}/keys`);
+      return data;
+    },
+    enabled: !!projectId && !!envId,
+  });
+};
+
+export const useCreateEnvironmentKey = (projectId: string, envId: string) => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ envId, keyType }: { envId: string, keyType: 'server' | 'client' }) => {
-      const { data } = await api.post<{ apiKey: string }>(`/projects/${projectId}/environments/${envId}/keys/${keyType}/rotate`);
+    mutationFn: async (request: CreateKeyRequest) => {
+      const { data } = await api.post<CreateKeyResponse>(`/projects/${projectId}/environments/${envId}/keys`, request);
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['projects', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['projects', projectId, 'environments', envId, 'keys'] });
+    },
+  });
+};
+
+export const useRevokeEnvironmentKey = (projectId: string, envId: string) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (keyId: string) => {
+      await api.delete(`/projects/${projectId}/environments/${envId}/keys/${keyId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projects', projectId, 'environments', envId, 'keys'] });
     },
   });
 };
@@ -217,6 +240,18 @@ export const useAddProjectMember = (projectId: string) => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects', projectId, 'members'] });
+    },
+  });
+};
+
+export const useDeleteFeatureFlag = (projectId: string) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (flagKey: string) => {
+      await api.delete(`/projects/${projectId}/flags/${flagKey}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projects', projectId, 'flags'] });
     },
   });
 };

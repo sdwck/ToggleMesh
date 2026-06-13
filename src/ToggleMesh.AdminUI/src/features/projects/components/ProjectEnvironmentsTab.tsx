@@ -14,6 +14,20 @@ import { ProjectRole, type AuditLog, type Environment, type ProjectDetails } fro
 import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
 
+const formatDate = (dateString: string) => {
+  const date = new Date(dateString);
+  const pad = (num: number) => String(num).padStart(2, '0');
+  
+  const year = date.getFullYear();
+  const month = pad(date.getMonth() + 1);
+  const day = pad(date.getDate());
+  const hours = pad(date.getHours());
+  const minutes = pad(date.getMinutes());
+  const seconds = pad(date.getSeconds());
+  
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+};
+
 function EnvironmentAuditLogs({ envId }: { envId: string }) {
   const [page, setPage] = useState(1);
   const pageSize = 6;
@@ -54,16 +68,18 @@ function EnvironmentAuditLogs({ envId }: { envId: string }) {
             ) : (
               data?.items.map((log) => (
                 <TableRow key={log.id} className="hover:bg-muted/30 text-sm">
-                  <TableCell className="text-muted-foreground whitespace-nowrap">
-                    {new Date(log.timestamp).toLocaleString()}
+                  <TableCell className="text-muted-foreground whitespace-nowrap font-mono text-xs">
+                    {formatDate(log.timestamp)}
                   </TableCell>
                   <TableCell>
                     <Badge variant="outline" className="text-[10px] font-mono uppercase">
                       {log.action}
                     </Badge>
                   </TableCell>
-                  <TableCell className="font-mono text-xs text-primary/80">{log.entityName}</TableCell>
-                  <TableCell className="text-muted-foreground truncate max-w-[120px]" title={log.performedBy}>
+                  <TableCell className="font-mono text-xs text-primary/80">
+                    {log.entityName} ({log.entityFriendlyName || log.entityId})
+                  </TableCell>
+                  <TableCell className="text-muted-foreground whitespace-nowrap font-mono text-xs">
                     {log.performedBy}
                   </TableCell>
                   <TableCell className="text-right">
@@ -173,7 +189,11 @@ export function ProjectEnvironmentsTab({ project }: { project: ProjectDetails })
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-end">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight">Environments</h2>
+          <p className="text-muted-foreground">Manage environments for this project.</p>
+        </div>
         {canManageProject && (
           <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
             <DialogTrigger asChild>
@@ -182,7 +202,7 @@ export function ProjectEnvironmentsTab({ project }: { project: ProjectDetails })
                 New Environment
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="border-border/40 bg-zinc-950">
               <DialogHeader>
                 <DialogTitle>Create Environment</DialogTitle>
                 <DialogDescription>
@@ -244,7 +264,7 @@ export function ProjectEnvironmentsTab({ project }: { project: ProjectDetails })
       </div>
 
       <Dialog open={!!auditEnvId} onOpenChange={(open) => !open && setAuditEnvId(null)}>
-        <DialogContent className="max-w-4xl max-h-[80vh] flex flex-col">
+        <DialogContent className="max-w-5xl max-h-[80vh] flex flex-col border-border/40 bg-zinc-950">
           <DialogHeader>
             <DialogTitle>Environment Activity Log</DialogTitle>
             <DialogDescription>

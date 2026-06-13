@@ -24,43 +24,46 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService
     private readonly HttpClient _client;
     private readonly IRuleEngine _ruleEngine;
     private readonly string? _fallbackFilePath;
-    private readonly IEnumerable<IToggleMeshContextProvider> _contextProviders;
+    private readonly IToggleMeshContextProvider[] _contextProviders;
     private readonly List<string> _identityKeys = ["UserId", "sub", "Email", "SessionId", "DeviceId", "Id"];
     private ConcurrentDictionary<string, FlagMetrics> _metricsBuffer = new();
     private readonly bool _isMetricsEnabled;
     private readonly TimeProvider _timeProvider;
     private readonly ResiliencePipeline _resiliencePipeline;
+    private readonly CancellationTokenSource _sdkLifetimeCts = new();
 
     public ToggleMeshClient(
         IHttpClientFactory httpClientFactory,
-        IOptions<ToggleMeshOptions> options, 
+        IOptions<ToggleMeshOptions> options,
         ILogger<ToggleMeshClient> logger,
-        IRuleEngine ruleEngine, 
-        IEnumerable<IToggleMeshContextProvider> contextProviders, 
+        IRuleEngine ruleEngine,
+        IEnumerable<IToggleMeshContextProvider> contextProviders,
         TimeProvider? timeProvider = null)
     {
         _logger = logger;
         _ruleEngine = ruleEngine;
-        _contextProviders = contextProviders;
+        _contextProviders = contextProviders.ToArray();
         _timeProvider = timeProvider ?? TimeProvider.System;
         _isMetricsEnabled = options.Value.IsMetricsEnabled;
         if (options.Value.IdentityKeys.Any())
             _identityKeys = options.Value.IdentityKeys.ToList();
         _client = httpClientFactory.CreateClient("ToggleMesh");
-        
+
         _resiliencePipeline = new ResiliencePipelineBuilder()
             .AddRetry(new RetryStrategyOptions
             {
-                ShouldHandle = new PredicateBuilder().Handle<HttpRequestException>(ex => 
-                    ex.StatusCode == null || (int)ex.StatusCode >= 500 || ex.StatusCode == System.Net.HttpStatusCode.RequestTimeout),
+                ShouldHandle = new PredicateBuilder().Handle<HttpRequestException>(ex =>
+                    ex.StatusCode == null || (int)ex.StatusCode >= 500 ||
+                    ex.StatusCode == System.Net.HttpStatusCode.RequestTimeout),
                 MaxRetryAttempts = 2,
                 Delay = TimeSpan.FromSeconds(2),
                 BackoffType = DelayBackoffType.Exponential
             })
             .AddCircuitBreaker(new CircuitBreakerStrategyOptions
             {
-                ShouldHandle = new PredicateBuilder().Handle<HttpRequestException>(ex => 
-                    ex.StatusCode == null || (int)ex.StatusCode >= 500 || ex.StatusCode == System.Net.HttpStatusCode.RequestTimeout),
+                ShouldHandle = new PredicateBuilder().Handle<HttpRequestException>(ex =>
+                    ex.StatusCode == null || (int)ex.StatusCode >= 500 ||
+                    ex.StatusCode == System.Net.HttpStatusCode.RequestTimeout),
                 FailureRatio = 0.5,
                 SamplingDuration = TimeSpan.FromSeconds(30),
                 MinimumThroughput = 2,
@@ -82,7 +85,7 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService
                 }
             })
             .Build();
-        
+
         var safeKey = GetSafeFileName(options.Value.ApiKey);
 
         if (options.Value.UseFallbackFile)
@@ -91,26 +94,25 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService
                 : options.Value.FallbackFilePath;
 
         var hubUrl = new Uri(
-            new Uri(options.Value.EndpointUrl), Constants.Endpoints.ToggleHub);
-        
+            new Uri(options.Value.BaseUrl), Constants.Endpoints.ToggleHub);
+
         _connection = new HubConnectionBuilder()
-            .WithUrl(hubUrl, connectionOptions =>
-            {
-                connectionOptions.Headers.Add("x-api-key", options.Value.ApiKey);
-            })
-            .WithAutomaticReconnect([TimeSpan.Zero, TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(30)
+            .WithUrl(hubUrl, connectionOptions => { connectionOptions.Headers.Add("x-api-key", options.Value.ApiKey); })
+            .WithAutomaticReconnect([
+                TimeSpan.Zero, TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(10),
+                TimeSpan.FromSeconds(30)
             ])
             .Build();
 
         _connection.On<FeatureFlagDto>("FlagUpdated", flag =>
         {
-            _logger.LogDebug("[ToggleMesh] Flag updated remotely: {Key} (IsEnabled: {Value}, Rules: {RuleCount})", 
+            _logger.LogDebug("[ToggleMesh] Flag updated remotely: {Key} (IsEnabled: {Value}, Rules: {RuleCount})",
                 flag.Key, flag.IsEnabled, flag.Rules.Count());
 
             CacheFlag(flag);
             _ = SaveFallbackAsync();
         });
-        
+
         _connection.On("StateReloadRequired", async () =>
         {
             _logger.LogInformation("[ToggleMesh] Received state reload request from server.");
@@ -120,16 +122,22 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService
         _connection.Reconnected += async _ =>
         {
             _logger.LogInformation("[ToggleMesh] SignalR reconnected. Syncing state.");
+            var jitterMs = Random.Shared.Next(100, 15000);
+            await Task.Delay(TimeSpan.FromMilliseconds(jitterMs), _timeProvider);
             await SyncStateWithApiAsync(CancellationToken.None);
         };
 
         _connection.Closed += async error =>
         {
-            _logger.LogWarning(error, "[ToggleMesh] Connection closed permanently. Restarting background connection loop.");
-            await EnsureConnectedLoopAsync(CancellationToken.None);
+            if (_sdkLifetimeCts.IsCancellationRequested)
+                return;
+            
+            _logger.LogWarning(error,
+                "[ToggleMesh] Connection closed permanently. Restarting background connection loop.");
+            await EnsureConnectedLoopAsync(_sdkLifetimeCts.Token);
         };
     }
-    
+
     private static string GetSafeFileName(string apiKey)
     {
         if (string.IsNullOrWhiteSpace(apiKey)) return "default";
@@ -137,19 +145,20 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService
         var hash = System.Security.Cryptography.SHA256.HashData(bytes);
         return Convert.ToHexString(hash)[..12].ToLowerInvariant();
     }
-    
-    public bool IsEnabled(string flagKey, bool defaultValue = false) => 
+
+    public bool IsEnabled(string flagKey, bool defaultValue = false) =>
         IsEnabled<object>(flagKey, string.Empty, null!, defaultValue);
 
-    public bool IsEnabled(string flagKey, string identity, bool defaultValue = false) => 
+    public bool IsEnabled(string flagKey, string identity, bool defaultValue = false) =>
         IsEnabled<object>(flagKey, identity, null!, defaultValue);
 
-    public bool IsEnabled(string flagKey, IDictionary<string, string> context, bool defaultValue = false) => 
+    public bool IsEnabled(string flagKey, IDictionary<string, string> context, bool defaultValue = false) =>
         IsEnabled(flagKey, string.Empty, context, defaultValue);
-    
-    public bool IsEnabled(string flagKey, string identity, IDictionary<string, string> context, bool defaultValue = false) =>
+
+    public bool IsEnabled(string flagKey, string identity, IDictionary<string, string> context,
+        bool defaultValue = false) =>
         IsEnabled<IDictionary<string, string>>(flagKey, identity, context, defaultValue);
-    
+
     public bool IsEnabled<TContext>(string flagKey, TContext contextObject, bool defaultValue = false) =>
         IsEnabled(flagKey, string.Empty, contextObject, defaultValue);
 
@@ -179,10 +188,10 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService
 
     private void CacheFlag(FeatureFlagDto flag)
     {
-        _cache[flag.Key] = new CachedFlag 
-        { 
-            Key = flag.Key, 
-            IsEnabled = flag.IsEnabled, 
+        _cache[flag.Key] = new CachedFlag
+        {
+            Key = flag.Key,
+            IsEnabled = flag.IsEnabled,
             RolloutPercentage = flag.RolloutPercentage,
             Groups = _ruleEngine.CompileRules(flag.Rules),
             OriginalDto = flag
@@ -201,48 +210,71 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService
     private async Task RunMetricsFlusherAsync(CancellationToken ct)
     {
         using var timer = new PeriodicTimer(TimeSpan.FromSeconds(10));
-        ConcurrentDictionary<string, FlagMetrics> oldBuffer = [];
         while (!ct.IsCancellationRequested && await timer.WaitForNextTickAsync(ct))
         {
-            try
-            {
-                oldBuffer = Interlocked.Exchange(ref _metricsBuffer, new ConcurrentDictionary<string, FlagMetrics>());
-                if (oldBuffer.IsEmpty)
-                    continue;
+            var oldBuffer = 
+                Interlocked.Exchange(
+                    ref _metricsBuffer, 
+                    new ConcurrentDictionary<string, FlagMetrics>());
+            if (oldBuffer.IsEmpty)
+                continue;
 
-                var payload = oldBuffer.Select(kvp => new
+            var payload = oldBuffer.Select(kvp => new
                 {
                     kvp.Key,
-                    TrueCount = Interlocked.Read(ref kvp.Value.TrueCount),
-                    FalseCount = Interlocked.Read(ref kvp.Value.FalseCount)
-                }).ToList();
+                    TrueCount = Interlocked.Exchange(ref kvp.Value.TrueCount, 0),
+                    FalseCount = Interlocked.Exchange(ref kvp.Value.FalseCount, 0)
+                })
+                .Where(x => x.TrueCount > 0 || x.FalseCount > 0)
+                .ToList();
 
-                var response = await _resiliencePipeline.ExecuteAsync(async token => 
+            if (payload.Count == 0)
+                continue;
+
+            var isSuccess = false;
+
+            try
+            {
+                var response = await _resiliencePipeline.ExecuteAsync(async token =>
                     await _client.PostAsJsonAsync(Constants.Endpoints.Metrics, payload, token), ct);
-                if (!response.IsSuccessStatusCode)
-                {
-                    _logger.LogWarning("[ToggleMesh] Failed to flush metrics. Status: {StatusCode}", response.StatusCode);
-                    foreach (var kvp in oldBuffer)
-                    {
-                        var activeMetrics = _metricsBuffer.GetOrAdd(kvp.Key, _ => new FlagMetrics());
-                        Interlocked.Add(ref activeMetrics.TrueCount, Interlocked.Read(ref kvp.Value.TrueCount));
-                        Interlocked.Add(ref activeMetrics.FalseCount, Interlocked.Read(ref kvp.Value.FalseCount));
-                    }
-                }
+
+                isSuccess = response.IsSuccessStatusCode;
+
+                if (!isSuccess)
+                    _logger.LogWarning(
+                        "[ToggleMesh] Failed to flush metrics. Status: {StatusCode}",
+                        response.StatusCode);
             }
             catch (BrokenCircuitException)
             {
                 _logger.LogTrace("[ToggleMesh] Circuit breaker open. Skipping metrics flush.");
-                foreach (var kvp in oldBuffer)
-                {
-                    var activeMetrics = _metricsBuffer.GetOrAdd(kvp.Key, _ => new FlagMetrics());
-                    Interlocked.Add(ref activeMetrics.TrueCount, Interlocked.Read(ref kvp.Value.TrueCount));
-                    Interlocked.Add(ref activeMetrics.FalseCount, Interlocked.Read(ref kvp.Value.FalseCount));
-                }
             }
             catch (Exception e)
             {
                 _logger.LogTrace(e, "[ToggleMesh] Error during metrics flush.");
+            }
+            finally
+            {
+                if (!isSuccess)
+                    foreach (var item in payload)
+                    {
+                        var activeMetrics = _metricsBuffer.GetOrAdd(item.Key, _ => new FlagMetrics());
+                        Interlocked.Add(ref activeMetrics.TrueCount, item.TrueCount);
+                        Interlocked.Add(ref activeMetrics.FalseCount, item.FalseCount);
+                    }
+
+                foreach (var kvp in oldBuffer)
+                {
+                    var remainingTrue = Interlocked.Read(ref kvp.Value.TrueCount);
+                    var remainingFalse = Interlocked.Read(ref kvp.Value.FalseCount);
+
+                    if (remainingTrue > 0 || remainingFalse > 0)
+                    {
+                        var activeMetrics = _metricsBuffer.GetOrAdd(kvp.Key, _ => new FlagMetrics());
+                        Interlocked.Add(ref activeMetrics.TrueCount, kvp.Value.TrueCount);
+                        Interlocked.Add(ref activeMetrics.FalseCount, kvp.Value.FalseCount);
+                    }
+                }
             }
         }
     }
@@ -250,15 +282,15 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService
     public async Task StartAsync(CancellationToken cancellationToken)
     {
         _logger.LogInformation("[ToggleMesh] SDK starting.");
-        
+
         await LoadFallbackAsync();
-        
+
         using var cts = new CancellationTokenSource(
             TimeSpan.FromSeconds(2), _timeProvider);
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
             cts.Token,
             cancellationToken);
-        
+
         try
         {
             await SyncStateWithApiAsync(linkedCts.Token);
@@ -271,10 +303,10 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService
         {
             _logger.LogWarning(ex, "[ToggleMesh] Initial sync failed. Operating with offline cache/defaults.");
         }
-        
-        _ = Task.Run(() => EnsureConnectedLoopAsync(CancellationToken.None), CancellationToken.None);
+
+        _ = Task.Run(() => EnsureConnectedLoopAsync(_sdkLifetimeCts.Token), _sdkLifetimeCts.Token);
         if (_isMetricsEnabled)
-            _ = Task.Run(() => RunMetricsFlusherAsync(CancellationToken.None), CancellationToken.None);
+            _ = Task.Run(() => RunMetricsFlusherAsync(_sdkLifetimeCts.Token), _sdkLifetimeCts.Token);
     }
 
     private async Task EnsureConnectedLoopAsync(CancellationToken ct)
@@ -288,14 +320,15 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService
                     await _connection.StartAsync(ct);
                     _logger.LogTrace("[ToggleMesh] SignalR connection established.");
                 }
-                
+
                 await SyncStateWithApiAsync(ct);
                 break;
             }
             catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
             {
-                _logger.LogCritical("[ToggleMesh] Invalid API Key. Background sync loop stopped permanently. Please check your configuration.");
-                break; 
+                _logger.LogCritical(
+                    "[ToggleMesh] Invalid API Key. Background sync loop stopped permanently. Please check your configuration.");
+                break;
             }
             catch (Exception ex)
             {
@@ -308,9 +341,13 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService
     public async Task StopAsync(CancellationToken cancellationToken)
     {
         _logger.LogInformation("[ToggleMesh] SDK stopping.");
+        
+        await _sdkLifetimeCts.CancelAsync();
+        _sdkLifetimeCts.Dispose();
+        
         await _connection.StopAsync(cancellationToken);
     }
-    
+
     private async Task SyncStateWithApiAsync(CancellationToken cancellationToken)
     {
         try
@@ -364,7 +401,7 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService
                 _logger.LogTrace("[ToggleMesh] Fallback file path not configured. Skipping offline fallback load.");
                 return;
             }
-            
+
             if (!File.Exists(_fallbackFilePath))
             {
                 _logger.LogTrace("[ToggleMesh] No fallback file found at {Path}", _fallbackFilePath);
@@ -373,12 +410,13 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService
 
             var content = await File.ReadAllTextAsync(_fallbackFilePath);
             var flags = JsonSerializer.Deserialize<List<FeatureFlagDto>>(content);
-            
+
             if (flags != null)
             {
                 foreach (var flag in flags)
                     CacheFlag(flag);
-                _logger.LogInformation("[ToggleMesh] Loaded {Count} flags from offline fallback file.", flags.Count);
+                _logger.LogInformation("[ToggleMesh] Loaded {Count} flags from offline fallback file.",
+                    flags.Count);
             }
         }
         catch (Exception ex)
@@ -389,26 +427,52 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService
 
     private async Task SaveFallbackAsync()
     {
+        if (_fallbackFilePath is null)
+        {
+            _logger.LogTrace("[ToggleMesh] Fallback file path not configured. Skipping offline fallback save.");
+            return;
+        }
+
+        var tempFilePath = $"{_fallbackFilePath}.{Guid.NewGuid():N}.tmp";
+
         try
         {
-            if (_fallbackFilePath is null)
-            {
-                _logger.LogTrace("[ToggleMesh] Fallback file path not configured. Skipping offline fallback save.");
-                return;
-            }
-            
             var dir = Path.GetDirectoryName(_fallbackFilePath);
             if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
                 Directory.CreateDirectory(dir);
 
             var payload = _cache.Values.Select(x => x.OriginalDto).ToList();
             var content = JsonSerializer.Serialize(payload);
-            await File.WriteAllTextAsync(_fallbackFilePath, content);
+            await File.WriteAllTextAsync(tempFilePath, content);
+            File.Move(tempFilePath, _fallbackFilePath, overwrite: true);
             _logger.LogTrace("[ToggleMesh] Fallback state saved successfully.");
+        }
+        catch (IOException)
+        {
+            _logger.LogTrace("[ToggleMesh] Fallback file is temporarily locked by another process.");
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "[ToggleMesh] Failed to write fallback file to {Path}. Offline capabilities will be limited.", _fallbackFilePath);
+            _logger.LogError(ex,
+                "[ToggleMesh] Failed to write fallback file to {Path} due to an error.",
+                _fallbackFilePath);
+        }
+        finally
+        {
+            TryDeleteTempFile(tempFilePath);
+        }
+    }
+    
+    private static void TryDeleteTempFile(string path)
+    {
+        try
+        {
+            if (File.Exists(path))
+                File.Delete(path);
+        }
+        catch
+        {
+            // ignored
         }
     }
 }

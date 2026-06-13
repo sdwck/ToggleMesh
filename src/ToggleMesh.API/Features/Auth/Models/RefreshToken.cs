@@ -1,7 +1,7 @@
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace ToggleMesh.API.Features.Auth.Models;
-
+// TODO: Add a worker to clean up expired
 public class RefreshToken
 {
     public Guid Id { get; set; }

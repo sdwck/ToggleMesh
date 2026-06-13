@@ -2,6 +2,7 @@
 
 public class StartsWithOperator : RuleOperatorBase
 {
-    public override bool Evaluate(string userValue, string ruleValue) => 
-        userValue.StartsWith(ruleValue, StringComparison.OrdinalIgnoreCase);
+    public override bool Evaluate(string userValue, object? compiledRuleValue) => 
+        compiledRuleValue is string str && 
+        userValue.StartsWith(str, StringComparison.OrdinalIgnoreCase);
 }

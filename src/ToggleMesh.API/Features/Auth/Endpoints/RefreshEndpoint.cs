@@ -5,6 +5,7 @@ using ToggleMesh.API.Persistence;
 using System.Security.Claims;
 using System.IdentityModel.Tokens.Jwt;
 using Microsoft.EntityFrameworkCore;
+using ToggleMesh.API.Infrastructure.Security;
 
 namespace ToggleMesh.API.Features.Auth.Endpoints;
 
@@ -13,12 +14,18 @@ public class RefreshEndpoint : ToggleEndpoint<RefreshRequest, LoginResponse>
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly IConfiguration _configuration;
     private readonly AppDbContext _db;
+    private readonly TimeProvider _timeProvider;
 
-    public RefreshEndpoint(UserManager<ApplicationUser> userManager, IConfiguration configuration, AppDbContext db)
+    public RefreshEndpoint(
+        UserManager<ApplicationUser> userManager, 
+        IConfiguration configuration, 
+        AppDbContext db, 
+        TimeProvider timeProvider)
     {
         _userManager = userManager;
         _configuration = configuration;
         _db = db;
+        _timeProvider = timeProvider;
     }
 
     public override void Configure()
@@ -47,13 +54,17 @@ public class RefreshEndpoint : ToggleEndpoint<RefreshRequest, LoginResponse>
             .Include(x => x.User)
             .FirstOrDefaultAsync(x => x.Token == req.RefreshToken, ct);
 
-        if (rt == null || !rt.IsActive || rt.UserId != userId)
+        var oldTokenGracePeriod = TimeSpan.FromSeconds(15);
+        if (rt == null
+            || rt.UserId != userId 
+            || rt.Revoked != null 
+            && rt.Revoked + oldTokenGracePeriod < _timeProvider.GetUtcNow())
         {
-            ThrowError("Invalid access token or refresh token");
+            ThrowError("Invalid access or refresh token.");
             return;
         }
 
-        rt.Revoked = DateTime.UtcNow;
+        rt.Revoked ??= _timeProvider.GetUtcNow().UtcDateTime;
 
         var (newAccessToken, newRefreshToken) = await TokenGenerator.GenerateTokensAsync(rt.User, _userManager, _configuration);
 
@@ -61,8 +72,8 @@ public class RefreshEndpoint : ToggleEndpoint<RefreshRequest, LoginResponse>
         {
             Token = newRefreshToken,
             UserId = rt.UserId,
-            Expires = DateTime.UtcNow.AddDays(7),
-            Created = DateTime.UtcNow
+            Expires = _timeProvider.GetUtcNow().UtcDateTime.AddDays(7),
+            Created = _timeProvider.GetUtcNow().UtcDateTime
         };
 
         _db.RefreshTokens.Add(newRt);
@@ -85,7 +96,7 @@ public class RefreshEndpoint : ToggleEndpoint<RefreshRequest, LoginResponse>
             ValidateIssuerSigningKey = true,
             ValidIssuer = jwtSettings["Issuer"],
             ValidAudience = jwtSettings["Audience"],
-            IssuerSigningKey = Infrastructure.Security.RsaKeyProvider.GetKey(),
+            IssuerSigningKey = RsaKeyProvider.GetKey(_configuration),
             ValidateLifetime = false
         };
 

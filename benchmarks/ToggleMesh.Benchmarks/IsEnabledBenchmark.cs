@@ -14,20 +14,18 @@ using ToggleMesh.Common.Rules.Operators;
 
 namespace ToggleMesh.Benchmarks;
 
-public class Config : ManualConfig
+public class TypedUserContext
 {
-    public Config()
-    {
-        AddJob(Job.Default.WithToolchain(InProcessNoEmitToolchain.Instance));
-    }
+    public string Email { get; set; } = "test@gmail.com";
+    public int Age { get; set; } = 25;
 }
 
-[Config(typeof(Config))]
 [MemoryDiagnoser]
 public class IsEnabledBenchmark
 {
     private ToggleMeshClient _client = null!;
-    private readonly Dictionary<string, string> _userContext = new() { { "Email", "test@gmail.com" } };
+    private readonly TypedUserContext _userContextTyped = new();
+    private readonly Dictionary<string, string> _userContextDictionary = new() { { "Email", "test@gmail.com" } };
 
     [GlobalSetup]
     public void Setup()
@@ -35,31 +33,33 @@ public class IsEnabledBenchmark
         var operators = new IRuleOperator[] { new EqualsOperator(), new EndsWithOperator() };
         var engine = new RuleEngine(operators);
         var httpClientFactory = new Mock<IHttpClientFactory>();
-        var options = Options.Create(new ToggleMeshOptions { ApiKey = "bench", EndpointUrl = "http://localhost" });
-        
+        var options = Options.Create(new ToggleMeshOptions { ApiKey = "bench", BaseUrl = "http://localhost" });
+
         _client = new ToggleMeshClient(
-            httpClientFactory.Object, 
-            options, 
-            NullLogger<ToggleMeshClient>.Instance, 
-            engine, 
+            httpClientFactory.Object,
+            options,
+            NullLogger<ToggleMeshClient>.Instance,
+            engine,
             []);
-        
+
         var dtoType = typeof(FeatureFlagDto);
-        
-        var flagData = new { 
-            Key = "bench-flag", 
-            IsEnabled = true, 
+
+        var flagData = new
+        {
+            Key = "bench-flag",
+            IsEnabled = true,
             Rules = new[] { new { GroupId = 1, Attribute = "Email", Operator = "EndsWith", Value = "@gmail.com" } },
-            RolloutPercentage = (int?)null 
+            RolloutPercentage = (int?)null
         };
 
         var dto = System.Text.Json.JsonSerializer.Deserialize(
-            System.Text.Json.JsonSerializer.Serialize(flagData), 
+            System.Text.Json.JsonSerializer.Serialize(flagData),
             dtoType,
             new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
-        var cacheFlagMethod = typeof(ToggleMeshClient).GetMethod("CacheFlag", BindingFlags.NonPublic | BindingFlags.Instance);
-        
+        var cacheFlagMethod =
+            typeof(ToggleMeshClient).GetMethod("CacheFlag", BindingFlags.NonPublic | BindingFlags.Instance);
+
         if (cacheFlagMethod == null)
             throw new Exception("Could not find CacheFlag method on ToggleMeshClient.");
 
@@ -67,8 +67,14 @@ public class IsEnabledBenchmark
     }
 
     [Benchmark]
-    public bool IsEnabled_WithRules()
+    public bool IsEnabled_WithRules_Typed()
     {
-        return _client.IsEnabled("bench-flag", _userContext);
+        return _client.IsEnabled("bench-flag", _userContextTyped);
+    }
+
+    [Benchmark]
+    public bool IsEnabled_WithRules_Dictionary()
+    {
+        return _client.IsEnabled("bench-flag", _userContextDictionary);
     }
 }

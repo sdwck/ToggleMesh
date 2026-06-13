@@ -2,6 +2,9 @@
 
 public class GreaterThanOperator : RuleOperatorBase
 {
-    public override bool Evaluate(string userValue, string ruleValue) => 
-        double.TryParse(userValue, out var u) && double.TryParse(ruleValue, out var r) && u > r;
+    public override object? Compile(string ruleValue) => 
+        double.TryParse(ruleValue, out var r) ? r : null;
+
+    public override bool Evaluate(string userValue, object? compiledRuleValue) => 
+        compiledRuleValue is double r && double.TryParse(userValue, out var u) && u > r;
 }

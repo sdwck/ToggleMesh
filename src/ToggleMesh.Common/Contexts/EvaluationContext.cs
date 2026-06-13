@@ -4,12 +4,12 @@ namespace ToggleMesh.Common.Contexts;
 public readonly ref struct EvaluationContext<TAccessor> where TAccessor : IContextAccessor
 {
     private readonly TAccessor _contextAccessor;
-    private readonly IEnumerable<IToggleMeshContextProvider> _contextProviders;
+    private readonly IToggleMeshContextProvider[] _contextProviders;
     private readonly List<string> _identityKeys;
 
     public EvaluationContext(
         TAccessor contextAccessor, 
-        IEnumerable<IToggleMeshContextProvider> contextProviders, 
+        IToggleMeshContextProvider[] contextProviders, 
         List<string> identityKeys)
     {
         _contextAccessor = contextAccessor;

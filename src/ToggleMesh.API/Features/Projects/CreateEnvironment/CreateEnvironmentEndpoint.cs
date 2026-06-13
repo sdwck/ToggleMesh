@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using ToggleMesh.API.Extensions;
 using ToggleMesh.API.Infrastructure;
 using ToggleMesh.API.Persistence;
 
@@ -17,7 +18,7 @@ public class CreateEnvironmentEndpoint : ToggleEndpoint<CreateEnvironmentRequest
     {
         Post("/projects/{projectId}/environments");
         Version(1);
-        Policies($"Permission:{Auth.Models.Permissions.EnvironmentsCreate}");
+        this.RequirePermission(Auth.Models.Permissions.EnvironmentsCreate);
     }
 
     public override async Task HandleAsync(CreateEnvironmentRequest req, CancellationToken ct)

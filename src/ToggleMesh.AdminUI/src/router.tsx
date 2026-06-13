@@ -3,7 +3,10 @@ import { Login } from '@/features/auth/Login';
 import { Register } from '@/features/auth/Register';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { ProjectsPage } from '@/features/projects/ProjectsPage';
-import { ProjectDetailsPage } from '@/features/projects/ProjectDetailsPage';
+import { ProjectFlagsPage } from '@/features/projects/ProjectFlagsPage';
+import { ProjectEnvironmentsPage } from '@/features/projects/ProjectEnvironmentsPage';
+import { ProjectMembersPage } from '@/features/projects/ProjectMembersPage';
+import { ProjectAuditPage } from '@/features/projects/ProjectAuditPage';
 import { ProjectFlagDetailsPage } from '@/features/flags/ProjectFlagDetailsPage';
 import { EnvironmentDetailsPage } from '@/features/environments/EnvironmentDetailsPage';
 import { GlobalError } from '@/components/GlobalError';
@@ -34,7 +37,23 @@ export const router = createBrowserRouter([
       },
       {
         path: 'projects/:projectId',
-        element: <ProjectDetailsPage />,
+        element: <Navigate to="flags" replace />,
+      },
+      {
+        path: 'projects/:projectId/flags',
+        element: <ProjectFlagsPage />,
+      },
+      {
+        path: 'projects/:projectId/environments',
+        element: <ProjectEnvironmentsPage />,
+      },
+      {
+        path: 'projects/:projectId/members',
+        element: <ProjectMembersPage />,
+      },
+      {
+        path: 'projects/:projectId/audit',
+        element: <ProjectAuditPage />,
       },
       {
         path: 'projects/:projectId/environments/:environmentId',

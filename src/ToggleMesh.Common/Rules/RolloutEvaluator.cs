@@ -1,3 +1,5 @@
+using System.Text;
+
 namespace ToggleMesh.Common.Rules;
 
 public static class RolloutEvaluator
@@ -21,9 +23,15 @@ public static class RolloutEvaluator
         const uint offsetBasis = 2166136261;
         const uint prime = 16777619;
         var hash = offsetBasis;
-        foreach (var c in text)
+        
+        var byteCount = Encoding.UTF8.GetByteCount(text);
+        var bytes = byteCount <= 256 ? stackalloc byte[256] : new byte[byteCount];
+        
+        var written = Encoding.UTF8.GetBytes(text, bytes);
+
+        for (var i = 0; i < written; i++)
         {
-            hash ^= c;
+            hash ^= bytes[i];
             hash *= prime;
         }
         return hash;

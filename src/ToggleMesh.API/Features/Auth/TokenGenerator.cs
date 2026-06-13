@@ -26,7 +26,7 @@ public static class TokenGenerator
         var userClaims = await userManager.GetClaimsAsync(user);
         claims.AddRange(userClaims);
 
-        var key = RsaKeyProvider.GetKey();
+        var key = RsaKeyProvider.GetKey(configuration);
         var creds = new SigningCredentials(key, SecurityAlgorithms.RsaSha256);
 
         var now = DateTime.UtcNow;

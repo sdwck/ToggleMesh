@@ -1,9 +1,11 @@
 using System.Net;
 using System.Net.Http.Json;
 using FluentAssertions;
+using Microsoft.Extensions.Caching.Hybrid;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
 using StackExchange.Redis;
+using ToggleMesh.API.Features.Client.SdkEvaluateFlag;
 using ToggleMesh.API.Features.Flags.Create;
 using ToggleMesh.API.Features.Flags.Toggle;
 using ToggleMesh.API.Features.Projects;
@@ -66,19 +68,20 @@ public class CacheInvalidationTests : IClassFixture<TestWebApplicationFactory>
         var createResponse = await _client.PostAsJsonAsync($"/api/v1/projects/{projectId}/flags", new CreateFlagRequest { Key = flagKey });
         createResponse.StatusCode.Should().Be(HttpStatusCode.Created);
 
-        var memoryCache = _factory.Services.GetRequiredService<IMemoryCache>();
-        var redis = _factory.Services.GetRequiredService<IConnectionMultiplexer>();
+        var cache = _factory.Services.GetRequiredService<HybridCache>();
 
         var l1CacheKey = $"sdk:compiled_rules:{envId}";
         var l2CacheKey = $"sdk:flags:states:{envId}";
-
-        memoryCache.Set(l1CacheKey, "dummy_l1_data");
         
-        var db = redis.GetDatabase();
-        await db.StringSetAsync(l2CacheKey, "dummy_l2_data");
-
-        memoryCache.TryGetValue(l1CacheKey, out _).Should().BeTrue();
-        (await db.KeyExistsAsync(l2CacheKey)).Should().BeTrue();
+        var dummyL2Data = new List<FlagStateDto> { new(flagKey, false, null, false, []) };
+        
+        await cache.SetAsync(l2CacheKey, dummyL2Data);
+        await cache.SetAsync(l1CacheKey, "dummy_l1_data", new HybridCacheEntryOptions 
+        { 
+            Flags = HybridCacheEntryFlags.DisableDistributedCache 
+        });
+        
+        (await cache.GetOrCreateAsync<List<FlagStateDto>>(l2CacheKey, _ => ValueTask.FromResult<List<FlagStateDto>>(null!))).Should().NotBeNull();
 
         // Act
         var toggleRequest = new ToggleFlagRequest { IsEnabled = true };   
@@ -86,8 +89,13 @@ public class CacheInvalidationTests : IClassFixture<TestWebApplicationFactory>
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
-        (await db.KeyExistsAsync(l2CacheKey)).Should().BeFalse();
+        
+        var cachedL2 = await cache.GetOrCreateAsync<List<FlagStateDto>>(l2CacheKey, _ => ValueTask.FromResult<List<FlagStateDto>>(null!), 
+            options: new HybridCacheEntryOptions { Flags = HybridCacheEntryFlags.DisableLocalCache });
+        
+        cachedL2.Should().BeNull("L2 Cache (Redis) should have been cleared.");
 
-        memoryCache.TryGetValue(l1CacheKey, out _).Should().BeFalse("L1 Memory Cache should have been cleared by the background worker via Pub/Sub.");
+        var cachedL1 = await cache.GetOrCreateAsync<string>(l1CacheKey, _ => ValueTask.FromResult<string>(null!));
+        cachedL1.Should().BeNull("L1 Memory Cache should have been cleared by the background worker.");
     }
 }

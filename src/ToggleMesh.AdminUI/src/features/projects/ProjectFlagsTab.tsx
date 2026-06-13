@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, ToggleRight } from 'lucide-react';
-import { useProjectFlags, useCreateFeatureFlag, useToggleFeatureFlag, useUpdateFlagPrivacy } from '@/api/queries';
+import { Plus, ToggleRight, Trash2 } from 'lucide-react';
+import { useProjectFlags, useCreateFeatureFlag, useToggleFeatureFlag, useUpdateFlagPrivacy, useDeleteFeatureFlag } from '@/api/queries';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -24,10 +24,14 @@ export function ProjectFlagsTab({ project }: ProjectFlagsTabProps) {
   const createFlag = useCreateFeatureFlag(project.id);
   const toggleFlag = useToggleFeatureFlag(project.id);
   const updatePrivacy = useUpdateFlagPrivacy(project.id);
+  const deleteFlag = useDeleteFeatureFlag(project.id);
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [newFlagKey, setNewFlagKey] = useState('');
   const [isCreating, setIsCreating] = useState(false);
+
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [flagToDelete, setFlagToDelete] = useState<string | null>(null);
 
   const canEditFlags = project.userRole === ProjectRole.Owner || project.userRole === ProjectRole.Admin || project.userRole === ProjectRole.Editor;
 
@@ -46,6 +50,23 @@ export function ProjectFlagsTab({ project }: ProjectFlagsTabProps) {
       toast.error('Failed to create flag. It might already exist.');
     } finally {
       setIsCreating(false);
+    }
+  };
+
+  const confirmDeleteFlag = (flagKey: string) => {
+    setFlagToDelete(flagKey);
+    setIsDeleteOpen(true);
+  };
+
+  const handleDeleteExecute = async () => {
+    if (!flagToDelete) return;
+    try {
+      await deleteFlag.mutateAsync(flagToDelete);
+      setIsDeleteOpen(false);
+      setFlagToDelete(null);
+      toast.success('Feature flag globally deleted');
+    } catch {
+      toast.error('Failed to delete feature flag');
     }
   };
 
@@ -69,16 +90,20 @@ export function ProjectFlagsTab({ project }: ProjectFlagsTabProps) {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-end">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight">Feature Flags</h2>
+          <p className="text-muted-foreground">Manage feature flags for this project.</p>
+        </div>
         {canEditFlags && (
           <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
             <DialogTrigger asChild>
               <Button>
                 <Plus className="mr-2 h-4 w-4" />
-                New Flags
+                New Flag
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="border-border/40 bg-zinc-950">
               <DialogHeader>
                 <DialogTitle>Create Feature Flag</DialogTitle>
                 <DialogDescription>
@@ -105,7 +130,7 @@ export function ProjectFlagsTab({ project }: ProjectFlagsTabProps) {
         )}
       </div>
 
-      <Card className="border-border/40 overflow-hidden">
+      <Card className="border-border/40 overflow-hidden bg-zinc-950/20">
         <Table wrapperClassName="max-h-[600px] overflow-auto">
           <TableHeader className="sticky top-0 bg-background z-10 h-[41px]">
             <TableRow className="hover:bg-transparent border-border/40 shadow-sm h-10">
@@ -177,10 +202,28 @@ export function ProjectFlagsTab({ project }: ProjectFlagsTabProps) {
                     );
                   })}
 
-                  <TableCell className="text-right py-2">
-                    <Button variant="ghost" size="sm" className="h-8">
-                      Manage
-                    </Button>
+                  <TableCell className="text-right py-2" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex items-center justify-end gap-3">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 px-3 text-xs font-medium"
+                        onClick={() => navigate(`/projects/${project.id}/flags/${flag.key}`)}
+                      >
+                        Manage
+                      </Button>
+                      {canEditFlags && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-md"
+                          onClick={() => confirmDeleteFlag(flag.key)}
+                          title="Delete Flag"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
                   </TableCell>
                 </TableRow>
               ))
@@ -188,6 +231,23 @@ export function ProjectFlagsTab({ project }: ProjectFlagsTabProps) {
           </TableBody>
         </Table>
       </Card>
+
+      <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
+        <DialogContent className="border-border/40 bg-zinc-950">
+          <DialogHeader>
+            <DialogTitle className="text-destructive">Delete Feature Flag</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to globally delete this flag? This will instantly remove it from ALL environments and cascaded rules. SDK evaluations will stop receiving this flag.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="mt-4">
+            <Button variant="outline" onClick={() => setIsDeleteOpen(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={handleDeleteExecute} disabled={deleteFlag.isPending}>
+              {deleteFlag.isPending ? 'Deleting...' : 'Delete Globally'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

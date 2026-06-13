@@ -67,7 +67,7 @@ Evaluate users against nested **AND/OR** rule groups using built-in operators:
 * **Incremental Rollouts (A/B Testing):** Deterministic percentage-based rollouts using FNV-1a hashing ensures a user consistently receives the same flag state.
 
 ### 📊 High-Throughput Metrics Ingestion
-The SDK automatically batches feature evaluations (True/False exposure counts) and flushes them to the server every 10 seconds. The API ingests these batches via `System.Threading.Channels` and background workers process them into SQL via `ExecuteUpdateAsync`, easily handling **47,000+ RPS** without bottlenecking the database.
+The SDK automatically batches feature evaluations (True/False exposure counts) and flushes them to the server every 10 seconds. The API ingests these batches via `System.Threading.Channels` and background workers process them into SQL via `ExecuteSqlAsync` with `unnest` arrays, easily handling **tens of thousands of RPS** without bottlenecking the database or risking deadlocks.
 
 ### 🔐 Enterprise Security & Multi-Tenancy
 * **RBAC:** Built-in Identity with Owner, Admin, Editor, and Viewer roles scoped per project.
@@ -107,7 +107,7 @@ if (client.isEnabled(Flags.NewCheckoutFlow)) {
 // Program.cs
 builder.Services.AddToggleMeshClient(options => 
 {
-    options.EndpointUrl = "https://api.togglemesh.yourcompany.com";
+    options.BaseUrl = "https://api.togglemesh.yourcompany.com";
     options.ApiKey = "tm_your_environment_api_key_here";
 });
 
@@ -146,4 +146,4 @@ if (_toggleMesh.IsEnabled("beta-feature", contextObject: userContext))
 * **Backend:** C#, .NET 10, FastEndpoints, EF Core, SignalR
 * **Infrastructure:** PostgreSQL, Redis, Docker Compose
 * **Frontend:** React, Vite, TypeScript, Tailwind CSS, Shadcn UI
-* **Quality Assurance:** `Testcontainers` for true E2E Integration Testing, `FakeTimeProvider` for deterministic async testing, `k6` for load testing.
+* **Quality Assurance:** `Testcontainers` for Integration Testing, `FakeTimeProvider` for deterministic async testing, `k6` for load testing.

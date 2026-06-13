@@ -13,7 +13,10 @@ public class RuleEngine : IRuleEngine
         _operators = operators.ToDictionary(o => o.Name, o => o, StringComparer.OrdinalIgnoreCase);
     }
 
-    public bool Evaluate<TAccessor>(CompiledRuleGroup[] groups, ref EvaluationContext<TAccessor> context) where TAccessor : IContextAccessor
+    public bool Evaluate<TAccessor>(
+        CompiledRuleGroup[] groups, 
+        ref EvaluationContext<TAccessor> context) 
+        where TAccessor : IContextAccessor
     {
         if (groups.Length == 0)
             return true;
@@ -28,7 +31,7 @@ public class RuleEngine : IRuleEngine
                 var rule = rules[j];
 
                 if (context.TryGetValue(rule.Attribute, out var userValue) &&
-                    rule.Operator.Evaluate(userValue!, rule.Value))
+                    rule.Operator.Evaluate(userValue!, rule.CompiledValue))
                     continue;
 
                 groupPassed = false;
@@ -50,11 +53,14 @@ public class RuleEngine : IRuleEngine
         return rules
             .GroupBy(x => x.GroupId)
             .Select(g => new CompiledRuleGroup(
-                g.Select(r => new CompiledRule(
-                    r.Attribute,
-                    _operators.GetValueOrDefault(r.Operator) ?? FalseOperator.Instance, 
-                    r.Value)
-                ).ToArray())
+                g.Select(r =>
+                {
+                    var op = _operators.GetValueOrDefault(r.Operator) ?? FalseOperator.Instance;
+                    return new CompiledRule(
+                        r.Attribute,
+                        op,
+                        op.Compile(r.Value));
+                }).ToArray())
             ).ToArray();
     }
     
@@ -65,7 +71,8 @@ public class RuleEngine : IRuleEngine
         private FalseOperator() { }
         
         public string Name => "False";
-
-        public bool Evaluate(string userValue, string ruleValue) => false;
+        
+        public object? Compile(string ruleValue) => null;
+        public bool Evaluate(string userValue, object? compiledRuleValue) => false;
     }
 }

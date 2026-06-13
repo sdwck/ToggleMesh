@@ -1,4 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using ToggleMesh.API.Extensions;
 using ToggleMesh.API.Infrastructure;
 using ToggleMesh.API.Persistence;
 
@@ -17,7 +18,7 @@ public class GetFlagsEndpoint : ToggleEndpointWithoutRequest<List<ProjectFlagDto
     {
         Get("/projects/{projectId}/flags");
         Version(1);
-        Policies($"Permission:{Auth.Models.Permissions.FlagsView}");
+        this.RequirePermission(Auth.Models.Permissions.FlagsView);
     }
 
     public override async Task HandleAsync(CancellationToken ct)

@@ -126,4 +126,23 @@ public class FlagsEndpointsTests : IClassFixture<TestWebApplicationFactory>
         receivedFlag.Key.Should().Be(flagKey);
         receivedFlag.IsEnabled.Should().BeTrue();
     }
+
+    [Fact]
+    public async Task DeleteFlag_WithValidData_ShouldReturn204NoContent()
+    {
+        // Arrange
+        var (projectId, _, _) = await SeedEnvironmentAsync();
+        var flagKey = "to_delete_flag";
+        await _client.PostAsJsonAsync($"/api/v1/projects/{projectId}/flags", new CreateFlagRequest { Key = flagKey });
+
+        // Act
+        var deleteResponse = await _client.DeleteAsync($"/api/v1/projects/{projectId}/flags/{flagKey}");
+
+        // Assert
+        deleteResponse.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        db.FeatureFlags.Any(f => f.ProjectId == projectId && f.Key == flagKey).Should().BeFalse();
+    }
 }

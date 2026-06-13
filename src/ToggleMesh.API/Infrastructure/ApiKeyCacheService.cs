@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Hybrid;
 using StackExchange.Redis;
 using ToggleMesh.API.Features.Projects;
 using ToggleMesh.API.Infrastructure.Security;
@@ -9,80 +10,83 @@ namespace ToggleMesh.API.Infrastructure;
 
 public class ApiKeyCacheService : IApiKeyCacheService
 {
+    private const string InvalidationChannel = "cache-invalidation:env";
+
+    private static readonly RedisChannel InvalidationRedisChannel =
+        RedisChannel.Literal(InvalidationChannel);
+
     private readonly AppDbContext _db;
     private readonly IConnectionMultiplexer _redis;
+    private readonly HybridCache _cache;
     private readonly TimeSpan _cacheTtl = TimeSpan.FromMinutes(5);
 
-    public ApiKeyCacheService(AppDbContext db, IConnectionMultiplexer redis)
+    public ApiKeyCacheService(
+        AppDbContext db,
+        IConnectionMultiplexer redis,
+        HybridCache cache)
     {
         _db = db;
         _redis = redis;
+        _cache = cache;
     }
 
     public async Task<CachedKeyInfo?> GetKeyInfoAsync(string apiKey, CancellationToken ct = default)
     {
-        var db = _redis.GetDatabase();
         var keyHash = ApiKeyHasher.Hash(apiKey);
         var cacheKey = $"apikey:{keyHash}";
 
-        var cachedValue = await db.StringGetAsync(cacheKey);
-
-        if (cachedValue.HasValue)
-        {
-            var value = cachedValue.ToString();
-            if (value == "invalid")
-                return null;
-
-            var parts = value.Split(':');
-            if (parts.Length == 2 && Guid.TryParse(parts[0], out var envId) && Enum.TryParse<KeyType>(parts[1], out var keyType))
+        return await _cache.GetOrCreateAsync<CachedKeyInfo?>(
+            cacheKey,
+            async ct1 =>
             {
-                return new CachedKeyInfo(envId, keyType);
-            }
-        }
+                var envKey = await _db.EnvironmentKeys
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(
+                        x => x.KeyHash == keyHash && (x.ExpireOn == null || x.ExpireOn > DateTime.UtcNow), ct1);
 
-        var envKey = await _db.EnvironmentKeys
-            .AsNoTracking()
-            .FirstOrDefaultAsync(x => x.KeyHash == keyHash && (x.ExpireOn == null || x.ExpireOn > DateTime.UtcNow), ct);
+                if (envKey == null)
+                    return null;
 
-        if (envKey == null)
-        {
-            await db.StringSetAsync(cacheKey, "invalid", _cacheTtl);
-            return null;
-        }
+                var info = new CachedKeyInfo(envKey.EnvironmentId, envKey.KeyType);
 
-        var ttl = _cacheTtl;
-        if (envKey.ExpireOn.HasValue)
-        {
-            var timeToExpire = envKey.ExpireOn.Value - DateTime.UtcNow;
-            if (timeToExpire <= TimeSpan.Zero)
-            {
-                await db.StringSetAsync(cacheKey, "invalid", _cacheTtl);
-                return null;
-            }
-            if (timeToExpire < _cacheTtl)
-                ttl = timeToExpire;
-        }
+                if (envKey.ExpireOn.HasValue)
+                {
+                    var timeToExpire = envKey.ExpireOn.Value - DateTime.UtcNow;
+                    if (timeToExpire <= TimeSpan.Zero)
+                        return null;
 
-        var newValue = $"{envKey.EnvironmentId}:{(int)envKey.KeyType}";
-        await db.StringSetAsync(cacheKey, newValue, ttl);
-        
-        return new CachedKeyInfo(envKey.EnvironmentId, envKey.KeyType);
+                    if (timeToExpire < _cacheTtl)
+                        await _cache.SetAsync(cacheKey, info, new HybridCacheEntryOptions { Expiration = timeToExpire },
+                            cancellationToken: ct1);
+                }
+
+                return info;
+            },
+            cancellationToken: ct);
     }
 
-    public async Task RemoveEnvironmentIdAsync(string apiKey, CancellationToken ct = default)
+    public async Task RemoveEnvironmentIdAsync(string keyHash, CancellationToken ct = default)
     {
-        var db = _redis.GetDatabase();
-        var cacheKey = $"apikey:{apiKey}";
-        await db.KeyDeleteAsync(cacheKey);
+        var cacheKey = $"apikey:{keyHash}";
+        await _cache.RemoveAsync(cacheKey, ct);
+
+        var sub = _redis.GetSubscriber();
+        await sub.PublishAsync(
+            InvalidationRedisChannel,
+            cacheKey);
     }
 
-    public async Task SetEnvironmentIdAsync(string apiKey, Guid environmentId, bool isClient = false, CancellationToken ct = default)
+    public async Task SetEnvironmentIdAsync(string keyHash, Guid environmentId, bool isClient = false,
+        CancellationToken ct = default)
     {
-        var db = _redis.GetDatabase();
-        var cacheKey = $"apikey:{apiKey}";
+        var cacheKey = $"apikey:{keyHash}";
         var keyType = isClient ? KeyType.Client : KeyType.Server;
-        var newValue = $"{environmentId}:{(int)keyType}";
-        
-        await db.StringSetAsync(cacheKey, newValue, _cacheTtl);
+        var keyInfo = new CachedKeyInfo(environmentId, keyType);
+
+        await _cache.SetAsync(
+            cacheKey, 
+            keyInfo, 
+            new HybridCacheEntryOptions { Expiration = _cacheTtl }, 
+            cancellationToken: ct);
     }
 }

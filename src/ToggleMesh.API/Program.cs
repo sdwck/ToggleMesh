@@ -5,19 +5,25 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Hybrid;
 using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
 using StackExchange.Redis;
 using ToggleMesh.API.BackgroundServices;
+using ToggleMesh.API.BackgroundServices.Caching;
+using ToggleMesh.API.BackgroundServices.Metrics;
 using ToggleMesh.API.Exceptions;
 using ToggleMesh.API.Features.Auth.Authorization;
 using ToggleMesh.API.Features.Auth.Models;
+using ToggleMesh.API.Features.Client;
 using ToggleMesh.API.Features.Metrics;
 using ToggleMesh.API.Hubs;
 using ToggleMesh.API.Infrastructure;
 using ToggleMesh.API.Infrastructure.Caching;
+using ToggleMesh.API.Infrastructure.Security;
 using ToggleMesh.API.Persistence;
 using ToggleMesh.API.Persistence.Interceptors;
+using ToggleMesh.API.Persistence.Interceptors.Audit;
 using ToggleMesh.Common.Rules;
 using ToggleMesh.Common.Rules.Operators;
 
@@ -49,6 +55,7 @@ builder.Services.AddSingleton<IRuleOperator, SemVerLessThanOperator>();
 builder.Services.AddSingleton<IRuleOperator, SemVerLessThanOrEqualOperator>();
 builder.Services.AddSingleton<IRuleOperator, StartsWithOperator>();
 builder.Services.AddSingleton<IRuleEngine, RuleEngine>();
+builder.Services.AddScoped<ISdkEvaluatorService, SdkEvaluatorService>();
 
 builder.Services.AddScoped<IApiKeyCacheService, ApiKeyCacheService>();
 builder.Services.AddSingleton(TimeProvider.System);
@@ -85,7 +92,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
         options.MapInboundClaims = false;
-        
+
         var jwtSettings = builder.Configuration.GetSection("Jwt");
         options.TokenValidationParameters = new TokenValidationParameters
         {
@@ -97,7 +104,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateIssuerSigningKey = true,
             ValidIssuer = jwtSettings["Issuer"],
             ValidAudience = jwtSettings["Audience"],
-            IssuerSigningKey = ToggleMesh.API.Infrastructure.Security.RsaKeyProvider.GetKey()
+            IssuerSigningKey = RsaKeyProvider.GetKey(builder.Configuration)
         };
     });
 
@@ -118,6 +125,25 @@ builder.Services.AddSingleton<IAuthorizationPolicyProvider, PermissionPolicyProv
 builder.Services.AddScoped<IAuthorizationHandler, PermissionAuthorizationHandler>();
 builder.Services.AddSingleton<ICacheInvalidator, RedisCacheInvalidator>();
 builder.Services.AddHostedService<CacheInvalidationWorker>();
+builder.Services.Scan(x =>
+    x.FromAssemblies(typeof(IAuditAnalyzer).Assembly)
+        .AddClasses(xx => xx.AssignableTo<IAuditAnalyzer>())
+        .AsImplementedInterfaces()
+        .WithSingletonLifetime());
+builder.Services.Scan(x =>
+    x.FromAssemblies(typeof(ICacheInvalidationHandler).Assembly)
+        .AddClasses(xx => xx.AssignableTo<ICacheInvalidationHandler>())
+        .AsImplementedInterfaces()
+        .WithSingletonLifetime());
+builder.Services.AddHybridCache(options =>
+{
+    options.MaximumPayloadBytes = 10 * 1024 * 1024;
+    options.DefaultEntryOptions = new HybridCacheEntryOptions
+    {
+        Expiration = TimeSpan.FromMinutes(10),
+        LocalCacheExpiration = TimeSpan.FromMinutes(5)
+    };
+});
 
 var app = builder.Build();
 

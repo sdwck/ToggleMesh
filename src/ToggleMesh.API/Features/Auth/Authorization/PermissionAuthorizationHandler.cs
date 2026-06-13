@@ -4,24 +4,26 @@ using Microsoft.AspNetCore.Authorization;
 using ToggleMesh.API.Features.Auth.Models;
 using ToggleMesh.API.Features.Projects;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Hybrid;
 using ToggleMesh.API.Persistence;
 using StackExchange.Redis;
 
 namespace ToggleMesh.API.Features.Auth.Authorization;
 
-public record CachedMemberState(ProjectRole Role, Dictionary<Guid, ProjectRole> EnvironmentRoles);
-
 public class PermissionAuthorizationHandler : AuthorizationHandler<PermissionRequirement>
 {
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly AppDbContext _dbContext;
-    private readonly IDatabase _redis;
+    private readonly HybridCache _cache;
 
-    public PermissionAuthorizationHandler(IHttpContextAccessor httpContextAccessor, AppDbContext dbContext, IConnectionMultiplexer redis)
+    public PermissionAuthorizationHandler(
+        IHttpContextAccessor httpContextAccessor, 
+        AppDbContext dbContext, 
+        HybridCache cache)
     {
         _httpContextAccessor = httpContextAccessor;
         _dbContext = dbContext;
-        _redis = redis.GetDatabase();
+        _cache = cache;
     }
 
     protected override async Task HandleRequirementAsync(AuthorizationHandlerContext context, PermissionRequirement requirement)
@@ -57,38 +59,45 @@ public class PermissionAuthorizationHandler : AuthorizationHandler<PermissionReq
 
         if (userIdString == null || !Guid.TryParse(userIdString, out var userId))
             return;
-
-        CachedMemberState memberState;
+        
         var cacheKey = $"project-member-state:{projectId.Value}:{userId}";
-        var cachedStateJson = await _redis.StringGetAsync(cacheKey);
+        var ct = httpContext.RequestAborted;
 
-        if (cachedStateJson.HasValue)
-        {
-            memberState = JsonSerializer.Deserialize<CachedMemberState>(cachedStateJson.ToString())!;
-        }
-        else
-        {
-            var projectMember = await _dbContext.ProjectMembers
-                .AsNoTracking()
-                .Include(pm => pm.EnvironmentRoles)
-                .FirstOrDefaultAsync(pm => pm.ProjectId == projectId.Value && pm.UserId == userId);
+        var memberState = await _cache.GetOrCreateAsync<CachedMemberState?>(
+            cacheKey,
+            async ct1 =>
+            {
+                var projectMember = await _dbContext.ProjectMembers
+                    .AsNoTracking()
+                    .Include(pm => pm.EnvironmentRoles)
+                    .FirstOrDefaultAsync(pm => 
+                        pm.ProjectId == projectId.Value &&
+                        pm.UserId == userId, ct1);
 
-            if (projectMember == null)
-                return;
+                if (projectMember == null)
+                    return null;
 
-            var envRoles = projectMember.EnvironmentRoles.ToDictionary(er => er.EnvironmentId, er => er.Role);
-            memberState = new CachedMemberState(projectMember.Role, envRoles);
-            await _redis.StringSetAsync(cacheKey, JsonSerializer.Serialize(memberState), TimeSpan.FromMinutes(5));
-        }
+                var envRoles = projectMember.EnvironmentRoles.ToDictionary(er => er.EnvironmentId, er => er.Role);
+                return new CachedMemberState(projectMember.Role, envRoles);
+            },
+            new HybridCacheEntryOptions
+            {
+                Expiration = TimeSpan.FromMinutes(5)
+            },
+            cancellationToken: ct
+        );
+        
+        if (memberState == null)
+            return;
 
         var effectiveRole = memberState.Role;
-        if (environmentId.HasValue && memberState.EnvironmentRoles != null && memberState.Role != ProjectRole.Owner && memberState.Role != ProjectRole.Admin)
-        {
+        // ReSharper disable once ConditionIsAlwaysTrueOrFalseAccordingToNullableAPIContract
+        if (environmentId.HasValue 
+            && memberState.EnvironmentRoles != null 
+            && memberState.Role != ProjectRole.Owner 
+            && memberState.Role != ProjectRole.Admin)
             if (memberState.EnvironmentRoles.TryGetValue(environmentId.Value, out var envRoleOverride))
-            {
                 effectiveRole = envRoleOverride;
-            }
-        }
 
         var hasPermission = false;
         switch (effectiveRole)
@@ -112,24 +121,5 @@ public class PermissionAuthorizationHandler : AuthorizationHandler<PermissionReq
 
         if (hasPermission)
             context.Succeed(requirement);
-    }
-}
-
-public class PermissionPolicyProvider : DefaultAuthorizationPolicyProvider
-{
-    public PermissionPolicyProvider(Microsoft.Extensions.Options.IOptions<AuthorizationOptions> options) : base(options) { }
-
-    public override async Task<AuthorizationPolicy?> GetPolicyAsync(string policyName)
-    {
-        if (policyName.StartsWith("Permission:", StringComparison.OrdinalIgnoreCase))
-        {
-            var permission = policyName.Substring("Permission:".Length);
-            var policy = new AuthorizationPolicyBuilder()
-                .AddRequirements(new PermissionRequirement(permission))
-                .Build();
-            return policy;
-        }
-
-        return await base.GetPolicyAsync(policyName);
     }
 }

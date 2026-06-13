@@ -8,7 +8,7 @@ public class ToggleMeshOptions
     /// Base URL of the ToggleMesh API.
     /// </summary>
     [Required]
-    public string EndpointUrl { get; set; } = string.Empty;
+    public string BaseUrl { get; set; } = string.Empty;
     /// <summary>
     /// API key for authenticating with the ToggleMesh API.
     /// This should be the API key associated with the environment you want to fetch flags for.

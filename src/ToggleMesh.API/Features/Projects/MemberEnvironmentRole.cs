@@ -1,6 +1,8 @@
+using ToggleMesh.API.Infrastructure;
+
 namespace ToggleMesh.API.Features.Projects;
 
-public class MemberEnvironmentRole
+public class MemberEnvironmentRole : IHasEnvironment
 {
     public Guid Id { get; set; }
     
