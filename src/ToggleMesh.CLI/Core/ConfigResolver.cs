@@ -30,7 +30,7 @@ public static class ConfigResolver
             builder.AddJsonFile(LocalConfigPath, optional: true);
 
         var config = builder
-            .AddEnvironmentVariables()
+            .AddEnvironmentVariables(prefix: "TOGGLEMESH__")
             .Build();
 
         var apiKey = config["ToggleMesh:ApiKey"] ?? config["ApiKey"];
