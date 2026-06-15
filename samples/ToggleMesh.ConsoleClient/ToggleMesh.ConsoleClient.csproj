@@ -8,7 +8,7 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\..\src\ToggleMesh.SDK\ToggleMesh.SDK.csproj" />
+      <ProjectReference Include="..\..\sdks\dotnet\ToggleMesh.SDK\ToggleMesh.SDK.csproj" />
     </ItemGroup>
 
     <ItemGroup>

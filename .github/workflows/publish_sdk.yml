@@ -1,0 +1,42 @@
+﻿name: Release & Publish SDK
+
+on:
+  push:
+    tags:
+      - 'sdk-v*'
+
+permissions:
+  id-token: write
+  contents: write
+
+jobs:
+  publish-nuget:
+    name: Pack and Publish SDK to NuGet
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Build SDK Project
+        run: dotnet build sdks/dotnet/ToggleMesh.SDK/ToggleMesh.SDK.csproj -c Release
+
+      - name: Pack SDK NuGet Package
+        run: dotnet pack sdks/dotnet/ToggleMesh.SDK/ToggleMesh.SDK.csproj -c Release --no-build -o ./artifacts
+
+      - name: NuGet Login
+        uses: NuGet/login@v1
+        id: login
+        with:
+          user: sdwcktarakanov
+      
+      - name: Push to NuGet
+        run: |
+          dotnet nuget push ./artifacts/*.nupkg \
+            --api-key ${{ steps.login.outputs.NUGET_API_KEY }} \
+            --source https://api.nuget.org/v3/index.json \
+            --skip-duplicate
