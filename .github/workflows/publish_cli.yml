@@ -1,4 +1,4 @@
-﻿name: Publish CLI to NuGet
+﻿name: Release & Publish CLI
 
 on:
   push:
@@ -7,21 +7,22 @@ on:
 
 permissions:
   id-token: write
-  contents: read
+  contents: write
 
 jobs:
-  publish:
+  publish-nuget:
+    name: Pack and Publish to NuGet
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout Source Code
         uses: actions/checkout@v4
 
-      - name: Setup .NET
+      - name: Setup .NET SDK
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
 
-      - name: Pack CLI
+      - name: Pack CLI NuGet Package
         run: dotnet pack src/ToggleMesh.CLI/ToggleMesh.CLI.csproj -c Release -o ./artifacts
 
       - name: NuGet Login
@@ -29,6 +30,73 @@ jobs:
         id: login
         with:
           user: sdwcktarakanov
-
+          
       - name: Push to NuGet
-        run: dotnet nuget push ./artifacts/*.nupkg --api-key ${{ steps.login.outputs.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
+        run: |
+          dotnet nuget push ./artifacts/*.nupkg \
+            --api-key ${{ steps.login.outputs.NUGET_API_KEY }} \
+            --source https://api.nuget.org/v3/index.json \
+            --skip-duplicate
+          
+  build-and-release-native:
+    name: Build Native AOT for ${{ matrix.rid }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            rid: win-x64
+            artifact_name: togglemesh-windows-amd64
+          - os: ubuntu-latest
+            rid: linux-x64
+            artifact_name: togglemesh-linux-amd64
+          - os: macos-latest
+            rid: osx-arm64
+            artifact_name: togglemesh-macos-arm64
+            
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Install Linux Build Dependencies
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang zlib1g-dev
+
+      - name: Restore CLI Dependencies
+        run: dotnet restore src/ToggleMesh.CLI/ToggleMesh.CLI.csproj -r ${{ matrix.rid }}
+
+      - name: Publish Native AOT Binary
+        shell: bash
+        run: |
+          dotnet publish src/ToggleMesh.CLI/ToggleMesh.CLI.csproj \
+            -c Release \
+            -r ${{ matrix.rid }} \
+            --no-restore \
+            -o ./publish
+
+      - name: Pack Artifacts (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          Compress-Archive -Path ./publish/ToggleMesh.CLI.exe -DestinationPath ./${{ matrix.artifact_name }}.zip
+
+      - name: Pack Artifacts (Unix)
+        if: matrix.os != 'windows-latest'
+        run: |
+          chmod +x ./publish/ToggleMesh.CLI
+          tar -czf ./${{ matrix.artifact_name }}.tar.gz -C ./publish ToggleMesh.CLI
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            togglemesh-*.zip
+            togglemesh-*.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

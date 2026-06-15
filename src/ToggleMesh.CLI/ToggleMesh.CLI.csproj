@@ -31,4 +31,9 @@
       <PackageReference Include="Spectre.Console.Cli" Version="0.55.0" />
     </ItemGroup>
 
+    <ItemGroup>
+        <TrimmerRootAssembly Include="ToggleMesh.CLI" />
+        <TrimmerRootAssembly Include="Spectre.Console.Cli" />
+    </ItemGroup>
+
 </Project>
