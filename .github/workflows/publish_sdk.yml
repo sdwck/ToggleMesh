@@ -26,7 +26,7 @@ jobs:
         run: dotnet build sdks/dotnet/ToggleMesh.SDK/ToggleMesh.SDK.csproj -c Release
 
       - name: Pack SDK NuGet Package
-        run: dotnet pack sdks/dotnet/ToggleMesh.SDK/ToggleMesh.SDK.csproj -c Release --no-build -o ./artifacts
+        run: dotnet pack sdks/dotnet/ToggleMesh.SDK/ToggleMesh.SDK.csproj -c Release --no-build -o ./artifacts -p:BuildProjectReferences=false
 
       - name: NuGet Login
         uses: NuGet/login@v1

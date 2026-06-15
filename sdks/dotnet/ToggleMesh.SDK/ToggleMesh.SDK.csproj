@@ -6,7 +6,7 @@
         <Nullable>enable</Nullable>
         <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
         <PackageId>ToggleMesh.SDK</PackageId>
-        <Version>0.1.0</Version>
+        <Version>0.1.1</Version>
         <Authors>sdwck</Authors>
         <Company>ToggleMesh</Company>
         <Description>Official high-performance, zero-allocation real-time C# Client SDK for ToggleMesh Feature Flag Engine.</Description>
@@ -16,6 +16,7 @@
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
         <PackageTags>feature-flags;feature-toggles;togglemesh;high-performance;real-time;signalr;polly</PackageTags>
         <PackageReadmeFile>README.md</PackageReadmeFile>
+        <TargetsForTfmSpecificBuildOutput>$(TargetsForTfmSpecificBuildOutput);CopyProjectReferencesToPackage</TargetsForTfmSpecificBuildOutput>
     </PropertyGroup>
 
     <ItemGroup>
@@ -45,5 +46,11 @@
     <ItemGroup>
       <ProjectReference Include="..\..\..\src\ToggleMesh.Common\ToggleMesh.Common.csproj" />
     </ItemGroup>
+
+    <Target Name="CopyProjectReferencesToPackage" DependsOnTargets="ResolveReferences">
+        <ItemGroup>
+            <BuildOutputInPackage Include="@(ReferenceCopyLocalPaths->WithMetadataValue('ReferenceSourceTarget', 'ProjectReference'))" />
+        </ItemGroup>
+    </Target>
 
 </Project>
