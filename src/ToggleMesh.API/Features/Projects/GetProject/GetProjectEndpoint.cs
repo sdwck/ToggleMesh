@@ -64,6 +64,7 @@ public class GetProjectEndpoint : ToggleEndpointWithoutRequest<GetProjectRespons
             Id = project.Id,
             Name = project.Name,
             UserRole = projectMember.Role,
+            CreatedAt = project.CreatedAt,
             Environments = visibleEnvironments.Select(e => 
             {
                 var effectiveRole = projectMember.Role;

@@ -19,6 +19,7 @@ public class SdkEvaluateFlagsEndpoint : ToggleEndpoint<SdkEvaluateFlagsRequest, 
         Version(1);
         AllowAnonymous();
         PreProcessor<ApiKeyPreProcessor<SdkEvaluateFlagsRequest>>();
+        Options(x => x.RequireCors("PublicSdk"));
     }
 
     public override async Task HandleAsync(SdkEvaluateFlagsRequest req, CancellationToken ct)

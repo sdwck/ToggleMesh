@@ -35,6 +35,7 @@ export interface Environment {
 export interface ProjectDetails {
     id: string;
     name: string;
+    createdAt: string;
     environments: Environment[];
     userRole: ProjectRole;
 }
@@ -151,7 +152,6 @@ export interface UpdateFlagRequest {
     isEnabled: boolean;
     rolloutPercentage: number | null;
     rules: RuleDto[];
-    tags: string[];
 }
 
 export interface UpdateMemberRequest {

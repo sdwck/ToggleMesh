@@ -2,9 +2,9 @@
 using ToggleMesh.API.Features.Projects;
 using ToggleMesh.API.Infrastructure;
 
-namespace ToggleMesh.API.Features.Metrics.Ingest;
+namespace ToggleMesh.API.Features.Metrics.SdkIngest;
 
-public class IngestMetricsRequest : ISdkRequest
+public class SdkIngestMetricsRequest : ISdkRequest
 {
     [HideFromDocs]
     public Guid EnvId { get; set; }

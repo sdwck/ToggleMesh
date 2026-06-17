@@ -1,5 +1,5 @@
 import {Outlet, NavLink, useLocation, useParams, Link, useNavigate} from 'react-router-dom';
-import {LogOut, Flag, Network, Users, FileText, ArrowLeft, Settings} from 'lucide-react';
+import {LogOut, Flag, Network, Users, FileText, ArrowLeft, Settings, ToggleRight} from 'lucide-react';
 import {Avatar, AvatarFallback} from '@/components/ui/avatar';
 import {Badge} from '@/components/ui/badge';
 import {
@@ -195,6 +195,19 @@ export function AppLayout() {
                             >
                                 <Settings className="h-4 w-4"/>
                                 Settings
+                            </NavLink>
+                            <NavLink
+                                to={`/projects/${projectId}/playground`}
+                                className={({isActive}) =>
+                                    `flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                                        isActive
+                                            ? 'bg-primary/10 text-primary'
+                                            : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
+                                    }`
+                                }
+                            >
+                                <ToggleRight className="h-4 w-4"/>
+                                Playground
                             </NavLink>
                         </nav>
                     </aside>

@@ -3,7 +3,6 @@ import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Plus, Trash2, Settings2 } from 'lucide-react';
-import { useUpdateFeatureFlag } from '@/api/queries';
 import type { FeatureFlag } from '@/api/types';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
@@ -14,6 +13,7 @@ import { Slider } from '@/components/ui/slider';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
+import { useUpdateFeatureFlag, useRuleOperators } from '@/api/queries';
 
 const ruleSchema = z.object({
     groupId: z.number(),
@@ -31,11 +31,6 @@ const formSchema = z.object({
 
 type FormValues = z.infer<typeof formSchema>;
 
-const operators = [
-    'Equals', 'NotEquals', 'Contains', 'StartsWith', 'EndsWith',
-    'GreaterThan', 'LessThan', 'InList', 'Regex', 'SemVerEqual', 'SemVerGreaterThan'
-];
-
 interface FeatureFlagEditorProps {
     flag: FeatureFlag | null;
     projectId: string;
@@ -46,6 +41,9 @@ interface FeatureFlagEditorProps {
 
 export function FeatureFlagEditor({ flag, projectId, envId, open, onOpenChange }: FeatureFlagEditorProps) {
     const updateFlag = useUpdateFeatureFlag(projectId, envId, flag?.key || '');
+
+    const { data: dynamicOperators, isLoading: isLoadingOperators } = useRuleOperators();
+    const operators = dynamicOperators || [];
 
     const form = useForm<FormValues>({
         resolver: zodResolver(formSchema),
@@ -79,7 +77,7 @@ export function FeatureFlagEditor({ flag, projectId, envId, open, onOpenChange }
             await updateFlag.mutateAsync({
                 isEnabled: values.isEnabled,
                 rolloutPercentage: values.isRolloutEnabled ? values.rolloutPercentage : null,
-                rules: values.rules,
+                rules: values.rules
             });
             toast.success('Feature flag updated');
             onOpenChange(false);
@@ -196,6 +194,7 @@ export function FeatureFlagEditor({ flag, projectId, envId, open, onOpenChange }
                                                             <Select
                                                                 value={form.watch(`rules.${field.index}.operator`)}
                                                                 onValueChange={(val) => form.setValue(`rules.${field.index}.operator`, val)}
+                                                                disabled={isLoadingOperators}
                                                             >
                                                                 <SelectTrigger>
                                                                     <SelectValue placeholder="Operator" />

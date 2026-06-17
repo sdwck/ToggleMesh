@@ -93,7 +93,6 @@ public class CloneEnvironmentTests : IClassFixture<TestWebApplicationFactory>
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.NoContent);
 
-        // Ensure we load fresh from DB
         db.ChangeTracker.Clear();
 
         var targetStates = await db.FlagEnvironmentStates

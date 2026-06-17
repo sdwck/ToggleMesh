@@ -135,6 +135,13 @@ builder.Services.AddCors(options =>
             .AllowAnyMethod()
             .AllowCredentials();
     });
+    
+    options.AddPolicy("PublicSdk", policy =>
+    {
+        policy.AllowAnyOrigin()
+            .AllowAnyHeader()
+            .AllowAnyMethod();
+    });
 });
 
 builder.Services.AddAuthorization();

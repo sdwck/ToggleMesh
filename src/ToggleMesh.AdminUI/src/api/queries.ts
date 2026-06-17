@@ -520,3 +520,14 @@ export const useUpdateFlagMetadata = (projectId: string, flagKey: string) => {
         },
     });
 };
+
+export const useRuleOperators = () => {
+    return useQuery({
+        queryKey: ['flags', 'operators'],
+        queryFn: async () => {
+            const { data } = await api.get<string[]>('/flags/operators');
+            return data;
+        },
+        staleTime: Infinity,
+    });
+};

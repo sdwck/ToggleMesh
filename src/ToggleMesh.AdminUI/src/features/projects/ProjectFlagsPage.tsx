@@ -1,4 +1,4 @@
-import {useParams} from 'react-router-dom';
+import {useParams, useSearchParams} from 'react-router-dom';
 import {useCreateFeatureFlag, useProjectDetails, useProjectTags} from '@/api/queries';
 import {ProjectFlagsTab} from './ProjectFlagsTab';
 import {Plus, Search, Tag} from "lucide-react";
@@ -36,10 +36,20 @@ export function ProjectFlagsPage() {
     const [isCreateOpen, setIsCreateOpen] = useState(false);
     const [isCreating, setIsCreating] = useState(false);
 
+    const [searchParams] = useSearchParams();
+    const initialTag = searchParams.get('tag');
+
     const [inputValue, setInputValue] = useState('');
     const [search, setSearch] = useState('');
-    const [selectedTags, setSelectedTags] = useState<string[]>([]);
+    const [selectedTags, setSelectedTags] = useState<string[]>(initialTag ? [initialTag] : []);
     const [sortBy, setSortBy] = useState<string>('updated-desc');
+
+    useEffect(() => {
+        const tag = searchParams.get('tag');
+        if (tag) {
+            setSelectedTags([tag]);
+        }
+    }, [searchParams]);
 
     useEffect(() => {
         const handler = setTimeout(() => {

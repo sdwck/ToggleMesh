@@ -12,6 +12,7 @@ import { EnvironmentDetailsPage } from '@/features/environments/EnvironmentDetai
 import { ProjectSettingsPage } from '@/features/projects/ProjectSettingsPage';
 import { AccountSettingsPage } from '@/features/auth/AccountSettingsPage';
 import { GlobalError } from '@/components/GlobalError';
+import { PlaygroundPage } from "@/PlaygroundPage.tsx";
 
 export const router = createBrowserRouter([
     {
@@ -72,6 +73,10 @@ export const router = createBrowserRouter([
             {
                 path: 'projects/:projectId/flags/:flagKey',
                 element: <ProjectFlagDetailsPage />,
+            },
+            {
+                path: 'projects/:projectId/playground',
+                element: <PlaygroundPage />,
             },
         ],
     },

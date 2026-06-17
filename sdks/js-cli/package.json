@@ -1,0 +1,28 @@
+{
+  "name": "togglemesh",
+  "version": "1.0.4",
+  "description": "Enterprise-grade real-time feature flag CLI for ToggleMesh.",
+  "keywords": [
+    "togglemesh",
+    "cli",
+    "feature-flags",
+    "code-generation"
+  ],
+  "homepage": "https://github.com/sdwck/ToggleMesh#readme",
+  "bugs": {
+    "url": "https://github.com/sdwck/ToggleMesh/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sdwck/ToggleMesh.git"
+  },
+  "license": "MIT",
+  "author": "sdwck <sdwcktarakanov@gmail.com>",
+  "type": "module",
+  "bin": {
+    "togglemesh": "./bin/index.js"
+  },
+  "files": [
+    "bin"
+  ]
+}

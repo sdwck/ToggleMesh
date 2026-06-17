@@ -2,13 +2,13 @@
 using ToggleMesh.API.Features.Projects;
 using ToggleMesh.API.Infrastructure;
 
-namespace ToggleMesh.API.Features.Metrics.Ingest;
+namespace ToggleMesh.API.Features.Metrics.SdkIngest;
 
-public class IngestMetricsEndpoint : ToggleEndpoint<IngestMetricsRequest>
+public class SdkIngestMetricsEndpoint : ToggleEndpoint<SdkIngestMetricsRequest>
 {
     private readonly Channel<MetricQueueItem> _channel;
 
-    public IngestMetricsEndpoint(Channel<MetricQueueItem> channel)
+    public SdkIngestMetricsEndpoint(Channel<MetricQueueItem> channel)
     {
         _channel = channel;
     }
@@ -18,10 +18,11 @@ public class IngestMetricsEndpoint : ToggleEndpoint<IngestMetricsRequest>
         Post("/sdk/metrics");
         Version(1);
         AllowAnonymous();
-        PreProcessor<ApiKeyPreProcessor<IngestMetricsRequest>>();
+        PreProcessor<ApiKeyPreProcessor<SdkIngestMetricsRequest>>();
+        Options(x => x.RequireCors("PublicSdk"));
     }
 
-    public override async Task HandleAsync(IngestMetricsRequest req, CancellationToken ct)
+    public override async Task HandleAsync(SdkIngestMetricsRequest req, CancellationToken ct)
     {
         if (req.Metrics.Count == 0)
         {
