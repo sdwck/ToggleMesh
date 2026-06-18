@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using ToggleMesh.API.Extensions;
 using ToggleMesh.API.Persistence;
 using ToggleMesh.API.Infrastructure;
+using ToggleMesh.API.Infrastructure.Endpoints;
 
 namespace ToggleMesh.API.Features.Projects.GetProject;
 
@@ -25,12 +26,9 @@ public class GetProjectEndpoint : ToggleEndpointWithoutRequest<GetProjectRespons
     {
         var projectId = Route<Guid>("projectId");
 
-        var projectMember = await _db.ProjectMembers
-            .AsNoTracking()
-            .Include(pm => pm.EnvironmentRoles)
-            .FirstOrDefaultAsync(pm => pm.ProjectId == projectId && pm.UserId == UserId, ct);
+        (var role, var envRoles) = await _db.GetProjectRoleAndEnvOverridesAsync(projectId, UserId, ct);
 
-        if (projectMember == null)
+        if (role == null)
         {
             await Send.NotFoundAsync(ct);
             return;
@@ -47,12 +45,10 @@ public class GetProjectEndpoint : ToggleEndpointWithoutRequest<GetProjectRespons
             await Send.NotFoundAsync(ct);
             return;
         }
-
-        var envRoles = projectMember.EnvironmentRoles.ToDictionary(x => x.EnvironmentId, x => x.Role);
         
         var visibleEnvironments = project.Environments.Where(env => 
         {
-            var effectiveRole = projectMember.Role;
+            var effectiveRole = role.Value;
             if (envRoles.TryGetValue(env.Id, out var overrideRole))
                 effectiveRole = overrideRole;
                 
@@ -63,11 +59,11 @@ public class GetProjectEndpoint : ToggleEndpointWithoutRequest<GetProjectRespons
         {
             Id = project.Id,
             Name = project.Name,
-            UserRole = projectMember.Role,
+            UserRole = role.Value,
             CreatedAt = project.CreatedAt,
             Environments = visibleEnvironments.Select(e => 
             {
-                var effectiveRole = projectMember.Role;
+                var effectiveRole = role.Value;
                 if (envRoles.TryGetValue(e.Id, out var overrideRole))
                     effectiveRole = overrideRole;
                     

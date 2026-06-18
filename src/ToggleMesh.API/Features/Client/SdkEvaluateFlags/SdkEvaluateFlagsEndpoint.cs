@@ -1,6 +1,7 @@
 using ToggleMesh.API.Features.Client.SdkEvaluateFlag;
 using ToggleMesh.API.Features.Projects;
 using ToggleMesh.API.Infrastructure;
+using ToggleMesh.API.Infrastructure.Endpoints;
 
 namespace ToggleMesh.API.Features.Client.SdkEvaluateFlags;
 
@@ -20,6 +21,7 @@ public class SdkEvaluateFlagsEndpoint : ToggleEndpoint<SdkEvaluateFlagsRequest, 
         AllowAnonymous();
         PreProcessor<ApiKeyPreProcessor<SdkEvaluateFlagsRequest>>();
         Options(x => x.RequireCors("PublicSdk"));
+        Options(x => x.RequireRateLimiting("sdk"));
     }
 
     public override async Task HandleAsync(SdkEvaluateFlagsRequest req, CancellationToken ct)

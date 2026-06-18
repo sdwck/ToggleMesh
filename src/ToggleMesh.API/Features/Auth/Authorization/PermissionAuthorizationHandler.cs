@@ -67,6 +67,24 @@ public class PermissionAuthorizationHandler : AuthorizationHandler<PermissionReq
             cacheKey,
             async ct1 =>
             {
+                var project = await _dbContext.Projects
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(p => p.Id == projectId.Value, ct1);
+                
+                if (project == null) 
+                    return null;
+
+                var orgMember = await _dbContext.OrganizationMembers
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(om => om.OrganizationId == project.OrganizationId && om.UserId == userId, ct1);
+
+                if (orgMember == null) 
+                    return null;
+
+                if (orgMember.Role == Organizations.OrganizationRole.Admin)
+                    return new CachedMemberState(ProjectRole.Owner, new Dictionary<Guid, ProjectRole>());
+                
+
                 var projectMember = await _dbContext.ProjectMembers
                     .AsNoTracking()
                     .Include(pm => pm.EnvironmentRoles)

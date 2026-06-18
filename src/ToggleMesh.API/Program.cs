@@ -1,4 +1,6 @@
 using System.IdentityModel.Tokens.Jwt;
+using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.RateLimiting;
 using System.Threading.Channels;
 using FastEndpoints;
 using Microsoft.AspNetCore.Authentication;
@@ -11,6 +13,7 @@ using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
 using StackExchange.Redis;
 using ToggleMesh.API.BackgroundServices;
+using ToggleMesh.API.BackgroundServices.Auth;
 using ToggleMesh.API.BackgroundServices.Caching;
 using ToggleMesh.API.BackgroundServices.Metrics;
 using ToggleMesh.API.BackgroundServices.Webhooks;
@@ -24,6 +27,7 @@ using ToggleMesh.API.Hubs;
 using ToggleMesh.API.Infrastructure;
 using ToggleMesh.API.Infrastructure.Caching;
 using ToggleMesh.API.Infrastructure.Security;
+using ToggleMesh.API.Infrastructure.Sse;
 using ToggleMesh.API.Persistence;
 using ToggleMesh.API.Persistence.Interceptors;
 using ToggleMesh.API.Persistence.Interceptors.Audit;
@@ -65,11 +69,13 @@ builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddMemoryCache();
 builder.Services.AddFastEndpoints();
 builder.Services.AddSingleton<AuditInterceptor>();
+builder.Services.AddSingleton<RealTimeInvalidationInterceptor>();
 builder.Services.AddDbContext<AppDbContext>((serviceProvider, options) =>
 {
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"));
     options.AddInterceptors(
-        serviceProvider.GetRequiredService<AuditInterceptor>());
+        serviceProvider.GetRequiredService<AuditInterceptor>(),
+        serviceProvider.GetRequiredService<RealTimeInvalidationInterceptor>());
 });
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
@@ -143,12 +149,35 @@ builder.Services.AddCors(options =>
             .AllowAnyMethod();
     });
 });
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = 429;
+    
+    var authLimit = builder.Configuration.GetValue<int>("RateLimits:Auth", 10);
+    var sdkLimit = builder.Configuration.GetValue<int>("RateLimits:Sdk", 1000);
+    
+    options.AddFixedWindowLimiter("auth", o =>
+    {
+        o.Window = TimeSpan.FromMinutes(1);
+        o.PermitLimit = authLimit;
+        o.QueueLimit = 0;
+    });
+
+    options.AddSlidingWindowLimiter("sdk", o =>
+    {
+        o.Window = TimeSpan.FromMinutes(1);
+        o.SegmentsPerWindow = 4;
+        o.PermitLimit = sdkLimit;
+        o.QueueLimit = 0;
+    });
+});
 
 builder.Services.AddAuthorization();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddSingleton<IAuthorizationPolicyProvider, PermissionPolicyProvider>();
 builder.Services.AddScoped<IAuthorizationHandler, PermissionAuthorizationHandler>();
 builder.Services.AddSingleton<ICacheInvalidator, RedisCacheInvalidator>();
+builder.Services.AddSingleton<ISseService, SseService>();
 builder.Services.AddHostedService<CacheInvalidationWorker>();
 builder.Services.Scan(x =>
     x.FromAssemblies(typeof(IAuditAnalyzer).Assembly)
@@ -181,6 +210,7 @@ builder.Services.AddSingleton(Channel.CreateBounded<WebhookEvent>(
     }));
 
 builder.Services.AddHostedService<WebhookDispatcherService>();
+builder.Services.AddHostedService<RefreshTokenCleanupService>();
 
 var app = builder.Build();
 
@@ -190,15 +220,34 @@ if (app.Environment.IsStaging() || app.Environment.IsProduction())
     app.UseExceptionHandler();
 }
 
+app.Use(async (context, next) =>
+{
+    context.Response.Headers["X-Content-Type-Options"] = "nosniff";
+    context.Response.Headers["X-Frame-Options"] = "DENY";
+    context.Response.Headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
+    context.Response.Headers["X-XSS-Protection"] = "0";
+    context.Response.Headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()";
+    await next();
+});
+
+if (app.Environment.IsStaging() || app.Environment.IsProduction())
+{
+    app.UseHsts();
+}
+
+app.UseHttpsRedirection();
+app.UseCors("AdminUI");
+
+app.UseRateLimiter();
+
+app.UseAuthentication();
+app.UseAuthorization();
+
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
     app.MapScalarApiReference();
 }
-
-app.UseCors("AdminUI");
-app.UseAuthentication();
-app.UseAuthorization();
 
 app.UseFastEndpoints(c =>
 {

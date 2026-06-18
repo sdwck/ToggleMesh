@@ -1,3 +1,23 @@
+export const OrganizationRole = {
+    Member: 0,
+    Admin: 1
+} as const;
+
+export type OrganizationRole = typeof OrganizationRole[keyof typeof OrganizationRole];
+
+export interface OrganizationDto {
+    id: string;
+    name: string;
+    createdAt: string;
+    role: OrganizationRole;
+}
+
+export interface OrganizationMemberDto {
+    userId: string;
+    email: string;
+    role: OrganizationRole;
+}
+
 export interface ProjectEnvironmentDto {
     id: string;
     name: string;
@@ -199,4 +219,10 @@ export interface CreateTokenResponse {
     plainToken: string;
     createdAt: string;
     expiresAt: string | null;
+}
+
+export interface UserProfile {
+    id: string;
+    email: string;
+    username: string;
 }

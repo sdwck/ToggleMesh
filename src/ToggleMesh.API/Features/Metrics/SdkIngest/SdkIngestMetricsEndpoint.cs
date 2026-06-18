@@ -1,6 +1,7 @@
-﻿using System.Threading.Channels;
+using System.Threading.Channels;
 using ToggleMesh.API.Features.Projects;
 using ToggleMesh.API.Infrastructure;
+using ToggleMesh.API.Infrastructure.Endpoints;
 
 namespace ToggleMesh.API.Features.Metrics.SdkIngest;
 
@@ -20,6 +21,7 @@ public class SdkIngestMetricsEndpoint : ToggleEndpoint<SdkIngestMetricsRequest>
         AllowAnonymous();
         PreProcessor<ApiKeyPreProcessor<SdkIngestMetricsRequest>>();
         Options(x => x.RequireCors("PublicSdk"));
+        Options(x => x.RequireRateLimiting("sdk"));
     }
 
     public override async Task HandleAsync(SdkIngestMetricsRequest req, CancellationToken ct)

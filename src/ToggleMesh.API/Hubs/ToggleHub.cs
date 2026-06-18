@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.SignalR;
+using Microsoft.AspNetCore.SignalR;
 using ToggleMesh.API.Features.Projects;
 using ToggleMesh.API.Infrastructure;
 
@@ -32,7 +32,7 @@ public class ToggleHub : Hub
 
         if (keyInfo is null)
         {
-            _logger.LogWarning("Connection aborted: Invalid or expired API key {ApiKey}", apiKey);
+            _logger.LogWarning("Connection aborted: Invalid or expired API key {ApiKeyPrefix}...", apiKey[..Math.Min(8, apiKey.Length)]);
             Context.Abort();
             return;
         }

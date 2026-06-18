@@ -3,6 +3,7 @@ using Microsoft.Extensions.Caching.Hybrid;
 using ToggleMesh.API.Features.Flags.Get;
 using ToggleMesh.API.Features.Projects;
 using ToggleMesh.API.Infrastructure;
+using ToggleMesh.API.Infrastructure.Endpoints;
 using ToggleMesh.API.Persistence;
 
 namespace ToggleMesh.API.Features.Flags.SdkGetAll;
@@ -24,6 +25,8 @@ public class SdkGetFlagsEndpoint : ToggleEndpoint<SdkGetFlagsRequest, List<GetFl
         Version(1);
         AllowAnonymous();
         PreProcessor<ApiKeyPreProcessor<SdkGetFlagsRequest>>();
+        Options(x => x.RequireCors("PublicSdk"));
+        Options(x => x.RequireRateLimiting("sdk"));
     }
 
     public override async Task HandleAsync(SdkGetFlagsRequest req, CancellationToken ct)

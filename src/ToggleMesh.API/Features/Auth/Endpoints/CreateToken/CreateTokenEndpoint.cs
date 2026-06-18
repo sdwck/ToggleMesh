@@ -1,6 +1,7 @@
 ﻿using System.Security.Cryptography;
 using ToggleMesh.API.Features.Auth.Models;
 using ToggleMesh.API.Infrastructure;
+using ToggleMesh.API.Infrastructure.Endpoints;
 using ToggleMesh.API.Infrastructure.Security;
 using ToggleMesh.API.Persistence;
 

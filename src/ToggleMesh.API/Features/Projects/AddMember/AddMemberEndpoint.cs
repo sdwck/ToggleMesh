@@ -1,8 +1,10 @@
+using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
 using ToggleMesh.API.Extensions;
 using ToggleMesh.API.Features.Projects.GetMembers;
 using ToggleMesh.API.Infrastructure;
+using ToggleMesh.API.Infrastructure.Endpoints;
 using ToggleMesh.API.Persistence;
 
 namespace ToggleMesh.API.Features.Projects.AddMember;
@@ -33,18 +35,23 @@ public class AddMemberEndpoint : ToggleEndpoint<AddMemberRequest, MemberDto>
             await Send.ErrorsAsync(cancellation: ct);
             return;
         }
+        
+        var (currentUserRole, _) =
+            await _db.GetProjectRoleAndEnvOverridesAsync(
+                projectId, 
+                UserId, 
+                ct);
 
-        var currentUserId = User.FindFirstValue(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub);
-        var currentUserMember = await _db.ProjectMembers
-            .FirstOrDefaultAsync(x => x.ProjectId == projectId && x.UserId == Guid.Parse(currentUserId!), ct);
-
-        if (currentUserMember == null || currentUserMember.Role > ProjectRole.Admin)
+        if (currentUserRole is null or > ProjectRole.Admin)
         {
             await Send.ForbiddenAsync(ct);
             return;
         }
 
-        if (currentUserMember.Role == ProjectRole.Admin && (req.Role == ProjectRole.Owner || req.Role == ProjectRole.Admin))
+        if (currentUserRole.Value == ProjectRole.Admin
+            && req.Role 
+                is ProjectRole.Owner 
+                or ProjectRole.Admin)
         {
             AddError("Admins cannot grant Owner or Admin roles.");
             await Send.ErrorsAsync(403, cancellation: ct);
@@ -55,7 +62,7 @@ public class AddMemberEndpoint : ToggleEndpoint<AddMemberRequest, MemberDto>
             .FirstOrDefaultAsync(m =>
                 m.ProjectId == projectId &&
                 m.UserId == user.Id, ct);
-            
+
         if (existingMember != null)
         {
             AddError("User is already a member of this project.");

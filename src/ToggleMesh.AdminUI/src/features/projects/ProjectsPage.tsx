@@ -1,10 +1,15 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, FolderGit2, Layers } from 'lucide-react';
-import { useProjects, useCreateProject } from '@/api/queries';
+import { useQueryClient } from '@tanstack/react-query';
+import api from '@/api/axios';
+import { useProjects, useCreateProject, useOrganizations, useCreateOrganization } from '@/api/queries';
+import { useOrganizationStore } from '@/stores/useOrganizationStore';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem, SelectSeparator } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
@@ -26,15 +31,91 @@ const getEnvBadgeStyle = (name: string) => {
 
 export function ProjectsPage() {
     const navigate = useNavigate();
-    const { data: projects, isLoading } = useProjects();
+    const queryClient = useQueryClient();
+    const { activeOrganizationId, setActiveOrganizationId } = useOrganizationStore();
+    const { data: projects, isLoading } = useProjects(activeOrganizationId);
+    const { data: organizations, isLoading: isLoadingOrgs } = useOrganizations();
+    const createOrganization = useCreateOrganization();
     const createProject = useCreateProject();
+
     const [isDialogOpen, setIsDialogOpen] = useState(false);
+    const [isCreateOrgOpen, setIsCreateOrgOpen] = useState(false);
     const [newProjectName, setNewProjectName] = useState('');
+    const [selectedOrgId, setSelectedOrgId] = useState<string>('');
+    const [newOrgName, setNewOrgName] = useState('');
+
+    const handlePrefetchProject = (projId: string) => {
+        queryClient.prefetchQuery({
+            queryKey: ['projects', projId],
+            queryFn: async () => {
+                const { data } = await api.get(`/projects/${projId}`);
+                return data;
+            },
+            staleTime: 5 * 60 * 1000,
+        });
+        queryClient.prefetchQuery({
+            queryKey: ['projects', projId, 'flags', undefined, undefined],
+            queryFn: async () => {
+                const { data } = await api.get(`/projects/${projId}/flags`);
+                return data;
+            },
+            staleTime: 5 * 60 * 1000,
+        });
+    };
+
+    useEffect(() => {
+        if (isDialogOpen) {
+            if (organizations && organizations.length > 0) {
+                if (activeOrganizationId && organizations.some(o => o.id === activeOrganizationId)) {
+                    setSelectedOrgId(activeOrganizationId);
+                } else {
+                    setSelectedOrgId(organizations[0].id);
+                }
+            } else {
+                setSelectedOrgId('');
+            }
+            setNewProjectName('');
+        }
+    }, [isDialogOpen, activeOrganizationId, organizations]);
+
+    const handleOrgChange = (val: string) => {
+        if (val === '__new__') {
+            setIsCreateOrgOpen(true);
+        } else {
+            setSelectedOrgId(val);
+        }
+    };
+
+    const handleCreateOrg = async () => {
+        if (!newOrgName.trim()) return;
+        try {
+            const newOrg = await createOrganization.mutateAsync({ name: newOrgName });
+            setSelectedOrgId(newOrg.id);
+            setActiveOrganizationId(newOrg.id);
+            toast.success('Organization created successfully');
+            setNewOrgName('');
+            setIsCreateOrgOpen(false);
+        } catch {
+            toast.error('Failed to create organization');
+        }
+    };
 
     const handleCreate = async () => {
-        if (!newProjectName.trim()) return;
+        if (!newProjectName.trim()) {
+            toast.error('Project name is required');
+            return;
+        }
+
+        if (!selectedOrgId) {
+            toast.error('Please select an organization');
+            return;
+        }
+
         try {
-            await createProject.mutateAsync(newProjectName);
+            await createProject.mutateAsync({ name: newProjectName, organizationId: selectedOrgId });
+
+            setActiveOrganizationId(selectedOrgId);
+
             toast.success('Project created successfully');
             setNewProjectName('');
             setIsDialogOpen(false);
@@ -42,6 +123,11 @@ export function ProjectsPage() {
             toast.error('Failed to create project');
         }
     };
+
+    const isSubmitDisabled =
+        createProject.isPending ||
+        !newProjectName.trim() ||
+        !selectedOrgId;
 
     return (
         <div className="space-y-6">
@@ -64,23 +150,72 @@ export function ProjectsPage() {
                                 A project represents a single application or microservice.
                             </DialogDescription>
                         </DialogHeader>
-                        <div className="py-4">
-                            <Input
-                                placeholder="e.g., e-commerce-api"
-                                value={newProjectName}
-                                onChange={(e) => setNewProjectName(e.target.value)}
-                                autoFocus
-                            />
+                        <div className="space-y-4 py-4 text-left">
+                            <div className="space-y-2">
+                                <Label htmlFor="project-name">Project Name</Label>
+                                <Input
+                                    id="project-name"
+                                    placeholder="e.g., e-commerce-api"
+                                    value={newProjectName}
+                                    onChange={(e) => setNewProjectName(e.target.value)}
+                                    autoFocus
+                                />
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label htmlFor="project-org">Organization</Label>
+                                <Select value={selectedOrgId} onValueChange={handleOrgChange}>
+                                    <SelectTrigger id="project-org" className="border-border/40 bg-zinc-950/50">
+                                        <SelectValue placeholder={isLoadingOrgs ? "Loading organizations..." : "Select organization"} />
+                                    </SelectTrigger>
+                                    <SelectContent className="border-border/40 bg-zinc-950/95 backdrop-blur-xl">
+                                        {organizations?.map((org) => (
+                                            <SelectItem key={org.id} value={org.id}>
+                                                {org.name}
+                                            </SelectItem>
+                                        ))}
+                                        {organizations && organizations.length > 0 && <SelectSeparator className="bg-border/40" />}
+                                        <SelectItem value="__new__" className="text-primary focus:text-primary font-medium">
+                                            + Create new organization...
+                                        </SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
                         </div>
                         <DialogFooter>
                             <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
-                            <Button onClick={handleCreate} disabled={createProject.isPending || !newProjectName.trim()}>
+                            <Button onClick={handleCreate} disabled={isSubmitDisabled}>
                                 {createProject.isPending ? 'Creating...' : 'Create'}
                             </Button>
                         </DialogFooter>
                     </DialogContent>
                 </Dialog>
             </div>
+
+            <Dialog open={isCreateOrgOpen} onOpenChange={setIsCreateOrgOpen}>
+                <DialogContent className="border-border/40 bg-zinc-950">
+                    <DialogHeader>
+                        <DialogTitle>Create Organization</DialogTitle>
+                        <DialogDescription>
+                            An organization contains your projects and team members.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="py-4">
+                        <Input
+                            placeholder="e.g., Acme Corp"
+                            value={newOrgName}
+                            onChange={(e) => setNewOrgName(e.target.value)}
+                            autoFocus
+                        />
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsCreateOrgOpen(false)}>Cancel</Button>
+                        <Button onClick={handleCreateOrg} disabled={createOrganization.isPending || !newOrgName.trim()}>
+                            {createOrganization.isPending ? 'Creating...' : 'Create'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             {isLoading ? (
                 <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -116,6 +251,7 @@ export function ProjectsPage() {
                             key={project.id}
                             className="border-border/40 hover:border-primary/25 bg-zinc-950/20 hover:bg-zinc-950/40 transition-all cursor-pointer p-6 flex flex-col justify-between h-44 shadow-lg group"
                             onClick={() => navigate(`/projects/${project.id}/flags`)}
+                            onMouseEnter={() => handlePrefetchProject(project.id)}
                         >
                             <div className="space-y-3">
                                 <div className="flex items-start justify-between">

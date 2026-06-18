@@ -76,6 +76,7 @@ api.interceptors.response.use(
         processQueue(refreshError, null);
         localStorage.removeItem('accessToken');
         localStorage.removeItem('refreshToken');
+        localStorage.removeItem('REACT_QUERY_OFFLINE_CACHE');
         window.location.href = '/login';
         return Promise.reject(refreshError);
       } finally {

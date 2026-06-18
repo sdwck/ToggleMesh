@@ -11,7 +11,7 @@ import {
 import {ProjectRole, KeyType} from '@/api/types';
 import {Button} from '@/components/ui/button';
 import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from '@/components/ui/table';
-import {ArrowLeft, Key, Plus, Copy, Trash2, MoreHorizontal, Code, Edit2, AlertTriangle} from 'lucide-react';
+import {ArrowLeft, Key, Plus, Copy, Trash2, MoreHorizontal, Code, Edit2, AlertTriangle, Terminal} from 'lucide-react';
 import {toast} from 'sonner';
 import {Skeleton} from '@/components/ui/skeleton';
 import {Input} from '@/components/ui/input';
@@ -60,6 +60,7 @@ export function EnvironmentDetailsPage() {
     const [keyIdToRevoke, setKeyIdToRevoke] = useState<string | null>(null);
 
     const [isSdkSetupOpen, setIsSdkSetupOpen] = useState(false);
+    const [isCliSetupOpen, setIsCliSetupOpen] = useState(false);
 
     const [isRenameOpen, setIsRenameOpen] = useState(false);
     const [envNameInput, setEnvNameInput] = useState('');
@@ -260,6 +261,10 @@ export function PaymentComponent() {
                 </div>
 
                 <div className="flex items-center gap-2">
+                    <Button variant="outline" onClick={() => setIsCliSetupOpen(true)} className="cursor-pointer">
+                        <Terminal className="mr-2 h-4 w-4"/>
+                        CLI Setup
+                    </Button>
                     <Button variant="outline" onClick={() => setIsSdkSetupOpen(true)} className="cursor-pointer">
                         <Code className="mr-2 h-4 w-4"/>
                         SDK Setup
@@ -369,9 +374,7 @@ export function PaymentComponent() {
                         <TabsList className="bg-zinc-900 border border-border/10 h-10">
                             <TabsTrigger value="csharp" className="text-xs">.NET SDK</TabsTrigger>
                             <TabsTrigger value="typescript" className="text-xs">React/TS SDK</TabsTrigger>
-                            <TabsTrigger value="cli-net" className="text-xs">CLI Tool (.NET)</TabsTrigger>
-                            <TabsTrigger value="cli-js" className="text-xs">CLI Tool (JS)</TabsTrigger>
-                            {/*TODO: Move to the separate guide*/}
+
                         </TabsList>
 
                         <TabsContent value="csharp" className="space-y-4">
@@ -450,6 +453,23 @@ export function PaymentComponent() {
                                 </div>
                             </div>
                         </TabsContent>
+
+                    </Tabs>
+                </SheetContent>
+            </Sheet>
+
+            <Sheet open={isCliSetupOpen} onOpenChange={setIsCliSetupOpen}>
+                <SheetContent className="w-full sm:max-w-xl overflow-y-auto bg-zinc-950 border-border/40">
+                    <SheetHeader>
+                        <SheetTitle>CLI Setup Guide</SheetTitle>
+                        <SheetDescription>Install and configure the ToggleMesh CLI for your environment.</SheetDescription>
+                    </SheetHeader>
+
+                    <Tabs defaultValue="cli-net" className="mt-6 space-y-4">
+                        <TabsList className="bg-zinc-900 border border-border/10 h-10">
+                            <TabsTrigger value="cli-net" className="text-xs">CLI Tool (.NET)</TabsTrigger>
+                            <TabsTrigger value="cli-js" className="text-xs">CLI Tool (JS)</TabsTrigger>
+                        </TabsList>
 
                         <TabsContent value="cli-net" className="space-y-4">
                             <div className="space-y-1">

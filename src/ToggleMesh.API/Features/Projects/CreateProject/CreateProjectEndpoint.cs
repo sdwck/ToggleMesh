@@ -1,5 +1,6 @@
 using ToggleMesh.API.Persistence;
 using ToggleMesh.API.Infrastructure;
+using ToggleMesh.API.Infrastructure.Endpoints;
 
 namespace ToggleMesh.API.Features.Projects.CreateProject;
 
@@ -22,7 +23,8 @@ public class CreateProjectEndpoint : ToggleEndpoint<CreateProjectRequest, Create
     {
         var project = new Project
         {
-            Name = req.Name
+            Name = req.Name,
+            OrganizationId = req.OrganizationId
         };
 
         _db.Projects.Add(project);

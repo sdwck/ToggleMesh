@@ -1,9 +1,7 @@
 using StackExchange.Redis;
-using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
 using ToggleMesh.API.Extensions;
-using ToggleMesh.API.Infrastructure;
+using ToggleMesh.API.Infrastructure.Endpoints;
 using ToggleMesh.API.Persistence;
 
 namespace ToggleMesh.API.Features.Projects.UpdateMember;
@@ -31,8 +29,7 @@ public class UpdateMemberEndpoint : ToggleEndpoint<UpdateMemberRequest>
         var projectId = Route<Guid>("projectId");
         var userId = Route<Guid>("userId");
 
-        var currentUserId = User.FindFirstValue(JwtRegisteredClaimNames.Sub);
-        if (currentUserId == userId.ToString())
+        if (UserId == userId)
         {
             AddError("You cannot change your own role.");
             await Send.ErrorsAsync(cancellation: ct);
@@ -49,16 +46,15 @@ public class UpdateMemberEndpoint : ToggleEndpoint<UpdateMemberRequest>
             return;
         }
 
-        var currentUserMember = await _db.ProjectMembers
-            .FirstOrDefaultAsync(x => x.ProjectId == projectId && x.UserId == Guid.Parse(currentUserId!), ct);
+        var (currentUserRole, _) = await _db.GetProjectRoleAndEnvOverridesAsync(projectId, UserId, ct);
 
-        if (currentUserMember == null || currentUserMember.Role > ProjectRole.Admin)
+        if (currentUserRole is null or > ProjectRole.Admin)
         {
             await Send.ForbiddenAsync(ct);
             return;
         }
 
-        if (currentUserMember.Role == ProjectRole.Admin)
+        if (currentUserRole.Value == ProjectRole.Admin)
         {
             if (member.Role == ProjectRole.Owner)
             {
@@ -66,7 +62,8 @@ public class UpdateMemberEndpoint : ToggleEndpoint<UpdateMemberRequest>
                 await Send.ErrorsAsync(403, cancellation: ct);
                 return;
             }
-            if (req.Role == ProjectRole.Owner || req.Role == ProjectRole.Admin)
+            
+            if (req.Role is ProjectRole.Owner or ProjectRole.Admin)
             {
                 AddError("Admins cannot grant Owner or Admin roles.");
                 await Send.ErrorsAsync(403, cancellation: ct);
@@ -79,7 +76,11 @@ public class UpdateMemberEndpoint : ToggleEndpoint<UpdateMemberRequest>
         _db.MemberEnvironmentRoles.RemoveRange(member.EnvironmentRoles);
         member.EnvironmentRoles.Clear();
 
-        if ((req.Role == ProjectRole.Editor || req.Role == ProjectRole.Viewer || req.Role == ProjectRole.None) && req.EnvironmentRoles != null)
+        if (req.Role 
+                is ProjectRole.Editor 
+                or ProjectRole.Viewer 
+                or ProjectRole.None 
+            && req.EnvironmentRoles != null)
         {
             foreach (var er in req.EnvironmentRoles)
             {

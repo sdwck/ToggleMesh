@@ -54,7 +54,7 @@ export function ProjectAuditTab({ project, isLoading }: { project?: ProjectDetai
     const timePickerRef = useRef<HTMLDivElement>(null);
 
     const projectId = project?.id ?? '';
-    
+
     const { data: auditData, isLoading: isLoadingAudit } = useProjectAuditLogs(
         projectId,
         auditPage,
@@ -110,145 +110,142 @@ export function ProjectAuditTab({ project, isLoading }: { project?: ProjectDetai
                     </h2>
                     <p className="text-sm text-muted-foreground">Review project activity and audit trail.</p>
                 </div>
-            <div className="flex gap-3 flex-wrap items-center self-end">
-                <Select value={filterAction} onValueChange={(val) => { setFilterAction(val); setAuditPage(1); }}>
-                    <SelectTrigger className="w-[160px] h-10 bg-zinc-950/20 border-border/40 text-xs">
-                        <SelectValue placeholder="Filter by action" />
-                    </SelectTrigger>
-                    <SelectContent className="border-border/40 bg-zinc-950">
-                        <SelectItem value="all">All Actions</SelectItem>
-                        <SelectItem value="added">Added</SelectItem>
-                        <SelectItem value="modified">Modified</SelectItem>
-                        <SelectItem value="deleted">Deleted</SelectItem>
-                    </SelectContent>
-                </Select>
+                <div className="flex gap-3 flex-wrap items-center self-end">
+                    <Select value={filterAction} onValueChange={(val) => { setFilterAction(val); setAuditPage(1); }}>
+                        <SelectTrigger className="w-[160px] h-10 bg-zinc-950/20 border-border/40 text-xs">
+                            <SelectValue placeholder="Filter by action" />
+                        </SelectTrigger>
+                        <SelectContent className="border-border/40 bg-zinc-950">
+                            <SelectItem value="all">All Actions</SelectItem>
+                            <SelectItem value="added">Added</SelectItem>
+                            <SelectItem value="modified">Modified</SelectItem>
+                            <SelectItem value="deleted">Deleted</SelectItem>
+                        </SelectContent>
+                    </Select>
 
-                <Select value={filterEntity} onValueChange={(val) => { setFilterEntity(val); setAuditPage(1); }}>
-                    <SelectTrigger className="w-[160px] h-10 bg-zinc-950/20 border-border/40 text-xs">
-                        <SelectValue placeholder="Filter by entity" />
-                    </SelectTrigger>
-                    <SelectContent className="border-border/40 bg-zinc-950">
-                        <SelectItem value="all">All Entities</SelectItem>
-                        <SelectItem value="featureflag">Feature Flags</SelectItem>
-                        <SelectItem value="projectenvironment">Environments</SelectItem>
-                        <SelectItem value="projectmember">Members</SelectItem>
-                    </SelectContent>
-                </Select>
+                    <Select value={filterEntity} onValueChange={(val) => { setFilterEntity(val); setAuditPage(1); }}>
+                        <SelectTrigger className="w-[160px] h-10 bg-zinc-950/20 border-border/40 text-xs">
+                            <SelectValue placeholder="Filter by entity" />
+                        </SelectTrigger>
+                        <SelectContent className="border-border/40 bg-zinc-950">
+                            <SelectItem value="all">All Entities</SelectItem>
+                            <SelectItem value="featureflag">Feature Flags</SelectItem>
+                            <SelectItem value="projectenvironment">Environments</SelectItem>
+                            <SelectItem value="projectmember">Members</SelectItem>
+                        </SelectContent>
+                    </Select>
 
-                <Select value={sortOrder} onValueChange={(val) => { setSortOrder(val); setAuditPage(1); }}>
-                    <SelectTrigger className="w-[160px] h-10 bg-zinc-950/20 border-border/40 font-mono text-xs">
-                        <SelectValue placeholder="Sort order" />
-                    </SelectTrigger>
-                    <SelectContent className="border-border/40 bg-zinc-950">
-                        <SelectItem value="desc">Newest First</SelectItem>
-                        <SelectItem value="asc">Oldest First</SelectItem>
-                    </SelectContent>
-                </Select>
+                    <Select value={sortOrder} onValueChange={(val) => { setSortOrder(val); setAuditPage(1); }}>
+                        <SelectTrigger className="w-[160px] h-10 bg-zinc-950/20 border-border/40 font-mono text-xs">
+                            <SelectValue placeholder="Sort order" />
+                        </SelectTrigger>
+                        <SelectContent className="border-border/40 bg-zinc-950">
+                            <SelectItem value="desc">Newest First</SelectItem>
+                            <SelectItem value="asc">Oldest First</SelectItem>
+                        </SelectContent>
+                    </Select>
 
-                <div className="relative" ref={timePickerRef}>
-                    <Button
-                        variant="outline"
-                        onClick={() => setIsTimePickerOpen(!isTimePickerOpen)}
-                        className={`h-10 px-3 text-xs font-medium border-border/40 bg-zinc-950/20 flex items-center gap-2 cursor-pointer transition-all ${
-                            isTimePickerOpen ? 'border-primary/50 bg-muted/20' : ''
-                        }`}
-                    >
-                        <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-                        <span className="font-mono">{getTimeButtonLabel()}</span>
-                        <ChevronDown className="h-3 w-3 text-muted-foreground ml-1" />
-                    </Button>
+                    <div className="relative" ref={timePickerRef}>
+                        <Button
+                            variant="outline"
+                            onClick={() => setIsTimePickerOpen(!isTimePickerOpen)}
+                            className={`h-10 px-3 text-xs font-medium border-border/40 bg-zinc-950/20 flex items-center gap-2 cursor-pointer transition-all ${isTimePickerOpen ? 'border-primary/50 bg-muted/20' : ''
+                                }`}
+                        >
+                            <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+                            <span className="font-mono">{getTimeButtonLabel()}</span>
+                            <ChevronDown className="h-3 w-3 text-muted-foreground ml-1" />
+                        </Button>
 
-                    {isTimePickerOpen && (
-                        <div className="absolute top-11 left-0 sm:left-auto sm:right-0 bg-zinc-950 border border-border/40 rounded-lg p-1.5 shadow-[0_16px_40px_rgba(0,0,0,0.8)] z-[50] flex flex-col md:flex-row min-w-[280px] md:min-w-[520px] animate-in fade-in slide-in-from-top-2 duration-150">
-                            <div className="flex-1 p-3 border-b md:border-b-0 md:border-r border-border/20 flex flex-col justify-between">
-                                <div className="space-y-4">
-                                    <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2 h-4 leading-none">
-                                        <Calendar className="h-3.5 w-3.5" />
-                                        <span>Time Range</span>
-                                    </div>
-                                    <div className="space-y-3 py-1">
-                                        <div className="space-y-1.5">
-                                            <label className="text-[10px] text-muted-foreground font-medium uppercase leading-none block">From</label>
-                                            <div className="relative">
-                                                <Input
-                                                    type="datetime-local"
-                                                    value={customFrom}
-                                                    onChange={(e) => setCustomFrom(e.target.value)}
-                                                    className="h-8 border-border/40 bg-zinc-900/50 font-mono text-[11px] pl-3 pr-10 cursor-pointer w-full
+                        {isTimePickerOpen && (
+                            <div className="absolute top-11 left-0 sm:left-auto sm:right-0 bg-zinc-950 border border-border/40 rounded-lg p-1.5 shadow-[0_16px_40px_rgba(0,0,0,0.8)] z-[50] flex flex-col md:flex-row min-w-[280px] md:min-w-[520px] animate-in fade-in slide-in-from-top-2 duration-150">
+                                <div className="flex-1 p-3 border-b md:border-b-0 md:border-r border-border/20 flex flex-col justify-between">
+                                    <div className="space-y-4">
+                                        <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2 h-4 leading-none">
+                                            <Calendar className="h-3.5 w-3.5" />
+                                            <span>Time Range</span>
+                                        </div>
+                                        <div className="space-y-3 py-1">
+                                            <div className="space-y-1.5">
+                                                <label className="text-[10px] text-muted-foreground font-medium uppercase leading-none block">From</label>
+                                                <div className="relative">
+                                                    <Input
+                                                        type="datetime-local"
+                                                        value={customFrom}
+                                                        onChange={(e) => setCustomFrom(e.target.value)}
+                                                        className="h-8 border-border/40 bg-zinc-900/50 font-mono text-[11px] pl-3 pr-10 cursor-pointer w-full
                                                     [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:cursor-pointer"
-                                                />
-                                                <Calendar className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                                                    />
+                                                    <Calendar className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                                                </div>
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <label className="text-[10px] text-muted-foreground font-medium uppercase leading-none block">To</label>
+                                                <div className="relative">
+                                                    <Input
+                                                        type="datetime-local"
+                                                        value={customTo}
+                                                        onChange={(e) => setCustomTo(e.target.value)}
+                                                        className="h-8 border-border/40 bg-zinc-900/50 font-mono text-[11px] pl-3 pr-10 cursor-pointer w-full
+                                                    [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:cursor-pointer"
+                                                    />
+                                                    <Calendar className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                                                </div>
                                             </div>
                                         </div>
-                                        <div className="space-y-1.5">
-                                            <label className="text-[10px] text-muted-foreground font-medium uppercase leading-none block">To</label>
-                                            <div className="relative">
-                                                <Input
-                                                    type="datetime-local"
-                                                    value={customTo}
-                                                    onChange={(e) => setCustomTo(e.target.value)}
-                                                    className="h-8 border-border/40 bg-zinc-900/50 font-mono text-[11px] pl-3 pr-10 cursor-pointer w-full
-                                                    [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:cursor-pointer"
-                                                />
-                                                <Calendar className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-                                            </div>
-                                        </div>
                                     </div>
+                                    <Button
+                                        className="w-full h-8 text-xs font-semibold cursor-pointer mt-auto"
+                                        onClick={handleApplyCustomRange}
+                                    >
+                                        Apply time range
+                                    </Button>
                                 </div>
-                                <Button
-                                    className="w-full h-8 text-xs font-semibold cursor-pointer mt-auto"
-                                    onClick={handleApplyCustomRange}
-                                >
-                                    Apply time range
-                                </Button>
-                            </div>
 
-                            <div className="w-full md:w-[220px] p-3 flex flex-col justify-between">
-                                <div className="space-y-3 flex flex-col h-full">
-                                    <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2 h-4 leading-none px-1">
-                                        <Clock className="h-3.5 w-3.5" />
-                                        <span>Quick Ranges</span>
-                                    </div>
-                                    <div className="grid grid-cols-2 md:grid-cols-1 gap-0.5 max-h-[11rem] overflow-y-auto pr-1 flex-1">
-                                        <button
-                                            onClick={() => handleQuickRangeSelect('all')}
-                                            className={`w-full text-left px-2 py-1.5 rounded-md text-xs font-medium transition-colors flex items-center justify-between cursor-pointer ${
-                                                rangeType === 'all'
+                                <div className="w-full md:w-[220px] p-3 flex flex-col justify-between">
+                                    <div className="space-y-3 flex flex-col h-full">
+                                        <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2 h-4 leading-none px-1">
+                                            <Clock className="h-3.5 w-3.5" />
+                                            <span>Quick Ranges</span>
+                                        </div>
+                                        <div className="grid grid-cols-2 md:grid-cols-1 gap-0.5 max-h-[11rem] overflow-y-auto pr-1 flex-1">
+                                            <button
+                                                onClick={() => handleQuickRangeSelect('all')}
+                                                className={`w-full text-left px-2 py-1.5 rounded-md text-xs font-medium transition-colors flex items-center justify-between cursor-pointer ${rangeType === 'all'
                                                     ? 'bg-primary/10 text-primary'
                                                     : 'text-zinc-400 hover:bg-muted/30 hover:text-zinc-200'
-                                            }`}
-                                        >
-                                            <span>All Time</span>
-                                            {rangeType === 'all' && <Check className="h-3 w-3" />}
-                                        </button>
-                                        {relativeRanges.map((range) => {
-                                            const isSelected = rangeType === range.value;
-                                            return (
-                                                <button
-                                                    key={range.value}
-                                                    onClick={() => handleQuickRangeSelect(range.value)}
-                                                    className={`w-full text-left px-2 py-1.5 rounded-md text-xs font-medium transition-colors flex items-center justify-between cursor-pointer ${
-                                                        isSelected
+                                                    }`}
+                                            >
+                                                <span>All Time</span>
+                                                {rangeType === 'all' && <Check className="h-3 w-3" />}
+                                            </button>
+                                            {relativeRanges.map((range) => {
+                                                const isSelected = rangeType === range.value;
+                                                return (
+                                                    <button
+                                                        key={range.value}
+                                                        onClick={() => handleQuickRangeSelect(range.value)}
+                                                        className={`w-full text-left px-2 py-1.5 rounded-md text-xs font-medium transition-colors flex items-center justify-between cursor-pointer ${isSelected
                                                             ? 'bg-primary/10 text-primary'
                                                             : 'text-zinc-400 hover:bg-muted/30 hover:text-zinc-200'
-                                                    }`}
-                                                >
-                                                    <span>{range.label}</span>
-                                                    {isSelected && <Check className="h-3 w-3" />}
-                                                </button>
-                                            );
-                                        })}
+                                                            }`}
+                                                    >
+                                                        <span>{range.label}</span>
+                                                        {isSelected && <Check className="h-3 w-3" />}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
-                        </div>
-                    )}
+                        )}
+                    </div>
                 </div>
-            </div>
             </div>
 
             <Card className="border-border/40 bg-zinc-950/20 overflow-hidden shadow-lg">
-                <div className="overflow-auto pr-0.5">
+                <div className="overflow-auto pr-0.5 min-h-[32rem]">
                     <Table>
                         <TableHeader className="sticky top-0 bg-background z-10">
                             <TableRow className="hover:bg-transparent border-border/40 shadow-sm h-10">

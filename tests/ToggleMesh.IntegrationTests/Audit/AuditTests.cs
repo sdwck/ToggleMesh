@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using ToggleMesh.API.Features.Audit.Get;
 using ToggleMesh.API.Features.Auth.Models;
+using ToggleMesh.API.Features.Flags;
 using ToggleMesh.API.Features.Flags.Create;
 using ToggleMesh.API.Features.Flags.Get;
 using ToggleMesh.API.Features.Flags.Toggle;

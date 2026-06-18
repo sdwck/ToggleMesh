@@ -184,9 +184,16 @@ export function ProjectSettingsPage() {
             </div>
 
             <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-5">
-                <TabsList>
-                    <TabsTrigger value="general">General</TabsTrigger>
-                    <TabsTrigger value="webhooks">Webhooks</TabsTrigger>
+                <TabsList className="bg-zinc-950 border border-border/40 p-1">
+                    <TabsTrigger value="general" className="text-xs">General</TabsTrigger>
+                    <TabsTrigger value="webhooks" className="text-xs gap-1.5">
+                        <Globe className="h-3.5 w-3.5" /> Webhooks
+                        {!isWebhooksLoading && (
+                            <Badge variant="outline" className="px-1 py-0 text-[10px] bg-zinc-900 border-zinc-800">
+                                {webhooks?.length ?? 0}
+                            </Badge>
+                        )}
+                    </TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="general" className="m-0">

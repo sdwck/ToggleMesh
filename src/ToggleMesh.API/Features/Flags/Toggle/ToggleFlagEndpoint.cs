@@ -7,6 +7,7 @@ using ToggleMesh.API.Features.Flags.Get;
 using ToggleMesh.API.Hubs;
 using ToggleMesh.API.Infrastructure;
 using ToggleMesh.API.Infrastructure.Caching;
+using ToggleMesh.API.Infrastructure.Endpoints;
 using ToggleMesh.API.Persistence;
 
 namespace ToggleMesh.API.Features.Flags.Toggle;

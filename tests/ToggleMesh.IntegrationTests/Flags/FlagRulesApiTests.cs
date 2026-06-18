@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
+using ToggleMesh.API.Features.Flags;
 using ToggleMesh.API.Features.Flags.Create;
 using ToggleMesh.API.Features.Flags.Get;
 using ToggleMesh.API.Features.Flags.Update;

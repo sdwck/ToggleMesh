@@ -1,11 +1,11 @@
-import {useParams, useSearchParams} from 'react-router-dom';
-import {useCreateFeatureFlag, useProjectDetails, useProjectTags} from '@/api/queries';
-import {ProjectFlagsTab} from './ProjectFlagsTab';
-import {Plus, Search, Tag} from "lucide-react";
-import {Input} from "@/components/ui/input.tsx";
-import {useState, useEffect} from "react";
-import {useQueryClient} from '@tanstack/react-query';
-import {toast} from "sonner";
+import { useParams, useSearchParams } from 'react-router-dom';
+import { useCreateFeatureFlag, useProjectDetails, useProjectTags } from '@/api/queries';
+import { ProjectFlagsTab } from './ProjectFlagsTab';
+import { Plus, Search, Tag } from "lucide-react";
+import { Input } from "@/components/ui/input.tsx";
+import { useState, useEffect } from "react";
+import { useQueryClient } from '@tanstack/react-query';
+import { toast } from "sonner";
 import {
     Dialog,
     DialogContent,
@@ -15,21 +15,21 @@ import {
     DialogTitle,
     DialogTrigger
 } from "@/components/ui/dialog";
-import {Button} from "@/components/ui/button.tsx";
-import {ProjectRole, type Project} from "@/api/types.ts";
-import {Skeleton} from "@/components/ui/skeleton";
-import {Card} from "@/components/ui/card";
-import {Table, TableBody, TableHead, TableHeader, TableRow} from "@/components/ui/table";
-import {TableSkeleton} from "@/components/TableSkeleton";
-import {Badge} from '@/components/ui/badge';
-import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/components/ui/select';
+import { Button } from "@/components/ui/button.tsx";
+import { ProjectRole, type Project } from "@/api/types.ts";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Card } from "@/components/ui/card";
+import { Table, TableBody, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { TableSkeleton } from "@/components/TableSkeleton";
+import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 export function ProjectFlagsPage() {
-    const {projectId} = useParams<{ projectId: string }>();
+    const { projectId } = useParams<{ projectId: string }>();
     const queryClient = useQueryClient();
 
-    const {data: project, isLoading} = useProjectDetails(projectId!);
-    const {data: projectTags} = useProjectTags(projectId!);
+    const { data: project, isLoading } = useProjectDetails(projectId!);
+    const { data: projectTags } = useProjectTags(projectId!);
     const createFlag = useCreateFeatureFlag(projectId!);
 
     const [newFlagKey, setNewFlagKey] = useState('');
@@ -95,60 +95,11 @@ export function ProjectFlagsPage() {
     };
 
     return (
-        <div className="space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="space-y-1">
-                    <h2 className="text-2xl font-bold tracking-tight h-8 flex items-center">
-                        {isLoading && !cachedProject ? (
-                            <Skeleton className="h-7 w-48"/>
-                        ) : (
-                            project?.name ?? cachedProject?.name
-                        )}
-                    </h2>
-                    <p className="text-muted-foreground">Manage feature flags for this project.</p>
-                </div>
-
-                {isLoading && !cachedProject ? (
-                    <Skeleton className="h-10 w-28"/>
-                ) : canEditFlags ? (
-                    <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-                        <DialogTrigger asChild>
-                            <Button className="cursor-pointer">
-                                <Plus className="mr-2 h-4 w-4"/>
-                                New Flag
-                            </Button>
-                        </DialogTrigger>
-                        <DialogContent className="border-border/40 bg-zinc-950">
-                            <DialogHeader>
-                                <DialogTitle>Create Feature Flag</DialogTitle>
-                                <DialogDescription>
-                                    Enter a unique key for the new feature flag.
-                                </DialogDescription>
-                            </DialogHeader>
-                            <div className="py-4">
-                                <Input
-                                    placeholder="e.g. new-billing-ui"
-                                    value={newFlagKey}
-                                    onChange={(e) => setNewFlagKey(e.target.value)}
-                                    autoFocus
-                                    className="font-mono"
-                                />
-                            </div>
-                            <DialogFooter>
-                                <Button variant="outline" onClick={() => setIsCreateOpen(false)}>Cancel</Button>
-                                <Button onClick={handleCreateFlag} disabled={isCreating || !newFlagKey.trim()}>
-                                    {isCreating ? 'Creating...' : 'Create Flag'}
-                                </Button>
-                            </DialogFooter>
-                        </DialogContent>
-                    </Dialog>
-                ) : null}
-            </div>
-
-            <div className="space-y-3">
+        <div className="relative">
+            <div className="sticky top-0 z-30 bg-background/95 backdrop-blur pb-4 mb-4 space-y-3 border-b border-border/10">
                 <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-                    <div className="flex items-center max-w-sm relative flex-1">
-                        <Search className="h-4 w-4 text-muted-foreground absolute left-3"/>
+                    <div className="flex items-center relative flex-1">
+                        <Search className="h-4 w-4 text-muted-foreground absolute left-3" />
                         <Input
                             placeholder="Search flags by key or name..."
                             value={inputValue}
@@ -158,8 +109,8 @@ export function ProjectFlagsPage() {
                     </div>
 
                     <Select value={sortBy} onValueChange={setSortBy}>
-                        <SelectTrigger className="w-[180px] bg-zinc-950/20 border-border/40">
-                            <SelectValue placeholder="Sort by"/>
+                        <SelectTrigger className="w-[180px] bg-zinc-950/20 border-border/40 h-10">
+                            <SelectValue placeholder="Sort by" />
                         </SelectTrigger>
                         <SelectContent className="border-border/40 bg-zinc-950">
                             <SelectItem value="updated-desc">Recently Updated</SelectItem>
@@ -170,15 +121,51 @@ export function ProjectFlagsPage() {
                             <SelectItem value="key-desc">Key (Z-A)</SelectItem>
                         </SelectContent>
                     </Select>
+
+                    {isLoading && !cachedProject ? (
+                        <Skeleton className="h-10 w-28" />
+                    ) : canEditFlags ? (
+                        <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+                            <DialogTrigger asChild>
+                                <Button className="cursor-pointer h-10">
+                                    <Plus className="mr-2 h-4 w-4" />
+                                    New Flag
+                                </Button>
+                            </DialogTrigger>
+                            <DialogContent className="border-border/40 bg-zinc-950">
+                                <DialogHeader>
+                                    <DialogTitle>Create Feature Flag</DialogTitle>
+                                    <DialogDescription>
+                                        Enter a unique key for the new feature flag.
+                                    </DialogDescription>
+                                </DialogHeader>
+                                <div className="py-4">
+                                    <Input
+                                        placeholder="e.g. new-billing-ui"
+                                        value={newFlagKey}
+                                        onChange={(e) => setNewFlagKey(e.target.value)}
+                                        autoFocus
+                                        className="font-mono"
+                                    />
+                                </div>
+                                <DialogFooter>
+                                    <Button variant="outline" onClick={() => setIsCreateOpen(false)}>Cancel</Button>
+                                    <Button onClick={handleCreateFlag} disabled={isCreating || !newFlagKey.trim()}>
+                                        {isCreating ? 'Creating...' : 'Create Flag'}
+                                    </Button>
+                                </DialogFooter>
+                            </DialogContent>
+                        </Dialog>
+                    ) : null}
                 </div>
 
                 {isLoading && (<div className="flex items-center gap-2 flex-wrap text-xs pt-1">
-                    <span className="text-muted-foreground flex items-center gap-1"><Tag className="h-3 w-3"/> Filter by tags:</span>
+                    <span className="text-muted-foreground flex items-center gap-1"><Tag className="h-3 w-3" /> Filter by tags:</span>
                     <Skeleton className="h-[1.5rem] w-16 rounded-md" />
                 </div>)}
                 {!isLoading && projectTags && projectTags.length > 0 && (
                     <div className="flex items-center gap-2 flex-wrap text-xs pt-1">
-                        <span className="text-muted-foreground flex items-center gap-1"><Tag className="h-3 w-3"/> Filter by tags:</span>
+                        <span className="text-muted-foreground flex items-center gap-1"><Tag className="h-3 w-3" /> Filter by tags:</span>
                         {projectTags.map(tag => {
                             const isSelected = selectedTags.includes(tag);
                             return (
@@ -186,11 +173,10 @@ export function ProjectFlagsPage() {
                                     key={tag}
                                     variant="outline"
                                     onClick={() => handleTagClick(tag)}
-                                    className={`cursor-pointer uppercase text-[9px] font-semibold px-2 py-0.5 tracking-wide transition-all ${
-                                        isSelected
+                                    className={`cursor-pointer uppercase text-[9px] font-semibold px-2 py-0.5 tracking-wide transition-all ${isSelected
                                             ? "bg-primary/10 text-primary border-primary/30"
                                             : "bg-zinc-900/40 text-muted-foreground border-zinc-800 hover:text-foreground hover:border-zinc-700"
-                                    }`}
+                                        }`}
                                 >
                                     {tag}
                                 </Badge>
@@ -209,8 +195,8 @@ export function ProjectFlagsPage() {
                     isLoadingProject={isLoading && !project}
                 />
             ) : (
-                <Card className="border-border/40 overflow-hidden bg-zinc-950/20">
-                    <Table wrapperClassName="max-h-[600px] overflow-auto">
+                <Card className="border-border/40 bg-zinc-950/20">
+                    <Table wrapperClassName="max-h-[calc(100vh-260px)] overflow-auto">
                         <TableHeader>
                             <TableRow className="hover:bg-transparent border-border/40 shadow-sm h-10">
                                 <TableHead className="w-[280px]">Flag Key</TableHead>
@@ -221,7 +207,7 @@ export function ProjectFlagsPage() {
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            <TableSkeleton columnsCount={5} rowsCount={3}/>
+                            <TableSkeleton columnsCount={5} rowsCount={3} />
                         </TableBody>
                     </Table>
                 </Card>

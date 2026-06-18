@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using ToggleMesh.API.Features.Auth.Endpoints.Login;
 using ToggleMesh.API.Features.Auth.Models;
 using ToggleMesh.API.Infrastructure;
+using ToggleMesh.API.Infrastructure.Endpoints;
 using ToggleMesh.API.Infrastructure.Security;
 using ToggleMesh.API.Persistence;
 
@@ -33,6 +34,7 @@ public class RefreshEndpoint : ToggleEndpoint<RefreshRequest, LoginResponse>
     {
         Post("/auth/refresh");
         AllowAnonymous();
+        Options(x => x.RequireRateLimiting("auth"));
     }
 
     public override async Task HandleAsync(RefreshRequest req, CancellationToken ct)

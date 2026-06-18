@@ -6,6 +6,7 @@ using ToggleMesh.API.Hubs;
 using ToggleMesh.API.Persistence;
 using ToggleMesh.API.Infrastructure;
 using ToggleMesh.API.Infrastructure.Caching;
+using ToggleMesh.API.Infrastructure.Endpoints;
 
 namespace ToggleMesh.API.Features.Flags.UpdatePrivacy;
 

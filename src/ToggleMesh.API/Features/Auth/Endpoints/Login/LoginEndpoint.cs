@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Identity;
 using ToggleMesh.API.Features.Auth.Models;
 using ToggleMesh.API.Infrastructure;
+using ToggleMesh.API.Infrastructure.Endpoints;
 using ToggleMesh.API.Persistence;
 
 namespace ToggleMesh.API.Features.Auth.Endpoints.Login;
@@ -22,6 +23,7 @@ public class LoginEndpoint : ToggleEndpoint<LoginRequest, LoginResponse>
     {
         Post("/auth/login");
         AllowAnonymous();
+        Options(x => x.RequireRateLimiting("auth"));
     }
 
     public override async Task HandleAsync(LoginRequest req, CancellationToken ct)

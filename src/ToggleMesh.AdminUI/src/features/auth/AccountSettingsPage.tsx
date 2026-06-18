@@ -1,5 +1,11 @@
-﻿import { useState } from 'react';
-import { usePersonalTokens, useCreatePersonalToken, useDeletePersonalToken } from '@/api/queries';
+import { useState, useEffect } from 'react';
+import {
+    usePersonalTokens,
+    useCreatePersonalToken,
+    useDeletePersonalToken,
+    useUserProfile,
+    useUpdateUserProfile
+} from '@/api/queries';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,7 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { KeyRound, Plus, Copy, Trash2, Key } from 'lucide-react';
+import { KeyRound, Plus, Copy, Trash2, Key, User } from 'lucide-react';
 import { toast } from 'sonner';
 import {EmptyState} from "@/components/EmptyState.tsx";
 
@@ -16,6 +22,29 @@ export function AccountSettingsPage() {
     const { data: tokens, isLoading } = usePersonalTokens();
     const createToken = useCreatePersonalToken();
     const deleteToken = useDeletePersonalToken();
+
+    const { data: profile } = useUserProfile();
+    const updateProfile = useUpdateUserProfile();
+    const [username, setUsername] = useState('');
+
+    useEffect(() => {
+        if (profile) {
+            setUsername(profile.username);
+        }
+    }, [profile]);
+
+    const handleUpdateProfile = async () => {
+        if (!username.trim()) {
+            toast.error('Username is required');
+            return;
+        }
+        try {
+            await updateProfile.mutateAsync({ username: username.trim() });
+            toast.success('Username updated successfully');
+        } catch (err: any) {
+            toast.error(err.response?.data?.errors?.[0]?.message || 'Failed to update username');
+        }
+    };
 
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [tokenName, setTokenName] = useState('');
@@ -66,7 +95,7 @@ export function AccountSettingsPage() {
             <div className="flex items-center justify-between">
                 <div>
                     <h2 className="text-2xl font-bold tracking-tight">Account Settings</h2>
-                    <p className="text-muted-foreground">Manage your personal developer access tokens.</p>
+                    <p className="text-muted-foreground">Manage your profile details and developer access tokens.</p>
                 </div>
                 <Dialog open={isDialogOpen} onOpenChange={(open) => { setIsDialogOpen(open); if (!open) setRevealedSecret(null); }}>
                     <DialogTrigger asChild>
@@ -129,6 +158,42 @@ export function AccountSettingsPage() {
                     </DialogContent>
                 </Dialog>
             </div>
+
+            <Card className="border-border/40 bg-zinc-950/20">
+                <CardHeader>
+                    <CardTitle className="text-base flex items-center gap-2">
+                        <User className="h-4 w-4 text-muted-foreground" /> Profile Settings
+                    </CardTitle>
+                    <CardDescription>
+                        Manage your user profile information.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl">
+                        <div className="space-y-2">
+                            <label className="text-sm text-muted-foreground">Email Address</label>
+                            <Input value={profile?.email || ''} readOnly disabled className="border-border/40 bg-zinc-900/40" />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-sm text-muted-foreground">Username</label>
+                            <div className="flex gap-3">
+                                <Input
+                                    value={username}
+                                    onChange={(e) => setUsername(e.target.value)}
+                                    placeholder="Username"
+                                    className="border-border/40 bg-zinc-950/40"
+                                />
+                                <Button
+                                    onClick={handleUpdateProfile}
+                                    disabled={updateProfile.isPending || !username.trim() || username === profile?.username}
+                                >
+                                    {updateProfile.isPending ? 'Saving...' : 'Update'}
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
 
             <Card className="border-border/40 bg-zinc-950/20">
                 <CardHeader>

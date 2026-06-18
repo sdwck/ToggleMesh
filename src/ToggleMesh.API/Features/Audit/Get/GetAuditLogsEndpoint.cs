@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using ToggleMesh.API.Infrastructure;
+using ToggleMesh.API.Infrastructure.Endpoints;
 using ToggleMesh.API.Persistence;
 
 namespace ToggleMesh.API.Features.Audit.Get;
@@ -36,23 +37,19 @@ public class GetAuditLogsEndpoint : ToggleEndpoint<GetAuditLogsRequest, GetAudit
             projectIdToCheck = env.ProjectId;
         }
 
-        var projectMember = await _db.ProjectMembers
-            .Include(pm => pm.EnvironmentRoles)
-            .FirstOrDefaultAsync(pm => pm.ProjectId == projectIdToCheck && pm.UserId == UserId, ct);
+        (var role, var envRoles) = await _db.GetProjectRoleAndEnvOverridesAsync(projectIdToCheck, UserId, ct);
 
-        if (projectMember == null)
+        if (role == null)
         {
             await Send.ForbiddenAsync(ct);
             return;
         }
 
-        var effectiveRole = projectMember.Role;
+        var effectiveRole = role.Value;
         if (req.EnvironmentId.HasValue)
         {
-            var envRoleOverride =
-                projectMember.EnvironmentRoles.FirstOrDefault(er => er.EnvironmentId == req.EnvironmentId.Value);
-            if (envRoleOverride != null)
-                effectiveRole = envRoleOverride.Role;
+            if (envRoles.TryGetValue(req.EnvironmentId.Value, out var envRoleOverride))
+                effectiveRole = envRoleOverride;
         }
 
         if (effectiveRole == Projects.ProjectRole.None)

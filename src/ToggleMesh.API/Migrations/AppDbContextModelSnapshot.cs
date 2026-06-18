@@ -462,6 +462,50 @@ namespace ToggleMesh.API.Migrations
                     b.ToTable("ProjectFlagRules", (string)null);
                 });
 
+            modelBuilder.Entity("ToggleMesh.API.Features.Organizations.Organization", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Organizations");
+                });
+
+            modelBuilder.Entity("ToggleMesh.API.Features.Organizations.OrganizationMember", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Role")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("OrganizationId", "UserId")
+                        .IsUnique();
+
+                    b.ToTable("OrganizationMembers");
+                });
+
             modelBuilder.Entity("ToggleMesh.API.Features.Projects.EnvironmentKey", b =>
                 {
                     b.Property<Guid>("Id")
@@ -547,7 +591,12 @@ namespace ToggleMesh.API.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
 
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("OrganizationId");
 
                     b.ToTable("Projects");
                 });
@@ -763,6 +812,25 @@ namespace ToggleMesh.API.Migrations
                     b.Navigation("FlagEnvironmentState");
                 });
 
+            modelBuilder.Entity("ToggleMesh.API.Features.Organizations.OrganizationMember", b =>
+                {
+                    b.HasOne("ToggleMesh.API.Features.Organizations.Organization", "Organization")
+                        .WithMany("Members")
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ToggleMesh.API.Features.Auth.Models.ApplicationUser", "User")
+                        .WithMany("OrganizationMembers")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Organization");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("ToggleMesh.API.Features.Projects.EnvironmentKey", b =>
                 {
                     b.HasOne("ToggleMesh.API.Features.Projects.ProjectEnvironment", "Environment")
@@ -791,6 +859,17 @@ namespace ToggleMesh.API.Migrations
                     b.Navigation("Environment");
 
                     b.Navigation("ProjectMember");
+                });
+
+            modelBuilder.Entity("ToggleMesh.API.Features.Projects.Project", b =>
+                {
+                    b.HasOne("ToggleMesh.API.Features.Organizations.Organization", "Organization")
+                        .WithMany("Projects")
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Organization");
                 });
 
             modelBuilder.Entity("ToggleMesh.API.Features.Projects.ProjectEnvironment", b =>
@@ -836,6 +915,8 @@ namespace ToggleMesh.API.Migrations
 
             modelBuilder.Entity("ToggleMesh.API.Features.Auth.Models.ApplicationUser", b =>
                 {
+                    b.Navigation("OrganizationMembers");
+
                     b.Navigation("ProjectMembers");
 
                     b.Navigation("RefreshTokens");
@@ -849,6 +930,13 @@ namespace ToggleMesh.API.Migrations
             modelBuilder.Entity("ToggleMesh.API.Features.Flags.FlagEnvironmentState", b =>
                 {
                     b.Navigation("Rules");
+                });
+
+            modelBuilder.Entity("ToggleMesh.API.Features.Organizations.Organization", b =>
+                {
+                    b.Navigation("Members");
+
+                    b.Navigation("Projects");
                 });
 
             modelBuilder.Entity("ToggleMesh.API.Features.Projects.Project", b =>

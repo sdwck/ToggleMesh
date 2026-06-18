@@ -1,7 +1,7 @@
 using FastEndpoints;
 using ToggleMesh.API.Extensions;
 
-namespace ToggleMesh.API.Infrastructure;
+namespace ToggleMesh.API.Infrastructure.Endpoints;
 
 public abstract class ToggleEndpoint<TRequest, TResponse> : Endpoint<TRequest, TResponse>
     where TRequest : notnull
@@ -11,16 +11,6 @@ public abstract class ToggleEndpoint<TRequest, TResponse> : Endpoint<TRequest, T
 
 public abstract class ToggleEndpoint<TRequest> : Endpoint<TRequest>
     where TRequest : notnull
-{
-    protected Guid UserId => User.GetUserId();
-}
-
-public abstract class ToggleEndpointWithoutRequest<TResponse> : EndpointWithoutRequest<TResponse>
-{
-    protected Guid UserId => User.GetUserId();
-}
-
-public abstract class ToggleEndpointWithoutRequest : EndpointWithoutRequest
 {
     protected Guid UserId => User.GetUserId();
 }

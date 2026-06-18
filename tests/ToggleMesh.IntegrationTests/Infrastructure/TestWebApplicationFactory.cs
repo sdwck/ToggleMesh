@@ -58,10 +58,15 @@ public class TestWebApplicationFactory : WebApplicationFactory<Program>, IAsyncL
                 services.Remove(webhookServiceDescriptor);
 
             services.AddSingleton<AuditInterceptor>();
+            services.AddSingleton<RealTimeInvalidationInterceptor>();
+            services.AddSingleton<TestOrganizationInterceptor>();
 
-            services.AddDbContext<AppDbContext>((_, options) =>
+            services.AddDbContext<AppDbContext>((sp, options) =>
             {
                 options.UseNpgsql(_db.GetConnectionString());
+                options.AddInterceptors(
+                    sp.GetRequiredService<TestOrganizationInterceptor>(),
+                    sp.GetRequiredService<RealTimeInvalidationInterceptor>());
             });
 
             services.AddSingleton<IConnectionMultiplexer>(_ =>
@@ -88,6 +93,25 @@ public class TestWebApplicationFactory : WebApplicationFactory<Program>, IAsyncL
         };
         db.Users.Add(testUser);
         await db.SaveChangesAsync();
+
+        var testOrgId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        var testOrg = new ToggleMesh.API.Features.Organizations.Organization
+        {
+            Id = testOrgId,
+            Name = "Test Organization",
+            CreatedAt = DateTime.UtcNow
+        };
+        db.Organizations.Add(testOrg);
+
+        var testOrgMember = new ToggleMesh.API.Features.Organizations.OrganizationMember
+        {
+            Id = Guid.NewGuid(),
+            OrganizationId = testOrgId,
+            UserId = testUser.Id,
+            Role = ToggleMesh.API.Features.Organizations.OrganizationRole.Admin
+        };
+        db.OrganizationMembers.Add(testOrgMember);
+        await db.SaveChangesAsync();
     }
 
     public new async Task DisposeAsync()
@@ -95,5 +119,43 @@ public class TestWebApplicationFactory : WebApplicationFactory<Program>, IAsyncL
         await _db.DisposeAsync();
         await _redis.DisposeAsync();
         await base.DisposeAsync();
+    }
+}
+
+public class TestOrganizationInterceptor : Microsoft.EntityFrameworkCore.Diagnostics.SaveChangesInterceptor
+{
+    public override ValueTask<Microsoft.EntityFrameworkCore.Diagnostics.InterceptionResult<int>> SavingChangesAsync(
+        Microsoft.EntityFrameworkCore.Diagnostics.DbContextEventData eventData,
+        Microsoft.EntityFrameworkCore.Diagnostics.InterceptionResult<int> result,
+        System.Threading.CancellationToken cancellationToken = default)
+    {
+        if (eventData.Context is AppDbContext dbContext)
+        {
+            SetTestOrganizationId(dbContext);
+        }
+        return base.SavingChangesAsync(eventData, result, cancellationToken);
+    }
+
+    public override Microsoft.EntityFrameworkCore.Diagnostics.InterceptionResult<int> SavingChanges(
+        Microsoft.EntityFrameworkCore.Diagnostics.DbContextEventData eventData,
+        Microsoft.EntityFrameworkCore.Diagnostics.InterceptionResult<int> result)
+    {
+        if (eventData.Context is AppDbContext dbContext)
+        {
+            SetTestOrganizationId(dbContext);
+        }
+        return base.SavingChanges(eventData, result);
+    }
+
+    private void SetTestOrganizationId(AppDbContext dbContext)
+    {
+        var targetOrgId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        foreach (var entry in dbContext.ChangeTracker.Entries<ToggleMesh.API.Features.Projects.Project>())
+        {
+            if (entry.State == EntityState.Added && entry.Entity.OrganizationId == Guid.Empty)
+            {
+                entry.Entity.OrganizationId = targetOrgId;
+            }
+        }
     }
 }

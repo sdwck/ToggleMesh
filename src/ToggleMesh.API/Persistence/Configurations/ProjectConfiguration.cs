@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using ToggleMesh.API.Features.Projects;
 
@@ -20,6 +20,11 @@ public sealed class ProjectConfiguration : IEntityTypeConfiguration<Project>
         entity.HasMany(x => x.Environments)
             .WithOne(x => x.Project)
             .HasForeignKey(x => x.ProjectId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        entity.HasOne(x => x.Organization)
+            .WithMany(o => o.Projects)
+            .HasForeignKey(x => x.OrganizationId)
             .OnDelete(DeleteBehavior.Cascade);
     }
 }

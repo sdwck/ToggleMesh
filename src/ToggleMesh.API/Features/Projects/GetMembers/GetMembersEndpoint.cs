@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using ToggleMesh.API.Extensions;
 using ToggleMesh.API.Infrastructure;
+using ToggleMesh.API.Infrastructure.Endpoints;
 using ToggleMesh.API.Persistence;
 
 namespace ToggleMesh.API.Features.Projects.GetMembers;

@@ -16,16 +16,122 @@ import type {
     Webhook,
     CreateTokenRequest,
     CreateTokenResponse,
-    TokenDto
+    TokenDto,
+    OrganizationDto,
+    OrganizationMemberDto,
+    UserProfile
 } from './types';
 
-export const useProjects = () => {
+export const useOrganizations = () => {
     return useQuery({
-        queryKey: ['projects'],
+        queryKey: ['organizations'],
         queryFn: async () => {
-            const { data } = await api.get<Project[]>('/projects');
+            const { data } = await api.get<OrganizationDto[]>('/organizations');
             return data;
         },
+        staleTime: 5 * 60 * 1000,
+        gcTime: 10 * 60 * 1000,
+    });
+};
+
+export const useCreateOrganization = () => {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async (req: { name: string }) => {
+            const { data } = await api.post<OrganizationDto>('/organizations', req);
+            return data;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['organizations'] });
+        },
+    });
+};
+
+export const useUpdateOrganization = () => {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async (req: { organizationId: string; name: string }) => {
+            await api.put(`/organizations/${req.organizationId}`, { name: req.name });
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['organizations'] });
+        },
+    });
+};
+
+export const useDeleteOrganization = () => {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async (organizationId: string) => {
+            await api.delete(`/organizations/${organizationId}`);
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['organizations'] });
+        },
+    });
+};
+
+export const useOrganizationMembers = (organizationId: string | null) => {
+    return useQuery({
+        queryKey: ['organizations', organizationId, 'members'],
+        queryFn: async () => {
+            if (!organizationId) return [];
+            const { data } = await api.get<OrganizationMemberDto[]>(`/organizations/${organizationId}/members`);
+            return data;
+        },
+        enabled: !!organizationId,
+        placeholderData: keepPreviousData,
+    });
+};
+
+export const useInviteOrganizationMember = () => {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async (req: { organizationId: string; email: string; role: number }) => {
+            const { data } = await api.post<OrganizationMemberDto>(`/organizations/${req.organizationId}/members/invite`, req);
+            return data;
+        },
+        onSuccess: (_, variables) => {
+            queryClient.invalidateQueries({ queryKey: ['organizations', variables.organizationId, 'members'] });
+        },
+    });
+};
+
+export const useUpdateOrganizationMember = () => {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async (req: { organizationId: string; userId: string; role: number }) => {
+            await api.put(`/organizations/${req.organizationId}/members/${req.userId}`, { role: req.role });
+        },
+        onSuccess: (_, variables) => {
+            queryClient.invalidateQueries({ queryKey: ['organizations', variables.organizationId, 'members'] });
+        },
+    });
+};
+
+export const useRemoveOrganizationMember = () => {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async (req: { organizationId: string; userId: string }) => {
+            await api.delete(`/organizations/${req.organizationId}/members/${req.userId}`);
+        },
+        onSuccess: (_, variables) => {
+            queryClient.invalidateQueries({ queryKey: ['organizations', variables.organizationId, 'members'] });
+        },
+    });
+};
+
+export const useProjects = (organizationId: string | null) => {
+    return useQuery({
+        queryKey: ['projects', organizationId],
+        queryFn: async () => {
+            const url = organizationId ? `/projects?organizationId=${organizationId}` : '/projects';
+            const { data } = await api.get<Project[]>(url);
+            return data;
+        },
+        staleTime: 5 * 60 * 1000,
+        gcTime: 10 * 60 * 1000,
+        placeholderData: keepPreviousData,
     });
 };
 
@@ -44,8 +150,8 @@ export const useProjectDetails = (projectId: string) => {
 export const useCreateProject = () => {
     const queryClient = useQueryClient();
     return useMutation({
-        mutationFn: async (name: string) => {
-            const { data } = await api.post<{ id: string }>('/projects', { name });
+        mutationFn: async (req: { name: string; organizationId: string }) => {
+            const { data } = await api.post<{ id: string; name: string }>('/projects', req);
             return data;
         },
         onSuccess: () => {
@@ -124,6 +230,7 @@ export const useEnvironmentKeys = (projectId: string, envId: string) => {
             return data;
         },
         enabled: !!projectId && !!envId,
+        placeholderData: keepPreviousData,
     });
 };
 
@@ -187,6 +294,7 @@ export const useCreateFeatureFlag = (projectId: string) => {
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['projects', projectId, 'flags'] });
+            queryClient.invalidateQueries({ queryKey: ['projects', projectId, 'tags'] });
         },
     });
 };
@@ -386,6 +494,7 @@ export const useProjectMembers = (projectId: string) => {
             return data;
         },
         enabled: !!projectId,
+        placeholderData: keepPreviousData,
     });
 };
 
@@ -409,6 +518,7 @@ export const useDeleteFeatureFlag = (projectId: string) => {
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['projects', projectId, 'flags'] });
+            queryClient.invalidateQueries({ queryKey: ['projects', projectId, 'tags'] });
         },
     });
 };
@@ -421,6 +531,7 @@ export const useProjectWebhooks = (projectId: string) => {
             return data;
         },
         enabled: !!projectId,
+        placeholderData: keepPreviousData,
     });
 };
 
@@ -455,6 +566,29 @@ export const usePersonalTokens = () => {
         queryFn: async () => {
             const { data } = await api.get<TokenDto[]>('/user/tokens');
             return data;
+        },
+    });
+};
+
+export const useUserProfile = () => {
+    return useQuery({
+        queryKey: ['user', 'profile'],
+        queryFn: async () => {
+            const { data } = await api.get<UserProfile>('/user/profile');
+            return data;
+        },
+        placeholderData: keepPreviousData,
+    });
+};
+
+export const useUpdateUserProfile = () => {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async (req: { username: string }) => {
+            await api.put('/user/profile', req);
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['user', 'profile'] });
         },
     });
 };
@@ -516,6 +650,7 @@ export const useUpdateFlagMetadata = (projectId: string, flagKey: string) => {
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['projects', projectId, 'flags'] });
+            queryClient.invalidateQueries({ queryKey: ['projects', projectId, 'tags'] });
             queryClient.invalidateQueries({ queryKey: ['environments'] });
         },
     });

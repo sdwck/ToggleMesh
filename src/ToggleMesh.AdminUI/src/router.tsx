@@ -11,6 +11,7 @@ import { ProjectFlagDetailsPage } from '@/features/flags/ProjectFlagDetailsPage'
 import { EnvironmentDetailsPage } from '@/features/environments/EnvironmentDetailsPage';
 import { ProjectSettingsPage } from '@/features/projects/ProjectSettingsPage';
 import { AccountSettingsPage } from '@/features/auth/AccountSettingsPage';
+import { OrganizationSettingsPage } from '@/features/organizations/OrganizationSettingsPage';
 import { GlobalError } from '@/components/GlobalError';
 import { PlaygroundPage } from "@/PlaygroundPage.tsx";
 
@@ -41,6 +42,10 @@ export const router = createBrowserRouter([
             {
                 path: 'settings/account',
                 element: <AccountSettingsPage />,
+            },
+            {
+                path: 'settings/organization',
+                element: <OrganizationSettingsPage />,
             },
             {
                 path: 'projects/:projectId',

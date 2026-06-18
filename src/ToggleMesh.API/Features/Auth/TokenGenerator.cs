@@ -20,6 +20,7 @@ public static class TokenGenerator
         {
             new(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
             new("email", user.Email ?? ""),
+            new("username", user.UserName ?? ""),
             new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
         };
         
