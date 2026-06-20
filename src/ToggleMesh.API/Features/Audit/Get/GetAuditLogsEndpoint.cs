@@ -1,8 +1,8 @@
 using Microsoft.EntityFrameworkCore;
-using ToggleMesh.API.Infrastructure;
 using ToggleMesh.API.Infrastructure.Endpoints;
 using ToggleMesh.API.Persistence;
 using ToggleMesh.Common.Pagination;
+// ReSharper disable ConditionIsAlwaysTrueOrFalseAccordingToNullableAPIContract
 
 namespace ToggleMesh.API.Features.Audit.Get;
 
@@ -92,6 +92,15 @@ public class GetAuditLogsEndpoint : ToggleEndpoint<GetAuditLogsRequest, CursorPa
         if (!string.IsNullOrWhiteSpace(req.EntityName) && req.EntityName != "all")
             query = query.Where(x => 
                 EF.Functions.ILike(x.EntityName, req.EntityName));
+
+        if (!string.IsNullOrWhiteSpace(req.Search))
+        {
+            var searchTerm = $"%{req.Search}%";
+            query = query.Where(x =>
+                (x.EntityFriendlyName != null && EF.Functions.ILike(x.EntityFriendlyName, searchTerm)) ||
+                EF.Functions.ILike(x.EntityId, searchTerm) ||
+                (x.PerformedByEmail != null && EF.Functions.ILike(x.PerformedByEmail, searchTerm)));
+        }
         
         if (dateFrom.HasValue)
             query = query.Where(x => x.Timestamp >= dateFrom.Value);
@@ -105,12 +114,10 @@ public class GetAuditLogsEndpoint : ToggleEndpoint<GetAuditLogsRequest, CursorPa
             : query.OrderByDescending(x => x.Id);
 
         if (req.Cursor.HasValue)
-        {
-            if (isAscending)
-                query = query.Where(x => x.Id > req.Cursor.Value);
-            else
-                query = query.Where(x => x.Id < req.Cursor.Value);
-        }
+            query = isAscending 
+                ? query.Where(x => x.Id > req.Cursor.Value) 
+                : query.Where(x => x.Id < req.Cursor.Value);
+        
 
         var totalCount = await query.CountAsync(ct);
 

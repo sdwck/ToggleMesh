@@ -11,7 +11,6 @@ using ToggleMesh.API.Persistence;
 
 namespace ToggleMesh.API.Features.Auth.Sso;
 
-[AllowAnonymous]
 public class SsoCallbackEndpoint : ToggleEndpoint<EmptyRequest, LoginResponse>
 {
     private readonly UserManager<ApplicationUser> _userManager;
@@ -29,6 +28,7 @@ public class SsoCallbackEndpoint : ToggleEndpoint<EmptyRequest, LoginResponse>
     {
         Get("/auth/sso/callback-handler");
         Version(1);
+        AllowAnonymous();
     }
 
     public override async Task HandleAsync(EmptyRequest req, CancellationToken ct)

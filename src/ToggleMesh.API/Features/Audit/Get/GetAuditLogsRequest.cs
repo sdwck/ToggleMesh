@@ -1,4 +1,4 @@
-﻿using ToggleMesh.Common.Pagination;
+using ToggleMesh.Common.Pagination;
 
 namespace ToggleMesh.API.Features.Audit.Get;
 
@@ -11,4 +11,5 @@ public class GetAuditLogsRequest : CursorPagedRequest
     public string? SortOrder { get; set; }
     public DateTime? DateFrom { get; set; }
     public DateTime? DateTo { get; set; }
+    public string? Search { get; set; }
 }

@@ -29,6 +29,8 @@ const getEnvBadgeStyle = (name: string) => {
     return "bg-blue-500/10 text-blue-400 border-blue-500/20";
 };
 
+
+
 export function ProjectsPage() {
     const navigate = useNavigate();
     const queryClient = useQueryClient();
@@ -259,20 +261,35 @@ export function ProjectsPage() {
                     {projects?.map((project) => (
                         <Card
                             key={project.id}
-                            className="border-border/40 hover:border-primary/25 bg-zinc-950/20 hover:bg-zinc-950/40 transition-all cursor-pointer p-6 flex flex-col justify-between h-44 shadow-lg group"
+                            className="border-border/40 hover:border-primary/40 bg-zinc-950/20 hover:bg-zinc-950/50 transition-all cursor-pointer p-5 flex flex-col justify-between h-44 shadow-md hover:shadow-primary/5 group"
                             onClick={() => navigate(`/projects/${project.id}/flags`)}
                             onMouseEnter={() => handlePrefetchProject(project.id)}
                         >
-                            <div className="space-y-3">
+                            <div className="space-y-4">
                                 <div className="flex items-start justify-between">
-                                    <h3 className="font-semibold text-lg tracking-tight group-hover:text-primary transition-colors flex items-center gap-2">
-                                        <FolderGit2 className="h-5 w-5 text-muted-foreground" />
-                                        {project.name}
-                                    </h3>
-                                </div>
-                                <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-mono">
-                                    <Layers className="h-3.5 w-3.5" />
-                                    {project.environmentCount} environment(s)
+                                    <div className="flex items-center gap-3">
+                                        <div className="h-10 w-10 rounded-md bg-primary/10 border border-primary/20 flex items-center justify-center text-primary group-hover:scale-105 transition-transform">
+                                            <FolderGit2 className="h-5 w-5" />
+                                        </div>
+                                        <div>
+                                            <h3 className="font-semibold text-base tracking-tight group-hover:text-primary transition-colors">
+                                                {project.name}
+                                            </h3>
+                                            <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1 font-medium">
+                                                <span className="flex items-center gap-1">
+                                                    <Layers className="h-3 w-3" />
+                                                    {project.environmentCount} env{project.environmentCount !== 1 ? 's' : ''}
+                                                </span>
+                                                <span className="text-border/40">•</span>
+                                                <span className="capitalize">{
+                                                    project.userRole === 0 ? 'Owner' :
+                                                        project.userRole === 1 ? 'Admin' :
+                                                            project.userRole === 2 ? 'Editor' :
+                                                                project.userRole === 3 ? 'Viewer' : 'No Access'
+                                                }</span>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
 
@@ -288,7 +305,9 @@ export function ProjectsPage() {
                                         </Badge>
                                     ))}
                                 </div>
-                                <Button size="sm" variant="secondary" className="h-8 px-3 text-xs">View</Button>
+                                <Button size="sm" variant="secondary" className="h-8 px-3 text-xs opacity-0 group-hover:opacity-100 transition-opacity">
+                                    Open Project
+                                </Button>
                             </div>
                         </Card>
                     ))}

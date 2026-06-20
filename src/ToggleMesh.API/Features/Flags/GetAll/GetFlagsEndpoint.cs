@@ -7,7 +7,7 @@ using ToggleMesh.Common.Pagination;
 
 namespace ToggleMesh.API.Features.Flags.GetAll;
 
-public class GetFlagsEndpoint : ToggleEndpoint<GetFlagsRequest, CursorPagedResponse<ProjectFlagDto>>
+public class GetFlagsEndpoint : ToggleEndpoint<GetFlagsRequest, PagedResponse<ProjectFlagDto>>
 {
     private readonly AppDbContext _db;
 
@@ -35,42 +35,32 @@ public class GetFlagsEndpoint : ToggleEndpoint<GetFlagsRequest, CursorPagedRespo
             return;
         }
 
-        var rawFlagsQuery = _db.FeatureFlags
+        var query = _db.FeatureFlags
             .AsNoTracking()
-            .Include(x => x.States)
+            .AsSplitQuery()
+            .Include(x => x.States.Where(s => !s.Environment.IsDeleted))
             .ThenInclude(s => s.Rules)
             .Where(x => x.ProjectId == projectId);
 
         if (!string.IsNullOrWhiteSpace(req.Search))
-            rawFlagsQuery = rawFlagsQuery.Where(x =>
+            query = query.Where(x =>
                 EF.Functions.ILike(x.Key, $"%{req.Search}%") ||
                 (x.Name != null && EF.Functions.ILike(x.Name, $"%{req.Search}%")) ||
                 (x.Description != null && EF.Functions.ILike(x.Description, $"%{req.Search}%")) ||
                 x.Tags.Any(t => EF.Functions.ILike(t, $"%{req.Search}%")));
 
         if (req.Tags.Length > 0)
-            rawFlagsQuery = rawFlagsQuery.Where(x =>
+            query = query.Where(x =>
                 x.Tags.Any(t => req.Tags.Contains(t)));
 
-        var query = rawFlagsQuery;
-
-        if (req.Cursor.HasValue)
-            query = query.Where(x => x.Id < req.Cursor.Value);
-
-        var totalCount = await rawFlagsQuery.CountAsync(ct);
+        var totalCount = await query.CountAsync(ct);
 
         var rawFlags = await query
-            .OrderByDescending(x => x.Id)
-            .Take(req.PageSize + 1)
+            .OrderByDescending(x => x.UpdatedAt)
+            .ThenByDescending(x => x.CreatedAt)
+            .Skip((req.Page - 1) * req.PageSize)
+            .Take(req.PageSize)
             .ToListAsync(ct);
-
-        var hasNextPage = rawFlags.Count > req.PageSize;
-        if (hasNextPage)
-            rawFlags.RemoveAt(rawFlags.Count - 1);
-
-        var nextCursor = rawFlags.Count > 0 
-            ? rawFlags.Last().Id 
-            : (Guid?)null;
 
         var flags = rawFlags.Select(x => new ProjectFlagDto(
                 x.Id,
@@ -97,6 +87,6 @@ public class GetFlagsEndpoint : ToggleEndpoint<GetFlagsRequest, CursorPagedRespo
                 x.Tags))
             .ToList();
 
-        await Send.OkAsync(new CursorPagedResponse<ProjectFlagDto>(flags, totalCount, nextCursor, hasNextPage), ct);
+        await Send.OkAsync(new PagedResponse<ProjectFlagDto>(flags, totalCount, req.Page, req.PageSize), ct);
     }
 }

@@ -5,7 +5,6 @@ namespace ToggleMesh.API.Features.Organizations;
 
 public class OrganizationMember : AuditableEntity
 {
-    
     public Guid OrganizationId { get; set; }
     public Organization Organization { get; set; } = null!;
 

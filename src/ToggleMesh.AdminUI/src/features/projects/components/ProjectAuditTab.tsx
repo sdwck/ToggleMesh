@@ -43,6 +43,13 @@ export function ProjectAuditTab({ project, isLoading }: { project?: ProjectDetai
     const [filterAction, setFilterAction] = useState<string>('all');
     const [filterEntity, setFilterEntity] = useState<string>('all');
     const [sortOrder, setSortOrder] = useState<string>('desc');
+    const [search, setSearch] = useState<string>('');
+    const [debouncedSearch, setDebouncedSearch] = useState<string>('');
+
+    useEffect(() => {
+        const timer = setTimeout(() => setDebouncedSearch(search), 300);
+        return () => clearTimeout(timer);
+    }, [search]);
 
     const [rangeType, setRangeType] = useState<string>('all');
     const [customFrom, setCustomFrom] = useState<string>('');
@@ -67,7 +74,8 @@ export function ProjectAuditTab({ project, isLoading }: { project?: ProjectDetai
         sortOrder,
         rangeType,
         customFrom,
-        customTo
+        customTo,
+        debouncedSearch
     );
 
     const items = auditData?.pages.flatMap(p => p.items) || [];
@@ -133,6 +141,13 @@ export function ProjectAuditTab({ project, isLoading }: { project?: ProjectDetai
                     <p className="text-sm text-muted-foreground">Review project activity and audit trail.</p>
                 </div>
                 <div className="flex gap-3 flex-wrap items-center self-end">
+                    <Input
+                        type="search"
+                        placeholder="Search logs..."
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        className="w-[200px] h-10 bg-zinc-950/20 border-border/40 text-xs"
+                    />
                     <Select value={filterAction} onValueChange={setFilterAction}>
                         <SelectTrigger className="w-[160px] h-10 bg-zinc-950/20 border-border/40 text-xs">
                             <SelectValue placeholder="Filter by action" />
@@ -154,6 +169,8 @@ export function ProjectAuditTab({ project, isLoading }: { project?: ProjectDetai
                             <SelectItem value="featureflag">Feature Flags</SelectItem>
                             <SelectItem value="projectenvironment">Environments</SelectItem>
                             <SelectItem value="projectmember">Members</SelectItem>
+                            <SelectItem value="webhook">Webhooks</SelectItem>
+                            <SelectItem value="project">Project</SelectItem>
                         </SelectContent>
                     </Select>
 
@@ -335,9 +352,7 @@ export function ProjectAuditTab({ project, isLoading }: { project?: ProjectDetai
             </Card>
 
             {hasNextPage && (
-                <div ref={loadMoreRef} className="flex justify-center pt-2 h-10 items-center">
-                    <span className="text-sm text-muted-foreground animate-pulse">Loading more...</span>
-                </div>
+                <div ref={loadMoreRef} className="h-4" />
             )}
 
             <Dialog open={!!selectedAuditLog} onOpenChange={(open) => !open && setSelectedAuditLog(null)}>

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
     useProjectDetails,
     useUpdateProject,
@@ -7,9 +7,12 @@ import {
     useProjectWebhooks,
     useCreateWebhook,
     useDeleteWebhook,
+    useUpdateWebhookStatus,
     useProjectFlags,
     useProjectMembers
 } from '@/api/queries';
+import { WebhookStatus } from '@/api/types';
+import type { Webhook } from '@/api/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -27,9 +30,11 @@ import {
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Trash2, Plus, Copy, Globe, AlertTriangle, Shield, Layers, Users, Flag, BookOpen } from 'lucide-react';
+import { Trash2, Plus, Copy, Globe, AlertTriangle, Shield, Layers, Users, Flag, BookOpen, Pause, Play, Activity, Settings } from 'lucide-react';
 import { toast } from 'sonner';
 import { EmptyState } from "@/components/EmptyState.tsx";
+import { WebhookDeliveriesModal } from './components/WebhookDeliveriesModal';
+import { EditWebhookModal } from './components/EditWebhookModal';
 
 const formatProjectDate = (dateString?: string) => {
     if (!dateString) return 'Unknown';
@@ -61,12 +66,20 @@ export function ProjectSettingsPage() {
     const deleteProject = useDeleteProject();
     const createWebhook = useCreateWebhook(projectId!);
     const deleteWebhook = useDeleteWebhook(projectId!);
+    const updateWebhookStatus = useUpdateWebhookStatus(projectId!);
 
-    const [activeTab, setActiveTab] = useState('general');
+    const [searchParams, setSearchParams] = useSearchParams();
+    const activeTab = searchParams.get('tab') || 'general';
+
+    const handleTabChange = (tab: string) => {
+        setSearchParams({ tab });
+    };
 
     const [projectName, setProjectName] = useState('');
     const [deleteConfirmName, setDeleteConfirmName] = useState('');
     const [isDeleteProjectOpen, setIsDeleteProjectOpen] = useState(false);
+
+    const [editingWebhook, setEditingWebhook] = useState<Webhook | null>(null);
 
     const handleOpenDeleteDialog = (open: boolean) => {
         setIsDeleteProjectOpen(open);
@@ -82,6 +95,7 @@ export function ProjectSettingsPage() {
     const [revealedSecret, setRevealedSecret] = useState<string | null>(null);
 
     const [webhookToDelete, setWebhookToDelete] = useState<string | null>(null);
+    const [deliveriesWebhook, setDeliveriesWebhook] = useState<Webhook | null>(null);
 
     useEffect(() => {
         if (project?.name) {
@@ -112,8 +126,18 @@ export function ProjectSettingsPage() {
             await deleteWebhook.mutateAsync(webhookToDelete);
             toast.success('Webhook deleted successfully');
             setWebhookToDelete(null);
-        } catch {
+        } catch (error) {
             toast.error('Failed to delete webhook');
+        }
+    };
+
+    const handleToggleWebhookStatus = async (hook: Webhook) => {
+        try {
+            const newStatus = hook.status === WebhookStatus.Active ? WebhookStatus.Paused : WebhookStatus.Active;
+            await updateWebhookStatus.mutateAsync({ webhookId: hook.id, status: newStatus });
+            toast.success(`Webhook ${newStatus === WebhookStatus.Active ? 'resumed' : 'paused'}`);
+        } catch {
+            toast.error('Failed to update webhook status');
         }
     };
 
@@ -183,11 +207,11 @@ export function ProjectSettingsPage() {
                 </div>
             </div>
 
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-5">
+            <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-5">
                 <TabsList className="bg-zinc-950 border border-border/40 p-1">
                     <TabsTrigger value="general" className="text-xs">General</TabsTrigger>
                     <TabsTrigger value="webhooks" className="text-xs gap-1.5">
-                        <Globe className="h-3.5 w-3.5" /> Webhooks
+                        <Settings className="h-3.5 w-3.5" /> Webhooks
                         {!isWebhooksLoading && (
                             <Badge variant="outline" className="px-1 py-0 text-[10px] bg-zinc-900 border-zinc-800">
                                 {webhooks?.length ?? 0}
@@ -237,13 +261,14 @@ export function ProjectSettingsPage() {
                                                 {isProjectLoading ? (
                                                     <Skeleton className="h-6 w-28 rounded" />
                                                 ) : (
-                                                    <Link
-                                                        to={`/projects/${projectId}/environments`}
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleTabChange('environments')}
                                                         className="flex items-center gap-1.5 font-mono text-zinc-300 hover:text-blue-400 bg-zinc-900/30 hover:bg-blue-500/10 px-2 py-1 rounded border border-border/10 hover:border-blue-500/20 transition-all text-[11px]"
                                                     >
                                                         <Layers className="h-3.5 w-3.5 text-blue-500" />
                                                         <span>{project?.environments?.length || 0} configured</span>
-                                                    </Link>
+                                                    </button>
                                                 )}
                                             </div>
 
@@ -252,13 +277,14 @@ export function ProjectSettingsPage() {
                                                 {isFlagsLoading ? (
                                                     <Skeleton className="h-6 w-28 rounded" />
                                                 ) : (
-                                                    <Link
-                                                        to={`/projects/${projectId}/flags`}
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleTabChange('flags')}
                                                         className="flex items-center gap-1.5 font-mono text-zinc-300 hover:text-purple-400 bg-zinc-900/30 hover:bg-purple-500/10 px-2 py-1 rounded border border-border/10 hover:border-purple-500/20 transition-all text-[11px]"
                                                     >
                                                         <Flag className="h-3.5 w-3.5 text-purple-500" />
                                                         <span>{flags?.length || 0} defined</span>
-                                                    </Link>
+                                                    </button>
                                                 )}
                                             </div>
 
@@ -269,7 +295,7 @@ export function ProjectSettingsPage() {
                                                 ) : (
                                                     <button
                                                         type="button"
-                                                        onClick={() => setActiveTab('webhooks')}
+                                                        onClick={() => handleTabChange('webhooks')}
                                                         className="flex items-center gap-1.5 font-mono text-zinc-300 hover:text-orange-400 bg-zinc-900/30 hover:bg-orange-500/10 px-2 py-1 rounded border border-border/10 hover:border-orange-500/20 transition-all text-[11px]"
                                                     >
                                                         <Globe className="h-3.5 w-3.5 text-orange-500" />
@@ -283,13 +309,14 @@ export function ProjectSettingsPage() {
                                                 {isMembersLoading ? (
                                                     <Skeleton className="h-6 w-28 rounded" />
                                                 ) : (
-                                                    <Link
-                                                        to={`/projects/${projectId}/members`}
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleTabChange('members')}
                                                         className="flex items-center gap-1.5 font-mono text-zinc-300 hover:text-emerald-400 bg-zinc-900/30 hover:bg-emerald-500/10 px-2 py-1 rounded border border-border/10 hover:border-emerald-500/20 transition-all text-[11px]"
                                                     >
                                                         <Users className="h-3.5 w-3.5 text-emerald-500" />
                                                         <span>{members?.length || 0} users</span>
-                                                    </Link>
+                                                    </button>
                                                 )}
                                             </div>
 
@@ -557,7 +584,7 @@ export function ProjectSettingsPage() {
                                                 <div className="flex gap-1.5 flex-wrap">
                                                     {hook.events.length === 0 ? (
                                                         <Badge variant="outline"
-                                                            className="text-[10px] font-mono">ALL</Badge>
+                                                            className="text-[10px] font-mono text-zinc-500 border-zinc-700">NONE</Badge>
                                                     ) : (
                                                         hook.events.map((e: string) => <Badge key={e}
                                                             variant="outline"
@@ -568,15 +595,54 @@ export function ProjectSettingsPage() {
                                             <TableCell className="text-xs text-muted-foreground font-mono">
                                                 {hook.lastTriggeredAt ? new Date(hook.lastTriggeredAt).toLocaleString() : 'Never'}
                                             </TableCell>
+                                            <TableCell>
+                                                <div className="flex gap-2">
+                                                    {hook.status === WebhookStatus.Active && (
+                                                        <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 text-[10px]">Active</Badge>
+                                                    )}
+                                                    {hook.status === WebhookStatus.Paused && (
+                                                        <Badge variant="outline" className="bg-zinc-500/10 text-zinc-400 border-zinc-500/20 text-[10px]">Paused</Badge>
+                                                    )}
+                                                    {hook.status === WebhookStatus.Failing && (
+                                                        <Badge variant="outline" className="bg-amber-500/10 text-amber-400 border-amber-500/20 text-[10px]">Failing ({hook.consecutiveFailures}/10)</Badge>
+                                                    )}
+                                                    {hook.status === WebhookStatus.DisabledBySystem && (
+                                                        <Badge variant="outline" className="bg-rose-500/10 text-rose-400 border-rose-500/20 text-[10px]">Disabled</Badge>
+                                                    )}
+                                                </div>
+                                            </TableCell>
                                             <TableCell className="text-right">
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                                                    onClick={() => setWebhookToDelete(hook.id)}
-                                                >
-                                                    <Trash2 className="h-4 w-4" />
-                                                </Button>
+                                                <div className="flex justify-end gap-1">
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="h-8 w-8 text-muted-foreground hover:text-blue-400"
+                                                        onClick={() => setDeliveriesWebhook(hook)}
+                                                    >
+                                                        <Activity className="h-4 w-4" />
+                                                    </Button>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="h-8 w-8 text-muted-foreground hover:text-amber-400"
+                                                        title={hook.status === WebhookStatus.Paused ? 'Resume Webhook' : 'Pause Webhook'}
+                                                        onClick={() => handleToggleWebhookStatus(hook)}
+                                                    >
+                                                        {hook.status === WebhookStatus.Paused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
+                                                    </Button>
+                                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary"
+                                                        onClick={() => setEditingWebhook(hook)}>
+                                                        <Settings className="h-4 w-4" />
+                                                    </Button>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                                                        onClick={() => setWebhookToDelete(hook.id)}
+                                                    >
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </Button>
+                                                </div>
                                             </TableCell>
                                         </TableRow>
                                     ))
@@ -598,11 +664,23 @@ export function ProjectSettingsPage() {
                     <DialogFooter className="mt-4">
                         <Button variant="outline" onClick={() => setWebhookToDelete(null)}>Cancel</Button>
                         <Button variant="destructive" onClick={executeDeleteWebhook} disabled={deleteWebhook.isPending}>
-                            {deleteWebhook.isPending ? 'Deleting...' : 'Yes, Delete'}
+                            {deleteWebhook.isPending ? 'Deleting...' : 'Delete Webhook'}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            <WebhookDeliveriesModal 
+                webhook={deliveriesWebhook} 
+                open={!!deliveriesWebhook} 
+                onOpenChange={(open) => !open && setDeliveriesWebhook(null)} 
+            />
+
+            <EditWebhookModal
+                webhook={editingWebhook}
+                open={!!editingWebhook}
+                onOpenChange={(open) => !open && setEditingWebhook(null)}
+            />
         </div>
     );
 }

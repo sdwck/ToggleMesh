@@ -1,4 +1,4 @@
-﻿using System.Security.Claims;
+using System.Security.Claims;
 using System.Text.Json;
 using System.Threading.Channels;
 using Microsoft.EntityFrameworkCore;
@@ -6,10 +6,12 @@ using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using ToggleMesh.API.Extensions;
 using ToggleMesh.API.Features.Audit;
+using ToggleMesh.API.Features.Auth.Models;
 using ToggleMesh.API.Features.Flags;
 using ToggleMesh.API.Features.Webhooks;
 using ToggleMesh.API.Persistence.Interceptors.Audit;
 using ToggleMesh.API.Persistence.Interceptors.Audit.Analyzers;
+using ToggleMesh.API.Persistence.Abstractions;
 
 namespace ToggleMesh.API.Persistence.Interceptors;
 
@@ -84,6 +86,7 @@ public class AuditInterceptor : SaveChangesInterceptor
 
         var actorEmail = user?.FindFirst("email")?.Value
                          ?? user?.FindFirst(ClaimTypes.Email)?.Value
+                         ?? user?.Identity?.Name
                          ?? string.Empty;
 
         var auditEntries = new List<AuditLog>();
@@ -98,7 +101,7 @@ public class AuditInterceptor : SaveChangesInterceptor
         
         var modifiedEntries = context.ChangeTracker.Entries()
             .Where(e => 
-                e.Entity is not AuditLog 
+                e.Entity is not AuditLog and not WebhookDelivery and not RefreshToken
                 && e.State is not 
                     (EntityState.Detached or EntityState.Unchanged))
             .ToList();
@@ -114,13 +117,23 @@ public class AuditInterceptor : SaveChangesInterceptor
             if (oldVals == null && newVals == null)
                 continue;
             
+            var action = entry.State.ToString();
+            if (entry is { State: EntityState.Modified, Entity: ISoftDeletable softDeletable })
+            {
+                var isDeletedProp = entry.Property("IsDeleted");
+                if (isDeletedProp is { IsModified: true, CurrentValue: true })
+                    action = "Deleted";
+                else if (isDeletedProp is { IsModified: true, CurrentValue: false })
+                    action = "Restored";
+            }
+
             auditEntries.Add(new AuditLog
             {
                 Id = Guid.CreateVersion7(),
                 EntityName = entityType.Name,
                 EntityFriendlyName = metadata.FriendlyName,
                 EntityId = entry.Property("Id").CurrentValue?.ToString() ?? "New",
-                Action = entry.State.ToString(),
+                Action = action,
                 Timestamp = DateTime.UtcNow,
                 ProjectId = metadata.ProjectId,
                 EnvironmentId = metadata.EnvironmentId,
@@ -162,13 +175,20 @@ public class AuditInterceptor : SaveChangesInterceptor
 
                 if (eventName != null)
                 {
-                    var alreadyExists = webhookEvents.Any(e => 
+                    var existingEvent = webhookEvents.FirstOrDefault(e => 
                         e.ProjectId == metadata.ProjectId.Value && 
-                        e.EnvironmentId == metadata.EnvironmentId && 
                         e.EventName == eventName && 
                         e.FlagKey == flagKey);
 
-                    if (!alreadyExists)
+                    if (existingEvent != null)
+                    {
+                        if (existingEvent.EnvironmentId == null && metadata.EnvironmentId != null)
+                        {
+                            webhookEvents.Remove(existingEvent);
+                            webhookEvents.Add(existingEvent with { EnvironmentId = metadata.EnvironmentId });
+                        }
+                    }
+                    else
                     {
                         webhookEvents.Add(new WebhookEvent(
                             metadata.ProjectId.Value,
@@ -197,7 +217,11 @@ public class AuditInterceptor : SaveChangesInterceptor
             var name = property.Metadata.Name;
             if (name == "Id" 
                 || name.EndsWith("Id") 
-                || name.EndsWith("Hash")) 
+                || name.EndsWith("Hash")
+                || name == "UpdatedAt"
+                || name == "CreatedAt"
+                || name == "LastTriggeredAt"
+                || name == "ConsecutiveFailures") 
                 continue;
 
             switch (entry.State)

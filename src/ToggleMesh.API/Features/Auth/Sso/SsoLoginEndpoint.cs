@@ -5,13 +5,13 @@ using Microsoft.AspNetCore.Authorization;
 
 namespace ToggleMesh.API.Features.Auth.Sso;
 
-[AllowAnonymous]
 public class SsoLoginEndpoint : EndpointWithoutRequest
 {
     public override void Configure()
     {
         Get("/auth/sso/login");
         Version(1);
+        AllowAnonymous();
     }
 
     public override async Task HandleAsync(CancellationToken ct)

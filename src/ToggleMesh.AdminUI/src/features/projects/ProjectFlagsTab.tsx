@@ -32,8 +32,8 @@ export function ProjectFlagsTab({ project, search, tags, sortBy, isLoadingProjec
     const navigate = useNavigate();
     const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-    const { 
-        data: flagsData, 
+    const {
+        data: flagsData,
         isLoading: isLoadingFlags,
         fetchNextPage,
         hasNextPage,
@@ -187,7 +187,10 @@ export function ProjectFlagsTab({ project, search, tags, sortBy, isLoadingProjec
             hasNextPage &&
             !isFetchingNextPage
         ) {
-            fetchNextPage();
+            const scrollElement = scrollContainerRef.current;
+            if (scrollElement && scrollElement.scrollTop > 50) {
+                fetchNextPage();
+            }
         }
     }, [virtualItems, orderedFlags.length, hasNextPage, isFetchingNextPage, fetchNextPage]);
 
@@ -378,11 +381,6 @@ export function ProjectFlagsTab({ project, search, tags, sortBy, isLoadingProjec
                 </div>
             </Card>
 
-            {isFetchingNextPage && (
-                <div className="flex justify-center pt-2 pb-4">
-                    <span className="text-sm text-muted-foreground animate-pulse">Loading more...</span>
-                </div>
-            )}
 
             <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
                 <DialogContent className="border-border/40 bg-zinc-950">

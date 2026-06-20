@@ -1,4 +1,4 @@
-﻿using ToggleMesh.API.Features.Projects;
+using ToggleMesh.API.Features.Projects;
 using ToggleMesh.API.Persistence.Abstractions;
 
 namespace ToggleMesh.API.Features.Webhooks;
@@ -11,7 +11,8 @@ public class Webhook : AuditableEntity
     public string Name { get; set; } = string.Empty;
     public string Url { get; set; } = string.Empty;
     public string SecretKey { get; set; } = string.Empty;
-    public bool IsActive { get; set; } = true;
+    public WebhookStatus Status { get; set; } = WebhookStatus.Active;
+    public int ConsecutiveFailures { get; set; } = 0;
     
     public Guid[] EnvironmentIds { get; set; } = []; 
     public string[] Events { get; set; } = []; 

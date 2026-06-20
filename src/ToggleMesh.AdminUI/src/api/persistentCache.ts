@@ -1,4 +1,4 @@
-﻿import {dehydrate, hydrate, QueryClient} from '@tanstack/react-query';
+import { dehydrate, hydrate, QueryClient } from '@tanstack/react-query';
 
 const CACHE_KEY = 'REACT_QUERY_OFFLINE_CACHE';
 const MAX_CACHE_SIZE_BYTES = 2.5 * 1024 * 1024;
@@ -34,6 +34,25 @@ export function persistCache(queryClient: QueryClient) {
 
                             return true;
                         }
+                    });
+
+
+                    state.queries = state.queries.map((q) => {
+                        const data = q.state.data as any;
+                        if (data && Array.isArray(data.pages) && Array.isArray(data.pageParams)) {
+                            return {
+                                ...q,
+                                state: {
+                                    ...q.state,
+                                    data: {
+                                        ...data,
+                                        pages: data.pages.slice(0, 1),
+                                        pageParams: data.pageParams.slice(0, 1)
+                                    }
+                                }
+                            };
+                        }
+                        return q;
                     });
 
                     let serializedState = JSON.stringify(state);

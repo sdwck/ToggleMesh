@@ -7,6 +7,7 @@ using StackExchange.Redis;
 using ToggleMesh.API.Features.Flags;
 using ToggleMesh.API.Features.Organizations;
 using ToggleMesh.API.Features.Projects;
+using ToggleMesh.API.Features.Webhooks;
 using ToggleMesh.API.Infrastructure.Sse;
 
 namespace ToggleMesh.API.Persistence.Interceptors;
@@ -71,6 +72,8 @@ public class RealTimeInvalidationInterceptor : SaveChangesInterceptor
                 state.SseKeys.Add(["organizations"]);
             else if (entry.Entity is OrganizationMember member)
                 state.SseKeys.Add(["organizations", member.OrganizationId, "members"]);
+            else if (entry.Entity is Webhook webhook)
+                state.SseKeys.Add(["projects", webhook.ProjectId, "webhooks"]);
 
             if (entry.Entity is ProjectMember pm)
                 state.MemberSnapshots.Add(new MemberSnapshot

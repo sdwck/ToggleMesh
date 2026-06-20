@@ -27,6 +27,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
     public DbSet<MemberEnvironmentRole> MemberEnvironmentRoles { get; set; }
     public DbSet<RefreshToken> RefreshTokens { get; set; }
     public DbSet<Webhook> Webhooks { get; set; }
+    public DbSet<WebhookDelivery> WebhookDeliveries { get; set; }
     public DbSet<PersonalAccessToken> PersonalAccessTokens { get; set; }
 
     public AppDbContext(DbContextOptions<AppDbContext> options) : base(options)

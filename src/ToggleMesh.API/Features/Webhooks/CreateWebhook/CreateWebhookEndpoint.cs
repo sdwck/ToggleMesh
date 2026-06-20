@@ -1,4 +1,4 @@
-﻿using System.Security.Cryptography;
+using System.Security.Cryptography;
 using ToggleMesh.API.Extensions;
 using ToggleMesh.API.Infrastructure;
 using ToggleMesh.API.Infrastructure.Endpoints;
@@ -41,9 +41,9 @@ public class CreateWebhookEndpoint : ToggleEndpoint<CreateWebhookRequest>
             Name = req.Name,
             Url = req.Url,
             SecretKey = secret,
+            Status = WebhookStatus.Active,
             EnvironmentIds = req.EnvironmentIds,
-            Events = req.Events,
-            IsActive = true
+            Events = req.Events
         };
 
         _db.Webhooks.Add(hook);

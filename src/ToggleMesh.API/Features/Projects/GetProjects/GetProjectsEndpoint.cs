@@ -59,6 +59,9 @@ public class GetProjectsEndpoint : ToggleEndpoint<GetProjectsRequest, PagedRespo
                 Id = p.Id,
                 Name = p.Name,
                 EnvironmentCount = p.Environments.Count,
+                UserRole = p.Organization.Members.Any(om => om.UserId == UserId && om.Role == OrganizationRole.Admin)
+                    ? ProjectRole.Owner
+                    : p.Members.Where(m => m.UserId == UserId).Select(m => (ProjectRole?)m.Role).FirstOrDefault() ?? ProjectRole.None,
                 Environments = p.Environments
                     .OrderBy(e => e.SortOrder)
                     .Select(e => new ProjectEnvironmentDto

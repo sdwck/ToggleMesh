@@ -233,3 +233,49 @@ export interface UserProfile {
     email: string;
     username: string;
 }
+
+export const WebhookStatus = {
+    Active: 0,
+    Failing: 1,
+    DisabledBySystem: 2,
+    Paused: 3
+} as const;
+
+export type WebhookStatus = typeof WebhookStatus[keyof typeof WebhookStatus];
+
+export const WebhookDeliveryStatus = {
+    Pending: 0,
+    Success: 1,
+    Failed: 2,
+    Canceled: 3
+} as const;
+
+export type WebhookDeliveryStatus = typeof WebhookDeliveryStatus[keyof typeof WebhookDeliveryStatus];
+
+export interface Webhook {
+    id: string;
+    projectId: string;
+    name: string;
+    url: string;
+    secretKey: string;
+    status: WebhookStatus;
+    consecutiveFailures: number;
+    environmentIds: string[];
+    events: string[];
+    lastTriggeredAt: string | null;
+    createdAt: string;
+}
+
+export interface WebhookDelivery {
+    id: string;
+    webhookId: string;
+    eventName: string;
+    payload: string;
+    status: WebhookDeliveryStatus;
+    statusCode: number | null;
+    errorMessage: string | null;
+    attemptCount: number;
+    nextAttemptAt: string | null;
+    completedAt: string | null;
+    createdAt: string;
+}

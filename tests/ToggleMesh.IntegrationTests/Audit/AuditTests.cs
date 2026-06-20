@@ -257,4 +257,119 @@ public class AuditTests : IClassFixture<TestWebApplicationFactory>
         log.EntityFriendlyName.Should().Be("Staging Env");
         log.ProjectId.Should().Be(project.Id);
     }
+
+    [Fact]
+    public async Task UpdateProject_ShouldGenerateAuditLog_WithProjectFriendlyName()
+    {
+        // Arrange
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        var project = new Project { Name = "Old Project Name" };
+        db.Projects.Add(project);
+        db.ProjectMembers.Add(new ProjectMember
+            { Project = project, UserId = Guid.Parse(TestAuthHandler.TestUserId), Role = ProjectRole.Owner });
+        await db.SaveChangesAsync();
+
+        db.AuditLogs.RemoveRange(db.AuditLogs);
+        await db.SaveChangesAsync();
+
+        var request = new { Name = "New Project Name" };
+
+        // Act
+        var response = await _client.PutAsJsonAsync($"/api/v1/projects/{project.Id}", request);
+
+        // Assert
+        response.StatusCode.Should().Be(System.Net.HttpStatusCode.NoContent);
+
+        var logs = await db.AuditLogs
+            .Where(x => x.EntityName == "Project" && x.Action == "Modified")
+            .ToListAsync();
+
+        logs.Should().HaveCount(1);
+        var log = logs.First();
+        log.EntityFriendlyName.Should().Be("New Project Name");
+        log.ProjectId.Should().Be(project.Id);
+    }
+
+    [Fact]
+    public async Task SoftDeleteAndRestore_ShouldGenerateCorrectAuditAction()
+    {
+        // Arrange
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        var project = new Project { Name = "Soft Delete Project" };
+        db.Projects.Add(project);
+        db.ProjectMembers.Add(new ProjectMember
+            { Project = project, UserId = Guid.Parse(TestAuthHandler.TestUserId), Role = ProjectRole.Owner });
+        await db.SaveChangesAsync();
+
+        db.AuditLogs.RemoveRange(db.AuditLogs);
+        await db.SaveChangesAsync();
+
+        // Act
+        await _client.DeleteAsync($"/api/v1/projects/{project.Id}");
+
+        db.ChangeTracker.Clear();
+        var deletedLogs = await db.AuditLogs
+            .Where(x => x.EntityName == "Project" && x.Action == "Deleted")
+            .ToListAsync();
+
+        var projFromDb = await db.Projects.IgnoreQueryFilters().FirstAsync(p => p.Id == project.Id);
+        projFromDb.IsDeleted = false;
+        await db.SaveChangesAsync();
+
+        db.ChangeTracker.Clear();
+        var restoredLogs = await db.AuditLogs
+            .Where(x => x.EntityName == "Project" && x.Action == "Restored")
+            .ToListAsync();
+
+        // Assert
+        deletedLogs.Should().HaveCount(1);
+        restoredLogs.Should().HaveCount(1);
+    }
+
+    [Fact]
+    public async Task RefreshToken_ShouldNotBeAudited()
+    {
+        // Arrange
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        var user = new ApplicationUser
+        {
+            Id = Guid.CreateVersion7(),
+            UserName = "refresh_audit@test.com",
+            Email = "refresh_audit@test.com"
+        };
+        db.Users.Add(user);
+        await db.SaveChangesAsync();
+
+        db.AuditLogs.RemoveRange(db.AuditLogs);
+        await db.SaveChangesAsync();
+
+        var token = new RefreshToken
+        {
+            Id = Guid.CreateVersion7(),
+            UserId = user.Id,
+            Token = "some_refresh_token",
+            Expires = DateTime.UtcNow.AddDays(7),
+            Created = DateTime.UtcNow
+        };
+
+        // Act
+        db.RefreshTokens.Add(token);
+        await db.SaveChangesAsync();
+
+        token.Token = "updated_refresh_token";
+        await db.SaveChangesAsync();
+
+        db.RefreshTokens.Remove(token);
+        await db.SaveChangesAsync();
+
+        // Assert
+        var logs = await db.AuditLogs.ToListAsync();
+        logs.Should().BeEmpty();
+    }
 }

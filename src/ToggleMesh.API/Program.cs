@@ -227,6 +227,8 @@ builder.Services.AddSingleton(Channel.CreateBounded<WebhookEvent>(
     }));
 
 builder.Services.AddHostedService<WebhookDispatcherService>();
+builder.Services.AddHostedService<WebhookDeliveryWorker>();
+builder.Services.AddHostedService<WebhookCleanupWorker>();
 builder.Services.AddHostedService<RefreshTokenCleanupService>();
 
 var app = builder.Build();

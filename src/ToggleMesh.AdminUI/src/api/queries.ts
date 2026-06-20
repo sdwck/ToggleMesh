@@ -6,6 +6,7 @@ import type {
     FeatureFlag,
     AuditLog,
     CursorPagedResponse,
+    PaginatedResponse,
     ProjectMember,
     UpdateFlagRequest,
     ProjectFlagDto,
@@ -194,6 +195,7 @@ export const useCreateEnvironment = (projectId: string) => {
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['projects', projectId] });
+            queryClient.invalidateQueries({ queryKey: ['projects'] });
         },
     });
 };
@@ -206,6 +208,7 @@ export const useUpdateEnvironment = (projectId: string, envId: string) => {
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['projects', projectId] });
+            queryClient.invalidateQueries({ queryKey: ['projects'] });
         },
     });
 };
@@ -218,6 +221,7 @@ export const useDeleteEnvironment = (projectId: string) => {
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['projects', projectId] });
+            queryClient.invalidateQueries({ queryKey: ['projects'] });
         },
     });
 };
@@ -266,7 +270,7 @@ export const useProjectFlags = (projectId: string, search?: string, tags?: strin
             const params = new URLSearchParams({ PageSize: '1000' });
             if (search) params.append('Search', search);
             tags?.forEach(t => params.append('Tags', t));
-            const { data } = await api.get<CursorPagedResponse<ProjectFlagDto>>(`/projects/${projectId}/flags?${params.toString()}`);
+            const { data } = await api.get<PaginatedResponse<ProjectFlagDto>>(`/projects/${projectId}/flags?${params.toString()}`);
             return data.items;
         },
         enabled: !!projectId,
@@ -277,17 +281,17 @@ export const useProjectFlags = (projectId: string, search?: string, tags?: strin
 export const useProjectFlagsInfinite = (projectId: string, search?: string, tags?: string[], pageSize = 20) => {
     return useInfiniteQuery({
         queryKey: ['projects', projectId, 'flags', search, tags, 'infinite', pageSize],
-        initialPageParam: null as string | null,
-        queryFn: async ({ pageParam }: { pageParam: string | null }) => {
-            const params = new URLSearchParams({ PageSize: pageSize.toString() });
-            if (pageParam) params.append('Cursor', pageParam);
+        initialPageParam: 1 as number,
+        queryFn: async ({ pageParam }: { pageParam: number }) => {
+            const params = new URLSearchParams({ PageSize: pageSize.toString(), Page: pageParam.toString() });
             if (search) params.append('Search', search);
             tags?.forEach(t => params.append('Tags', t));
-            const { data } = await api.get<CursorPagedResponse<ProjectFlagDto>>(`/projects/${projectId}/flags?${params.toString()}`);
+            const { data } = await api.get<PaginatedResponse<ProjectFlagDto>>(`/projects/${projectId}/flags?${params.toString()}`);
             return data;
         },
-        getNextPageParam: (lastPage: CursorPagedResponse<ProjectFlagDto>) => lastPage.hasNextPage ? lastPage.nextCursor : null,
+        getNextPageParam: (lastPage: PaginatedResponse<ProjectFlagDto>, allPages) => lastPage.hasNextPage ? allPages.length + 1 : null,
         enabled: !!projectId,
+        placeholderData: keepPreviousData,
     });
 };
 
@@ -368,10 +372,11 @@ export const useAuditLogs = (
     sortOrder?: string,
     rangeType = 'all',
     customFrom?: string,
-    customTo?: string
+    customTo?: string,
+    search?: string
 ) => {
     return useInfiniteQuery({
-        queryKey: ['environments', envId, 'audit', pageSize, action, entityName, sortOrder, rangeType, customFrom, customTo],
+        queryKey: ['environments', envId, 'audit', pageSize, action, entityName, sortOrder, rangeType, customFrom, customTo, search],
         initialPageParam: null as string | null,
         queryFn: async ({ pageParam }: { pageParam: string | null }) => {
             const params = new URLSearchParams({
@@ -383,6 +388,7 @@ export const useAuditLogs = (
             if (action && action !== 'all') params.append('Action', action);
             if (entityName && entityName !== 'all') params.append('EntityName', entityName);
             if (sortOrder) params.append('SortOrder', sortOrder);
+            if (search) params.append('Search', search);
 
             let dateFrom: string | undefined;
             let dateTo: string | undefined;
@@ -403,6 +409,7 @@ export const useAuditLogs = (
         },
         getNextPageParam: (lastPage: CursorPagedResponse<AuditLog>) => lastPage.hasNextPage ? lastPage.nextCursor : null,
         enabled: !!envId,
+        placeholderData: keepPreviousData,
     });
 };
 
@@ -414,10 +421,11 @@ export const useProjectAuditLogs = (
     sortOrder?: string,
     rangeType = 'all',
     customFrom?: string,
-    customTo?: string
+    customTo?: string,
+    search?: string
 ) => {
     return useInfiniteQuery({
-        queryKey: ['projects', projectId, 'audit', pageSize, action, entityName, sortOrder, rangeType, customFrom, customTo],
+        queryKey: ['projects', projectId, 'audit', pageSize, action, entityName, sortOrder, rangeType, customFrom, customTo, search],
         initialPageParam: null as string | null,
         queryFn: async ({ pageParam }: { pageParam: string | null }) => {
             const params = new URLSearchParams({
@@ -429,6 +437,7 @@ export const useProjectAuditLogs = (
             if (action && action !== 'all') params.append('Action', action);
             if (entityName && entityName !== 'all') params.append('EntityName', entityName);
             if (sortOrder) params.append('SortOrder', sortOrder);
+            if (search) params.append('Search', search);
 
             let dateFrom: string | undefined;
             let dateTo: string | undefined;
@@ -449,6 +458,7 @@ export const useProjectAuditLogs = (
         },
         getNextPageParam: (lastPage: CursorPagedResponse<AuditLog>) => lastPage.hasNextPage ? lastPage.nextCursor : null,
         enabled: !!projectId,
+        placeholderData: keepPreviousData,
     });
 };
 
@@ -681,5 +691,67 @@ export const useRuleOperators = () => {
             return data;
         },
         staleTime: Infinity,
+    });
+};
+
+export const useUpdateWebhook = (projectId: string) => {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async ({ webhookId, data }: { webhookId: string; data: Partial<Webhook> }) => {
+            const { data: res } = await api.put(`/projects/${projectId}/webhooks/${webhookId}`, data);
+            return res;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['projects', projectId, 'webhooks'] });
+        },
+    });
+};
+
+export const useUpdateWebhookStatus = (projectId: string) => {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async ({ webhookId, status }: { webhookId: string; status: number }) => {
+            const { data } = await api.put(`/projects/${projectId}/webhooks/${webhookId}/status`, { status });
+            return data;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['projects', projectId, 'webhooks'] });
+        },
+    });
+};
+
+export const useWebhookDeliveries = (projectId: string, webhookId: string, page: number) => {
+    return useQuery({
+        queryKey: ['webhookDeliveries', projectId, webhookId, page],
+        queryFn: async () => {
+            const { data } = await api.get(`/projects/${projectId}/webhooks/${webhookId}/deliveries?page=${page}&pageSize=10`);
+            return data;
+        },
+        enabled: !!webhookId && !!projectId,
+        refetchInterval: 3000,
+    });
+};
+
+export const useRetryWebhookDelivery = (projectId: string, webhookId: string) => {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async (deliveryId: string) => {
+            await api.post(`/projects/${projectId}/webhooks/${webhookId}/deliveries/${deliveryId}/retry`);
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['webhookDeliveries'] });
+        },
+    });
+};
+
+export const useCancelWebhookDelivery = (projectId: string, webhookId: string) => {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async (deliveryId: string) => {
+            await api.post(`/projects/${projectId}/webhooks/${webhookId}/deliveries/${deliveryId}/cancel`);
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['webhookDeliveries'] });
+        },
     });
 };

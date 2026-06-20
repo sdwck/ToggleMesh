@@ -55,6 +55,13 @@ function EnvironmentAuditLogs({ envId }: { envId: string }) {
     const [filterAction, setFilterAction] = useState<string>('all');
     const [filterEntity, setFilterEntity] = useState<string>('all');
     const [sortOrder, setSortOrder] = useState<string>('desc');
+    const [search, setSearch] = useState<string>('');
+    const [debouncedSearch, setDebouncedSearch] = useState<string>('');
+
+    useEffect(() => {
+        const timer = setTimeout(() => setDebouncedSearch(search), 300);
+        return () => clearTimeout(timer);
+    }, [search]);
 
     const { 
         data, 
@@ -62,7 +69,7 @@ function EnvironmentAuditLogs({ envId }: { envId: string }) {
         fetchNextPage, 
         hasNextPage, 
         isFetchingNextPage 
-    } = useAuditLogs(envId, pageSize, filterAction, filterEntity, sortOrder);
+    } = useAuditLogs(envId, pageSize, filterAction, filterEntity, sortOrder, 'all', undefined, undefined, debouncedSearch);
     
     const items = data?.pages.flatMap(p => p.items) || [];
     const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
@@ -102,6 +109,13 @@ function EnvironmentAuditLogs({ envId }: { envId: string }) {
         <div className="h-full flex flex-col justify-between space-y-4">
             <div className="flex flex-col flex-1 min-h-0 space-y-4">
                 <div className="flex gap-4 shrink-0">
+                    <Input
+                        type="search"
+                        placeholder="Search logs..."
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        className="w-[200px] h-10 bg-zinc-950/20 border-border/40 text-xs"
+                    />
                     <Select value={filterAction} onValueChange={handleActionChange}>
                         <SelectTrigger className="w-[150px] bg-zinc-950/20 border-border/40 text-xs">
                             <SelectValue placeholder="Action" />
@@ -122,6 +136,7 @@ function EnvironmentAuditLogs({ envId }: { envId: string }) {
                             <SelectItem value="all">All Entities</SelectItem>
                             <SelectItem value="flagenvironmentstate">Flags Status</SelectItem>
                             <SelectItem value="flagrule">Rules</SelectItem>
+                            <SelectItem value="environmentkey">API Keys</SelectItem>
                         </SelectContent>
                     </Select>
 
