@@ -24,5 +24,7 @@ public sealed class FeatureFlagConfiguration
             .WithMany()
             .HasForeignKey(x => x.ProjectId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        entity.HasQueryFilter(x => !x.IsDeleted);
     }
 }

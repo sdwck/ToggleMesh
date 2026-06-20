@@ -1,11 +1,10 @@
 using ToggleMesh.API.Features.Organizations.GetOrganizations;
-using ToggleMesh.API.Infrastructure;
 using ToggleMesh.API.Infrastructure.Endpoints;
 using ToggleMesh.API.Persistence;
 
 namespace ToggleMesh.API.Features.Organizations.CreateOrganization;
 
-public class CreateOrganizationEndpoint : ToggleEndpoint<CreateOrganizationRequest, GetOrganizations.OrganizationDto>
+public class CreateOrganizationEndpoint : ToggleEndpoint<CreateOrganizationRequest, OrganizationDto>
 {
     private readonly AppDbContext _db;
 
@@ -24,7 +23,6 @@ public class CreateOrganizationEndpoint : ToggleEndpoint<CreateOrganizationReque
     {
         var org = new Organization
         {
-            Id = Guid.NewGuid(),
             Name = req.Name,
             CreatedAt = DateTime.UtcNow
         };
@@ -33,7 +31,6 @@ public class CreateOrganizationEndpoint : ToggleEndpoint<CreateOrganizationReque
 
         var member = new OrganizationMember
         {
-            Id = Guid.NewGuid(),
             OrganizationId = org.Id,
             UserId = UserId,
             Role = OrganizationRole.Admin

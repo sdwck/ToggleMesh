@@ -138,7 +138,29 @@ export function FeatureFlagEditor({ flag, projectId, envId, open, onOpenChange }
                             <div className="pl-12 pr-4 space-y-4">
                                 <div className="flex items-center justify-between">
                                     <span className="text-sm text-muted-foreground">Percentage</span>
-                                    <span className="text-sm font-medium">{form.watch('rolloutPercentage')}%</span>
+                                    <div className="flex items-center text-sm font-medium">
+                                        <span
+                                            contentEditable
+                                            suppressContentEditableWarning
+                                            className="outline-none border-b border-dashed border-primary/40 hover:border-primary/80 focus:border-primary transition-colors min-w-[1ch] inline-block text-center cursor-text"
+                                            onBlur={(e) => {
+                                                let val = parseInt(e.currentTarget.textContent || '0', 10);
+                                                if (isNaN(val)) val = 0;
+                                                val = Math.max(0, Math.min(100, val));
+                                                form.setValue('rolloutPercentage', val);
+                                                e.currentTarget.textContent = val.toString();
+                                            }}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    e.preventDefault();
+                                                    e.currentTarget.blur();
+                                                }
+                                            }}
+                                        >
+                                            {form.watch('rolloutPercentage') ?? 0}
+                                        </span>
+                                        <span>%</span>
+                                    </div>
                                 </div>
                                 <Slider
                                     value={[form.watch('rolloutPercentage') || 0]}

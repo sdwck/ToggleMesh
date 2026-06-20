@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.Caching.Hybrid;
+using Microsoft.Extensions.Caching.Hybrid;
+using Microsoft.Extensions.Caching.Memory;
 using StackExchange.Redis;
 
 namespace ToggleMesh.API.Infrastructure.Caching;
@@ -9,20 +10,20 @@ public class RedisCacheInvalidator : ICacheInvalidator
     private static readonly RedisChannel InvalidationRedisChannel =
         RedisChannel.Literal(InvalidationChannel);
     private readonly IConnectionMultiplexer _redis;
-    private readonly HybridCache _cache;
+    private readonly IMemoryCache _memoryCache;
 
-    public RedisCacheInvalidator(IConnectionMultiplexer redis, HybridCache cache)
+    public RedisCacheInvalidator(IConnectionMultiplexer redis, IMemoryCache memoryCache)
     {
         _redis = redis;
-        _cache = cache;
+        _memoryCache = memoryCache;
     }
     
     public async Task InvalidateEnvironmentCacheAsync(Guid envId)
     {
         var l1CacheKey = $"sdk:compiled_rules:{envId}";
         var l2CacheKey = $"sdk:flags:states:{envId}";
-        await _cache.RemoveAsync(l1CacheKey);
-        await _cache.RemoveAsync(l2CacheKey);
+        _memoryCache.Remove(l1CacheKey);
+        await _redis.GetDatabase().KeyDeleteAsync(l2CacheKey);
         var sub = _redis.GetSubscriber();
         await sub.PublishAsync(
             InvalidationRedisChannel, 

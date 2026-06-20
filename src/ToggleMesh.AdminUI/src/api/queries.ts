@@ -1,11 +1,11 @@
-import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData, useInfiniteQuery } from '@tanstack/react-query';
 import api from './axios';
 import type {
     Project,
     ProjectDetails,
     FeatureFlag,
     AuditLog,
-    PaginatedResponse,
+    CursorPagedResponse,
     ProjectMember,
     UpdateFlagRequest,
     ProjectFlagDto,
@@ -126,8 +126,8 @@ export const useProjects = (organizationId: string | null) => {
         queryKey: ['projects', organizationId],
         queryFn: async () => {
             const url = organizationId ? `/projects?organizationId=${organizationId}` : '/projects';
-            const { data } = await api.get<Project[]>(url);
-            return data;
+            const { data } = await api.get<{ items: Project[] }>(url);
+            return data.items;
         },
         staleTime: 5 * 60 * 1000,
         gcTime: 10 * 60 * 1000,
@@ -261,16 +261,33 @@ export const useRevokeEnvironmentKey = (projectId: string, envId: string) => {
 
 export const useProjectFlags = (projectId: string, search?: string, tags?: string[]) => {
     return useQuery({
-        queryKey: ['projects', projectId, 'flags', search, tags],
+        queryKey: ['projects', projectId, 'flags', search, tags, 'all'],
         queryFn: async () => {
-            const params = new URLSearchParams();
+            const params = new URLSearchParams({ PageSize: '1000' });
             if (search) params.append('Search', search);
             tags?.forEach(t => params.append('Tags', t));
-            const { data } = await api.get<ProjectFlagDto[]>(`/projects/${projectId}/flags?${params.toString()}`);
-            return data;
+            const { data } = await api.get<CursorPagedResponse<ProjectFlagDto>>(`/projects/${projectId}/flags?${params.toString()}`);
+            return data.items;
         },
         enabled: !!projectId,
         placeholderData: keepPreviousData,
+    });
+};
+
+export const useProjectFlagsInfinite = (projectId: string, search?: string, tags?: string[], pageSize = 20) => {
+    return useInfiniteQuery({
+        queryKey: ['projects', projectId, 'flags', search, tags, 'infinite', pageSize],
+        initialPageParam: null as string | null,
+        queryFn: async ({ pageParam }: { pageParam: string | null }) => {
+            const params = new URLSearchParams({ PageSize: pageSize.toString() });
+            if (pageParam) params.append('Cursor', pageParam);
+            if (search) params.append('Search', search);
+            tags?.forEach(t => params.append('Tags', t));
+            const { data } = await api.get<CursorPagedResponse<ProjectFlagDto>>(`/projects/${projectId}/flags?${params.toString()}`);
+            return data;
+        },
+        getNextPageParam: (lastPage: CursorPagedResponse<ProjectFlagDto>) => lastPage.hasNextPage ? lastPage.nextCursor : null,
+        enabled: !!projectId,
     });
 };
 
@@ -345,7 +362,6 @@ const calculateDateFrom = (type: string): string => {
 
 export const useAuditLogs = (
     envId: string,
-    page = 1,
     pageSize = 20,
     action?: string,
     entityName?: string,
@@ -354,15 +370,16 @@ export const useAuditLogs = (
     customFrom?: string,
     customTo?: string
 ) => {
-    return useQuery({
-        queryKey: ['environments', envId, 'audit', page, pageSize, action, entityName, sortOrder, rangeType, customFrom, customTo],
-        queryFn: async () => {
+    return useInfiniteQuery({
+        queryKey: ['environments', envId, 'audit', pageSize, action, entityName, sortOrder, rangeType, customFrom, customTo],
+        initialPageParam: null as string | null,
+        queryFn: async ({ pageParam }: { pageParam: string | null }) => {
             const params = new URLSearchParams({
                 EnvironmentId: envId,
-                Page: page.toString(),
                 PageSize: pageSize.toString()
             });
 
+            if (pageParam) params.append('Cursor', pageParam);
             if (action && action !== 'all') params.append('Action', action);
             if (entityName && entityName !== 'all') params.append('EntityName', entityName);
             if (sortOrder) params.append('SortOrder', sortOrder);
@@ -381,17 +398,16 @@ export const useAuditLogs = (
             if (dateFrom) params.append('DateFrom', dateFrom);
             if (dateTo) params.append('DateTo', dateTo);
 
-            const { data } = await api.get<PaginatedResponse<AuditLog>>(`/audit-logs?${params.toString()}`);
+            const { data } = await api.get<CursorPagedResponse<AuditLog>>(`/audit-logs?${params.toString()}`);
             return data;
         },
+        getNextPageParam: (lastPage: CursorPagedResponse<AuditLog>) => lastPage.hasNextPage ? lastPage.nextCursor : null,
         enabled: !!envId,
-        placeholderData: keepPreviousData,
     });
 };
 
 export const useProjectAuditLogs = (
     projectId: string,
-    page = 1,
     pageSize = 20,
     action?: string,
     entityName?: string,
@@ -400,15 +416,16 @@ export const useProjectAuditLogs = (
     customFrom?: string,
     customTo?: string
 ) => {
-    return useQuery({
-        queryKey: ['projects', projectId, 'audit', page, pageSize, action, entityName, sortOrder, rangeType, customFrom, customTo],
-        queryFn: async () => {
+    return useInfiniteQuery({
+        queryKey: ['projects', projectId, 'audit', pageSize, action, entityName, sortOrder, rangeType, customFrom, customTo],
+        initialPageParam: null as string | null,
+        queryFn: async ({ pageParam }: { pageParam: string | null }) => {
             const params = new URLSearchParams({
                 ProjectId: projectId,
-                Page: page.toString(),
                 PageSize: pageSize.toString()
             });
 
+            if (pageParam) params.append('Cursor', pageParam);
             if (action && action !== 'all') params.append('Action', action);
             if (entityName && entityName !== 'all') params.append('EntityName', entityName);
             if (sortOrder) params.append('SortOrder', sortOrder);
@@ -427,11 +444,11 @@ export const useProjectAuditLogs = (
             if (dateFrom) params.append('DateFrom', dateFrom);
             if (dateTo) params.append('DateTo', dateTo);
 
-            const { data } = await api.get<PaginatedResponse<AuditLog>>(`/audit-logs?${params.toString()}`);
+            const { data } = await api.get<CursorPagedResponse<AuditLog>>(`/audit-logs?${params.toString()}`);
             return data;
         },
+        getNextPageParam: (lastPage: CursorPagedResponse<AuditLog>) => lastPage.hasNextPage ? lastPage.nextCursor : null,
         enabled: !!projectId,
-        placeholderData: keepPreviousData,
     });
 };
 

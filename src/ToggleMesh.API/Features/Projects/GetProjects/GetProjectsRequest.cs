@@ -1,6 +1,8 @@
-﻿namespace ToggleMesh.API.Features.Projects.GetProjects;
+using ToggleMesh.Common.Pagination;
 
-public class GetProjectsRequest
+namespace ToggleMesh.API.Features.Projects.GetProjects;
+
+public class GetProjectsRequest : PagedRequest
 {
     public Guid? OrganizationId { get; set; }
 }

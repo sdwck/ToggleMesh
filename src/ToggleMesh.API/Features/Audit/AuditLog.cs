@@ -1,8 +1,9 @@
+using ToggleMesh.API.Persistence.Abstractions;
+
 namespace ToggleMesh.API.Features.Audit;
 
-public class AuditLog
+public class AuditLog : Entity
 {
-    public Guid Id { get; set; }
     public Guid? ProjectId { get; set; }
     public Guid? EnvironmentId { get; set; }
     public string EntityName { get; set; } = string.Empty;

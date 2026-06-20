@@ -1,11 +1,12 @@
 using Microsoft.EntityFrameworkCore;
+using ToggleMesh.API.Features.Organizations;
 using ToggleMesh.API.Persistence;
-using ToggleMesh.API.Infrastructure;
 using ToggleMesh.API.Infrastructure.Endpoints;
+using ToggleMesh.Common.Pagination;
 
 namespace ToggleMesh.API.Features.Projects.GetProjects;
 
-public class GetProjectsEndpoint : ToggleEndpoint<GetProjectsRequest, List<ProjectListDto>>
+public class GetProjectsEndpoint : ToggleEndpoint<GetProjectsRequest, PagedResponse<ProjectListDto>>
 {
     private readonly AppDbContext _db;
 
@@ -22,7 +23,7 @@ public class GetProjectsEndpoint : ToggleEndpoint<GetProjectsRequest, List<Proje
 
     public override async Task HandleAsync(GetProjectsRequest req, CancellationToken ct)
     {
-        IQueryable<Project> query = _db.Projects.AsNoTracking();
+        var query = _db.Projects.AsNoTracking();
 
         if (req.OrganizationId.HasValue)
         {
@@ -34,20 +35,25 @@ public class GetProjectsEndpoint : ToggleEndpoint<GetProjectsRequest, List<Proje
 
             if (orgMember == null)
             {
-                await Send.OkAsync([], ct);
+                await Send.OkAsync(new PagedResponse<ProjectListDto>([], 0, req.Page, req.PageSize), ct);
                 return;
             }
 
-            if (orgMember.Role != Features.Organizations.OrganizationRole.Admin)
+            if (orgMember.Role != OrganizationRole.Admin)
                 query = query.Where(p => p.Members.Any(m => m.UserId == UserId));
         }
         else
             query = query.Where(p => 
                 p.Members.Any(m => m.UserId == UserId) || 
-                _db.OrganizationMembers.Any(om => om.OrganizationId == p.OrganizationId && om.UserId == UserId && om.Role == Features.Organizations.OrganizationRole.Admin)
+                _db.OrganizationMembers.Any(om => om.OrganizationId == p.OrganizationId && om.UserId == UserId && om.Role == OrganizationRole.Admin)
             );
 
+        var totalCount = await query.CountAsync(ct);
+
         var projects = await query
+            .OrderByDescending(p => p.CreatedAt)
+            .Skip((req.Page - 1) * req.PageSize)
+            .Take(req.PageSize)
             .Select(p => new ProjectListDto
             {
                 Id = p.Id,
@@ -63,6 +69,6 @@ public class GetProjectsEndpoint : ToggleEndpoint<GetProjectsRequest, List<Proje
             })
             .ToListAsync(ct);
 
-        await Send.OkAsync(projects, ct);
+        await Send.OkAsync(new PagedResponse<ProjectListDto>(projects, totalCount, req.Page, req.PageSize), ct);
     }
 }

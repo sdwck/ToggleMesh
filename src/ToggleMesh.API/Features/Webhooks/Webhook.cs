@@ -1,10 +1,10 @@
 ﻿using ToggleMesh.API.Features.Projects;
+using ToggleMesh.API.Persistence.Abstractions;
 
 namespace ToggleMesh.API.Features.Webhooks;
 
-public class Webhook
+public class Webhook : AuditableEntity
 {
-    public Guid Id { get; set; }
     public Guid ProjectId { get; set; }
     public Project Project { get; set; } = null!;
     
@@ -16,6 +16,5 @@ public class Webhook
     public Guid[] EnvironmentIds { get; set; } = []; 
     public string[] Events { get; set; } = []; 
     
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? LastTriggeredAt { get; set; }
 }

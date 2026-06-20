@@ -147,7 +147,7 @@ public class WebhookDispatcherService : BackgroundService
 
             var payload = new
             {
-                id = Guid.NewGuid(),
+                id = Guid.CreateVersion7(),
                 timestamp = DateTime.UtcNow,
                 eventName = webhookEvent.EventName,
                 projectId = webhookEvent.ProjectId,

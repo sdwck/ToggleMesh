@@ -1,10 +1,12 @@
 using ToggleMesh.API.Features.Projects;
 
+using ToggleMesh.API.Persistence;
+using ToggleMesh.API.Persistence.Abstractions;
+
 namespace ToggleMesh.API.Features.Flags;
 
-public class FeatureFlag
+public class FeatureFlag : AuditableEntity, ISoftDeletable
 {
-    public Guid Id { get; set; }
     public Guid ProjectId { get; set; }
     public Project Project { get; set; } = null!;
     
@@ -12,8 +14,7 @@ public class FeatureFlag
     public string? Name { get; set; }
     public string? Description { get; set; }
     
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+    public bool IsDeleted { get; set; }
 
     public ICollection<FlagEnvironmentState> States { get; set; } = new List<FlagEnvironmentState>();
     public bool IsClientSideExposed { get; set; }

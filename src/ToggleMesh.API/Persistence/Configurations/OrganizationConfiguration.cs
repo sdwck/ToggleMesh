@@ -6,22 +6,24 @@ namespace ToggleMesh.API.Persistence.Configurations;
 
 public sealed class OrganizationConfiguration : IEntityTypeConfiguration<Organization>
 {
-    public void Configure(EntityTypeBuilder<Organization> builder)
+    public void Configure(EntityTypeBuilder<Organization> entity)
     {
-        builder.HasKey(o => o.Id);
+        entity.HasKey(o => o.Id);
         
-        builder.Property(o => o.Name)
+        entity.Property(o => o.Name)
             .IsRequired()
             .HasMaxLength(100);
 
-        builder.HasMany(o => o.Projects)
+        entity.HasMany(o => o.Projects)
             .WithOne(p => p.Organization)
             .HasForeignKey(p => p.OrganizationId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        builder.HasMany(o => o.Members)
+        entity.HasMany(o => o.Members)
             .WithOne(m => m.Organization)
             .HasForeignKey(m => m.OrganizationId)
             .OnDelete(DeleteBehavior.Cascade);
+        
+        entity.HasQueryFilter(x => !x.IsDeleted);
     }
 }

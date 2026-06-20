@@ -83,7 +83,6 @@ public class UpdateFlagEndpoint : ToggleEndpoint<UpdateFlagRequest, GetFlagRespo
                     Value = newRule.Value 
                 });
 
-        state.FeatureFlag.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync(ct);
 
         var response = new GetFlagResponse(

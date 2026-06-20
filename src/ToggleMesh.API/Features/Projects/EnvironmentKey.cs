@@ -1,11 +1,11 @@
 ﻿using System.ComponentModel.DataAnnotations;
 using ToggleMesh.API.Infrastructure;
+using ToggleMesh.API.Persistence.Abstractions;
 
 namespace ToggleMesh.API.Features.Projects;
 
-public class EnvironmentKey : IHasEnvironment
+public class EnvironmentKey : Entity, IHasEnvironment
 {
-    public Guid Id { get; set; }
     public string Name { get; set; } = string.Empty;
     public string KeyHash { get; set; } = string.Empty; 
     public string KeyPreview { get; set; } = string.Empty;

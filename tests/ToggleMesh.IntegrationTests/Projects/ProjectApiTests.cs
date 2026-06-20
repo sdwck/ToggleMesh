@@ -64,9 +64,9 @@ public class ProjectApiTests : IClassFixture<TestWebApplicationFactory>
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         
-        var result = await response.Content.ReadFromJsonAsync<List<ProjectListDto>>();
+        var result = await response.Content.ReadFromJsonAsync<Common.Pagination.PagedResponse<ProjectListDto>>();
         result.Should().NotBeNull();
-        result!.Should().Contain(p => p.Name == "List Test Project");
+        result.Items.Should().Contain(p => p.Name == "List Test Project");
     }
 
     [Fact]
@@ -101,7 +101,7 @@ public class ProjectApiTests : IClassFixture<TestWebApplicationFactory>
 
         var newUser = new API.Features.Auth.Models.ApplicationUser
         {
-            Id = Guid.NewGuid(),
+            Id = Guid.CreateVersion7(),
             UserName = "newuser@example.com",
             Email = "newuser@example.com"
         };

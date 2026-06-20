@@ -54,7 +54,6 @@ public class UpdateFlagPrivacyEndpoint : ToggleEndpoint<UpdateFlagPrivacyRequest
         }
 
         flag.IsClientSideExposed = req.IsClientSideExposed;
-        flag.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync(ct);
         
         var environmentIds = await _db.Environments

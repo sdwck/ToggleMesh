@@ -1,6 +1,7 @@
-﻿using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Caching.Hybrid;
+﻿using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
+using StackExchange.Redis;
 using ToggleMesh.API.Features.Client.SdkEvaluateFlag;
 using ToggleMesh.API.Features.Client.SdkEvaluateFlags;
 using ToggleMesh.API.Persistence;
@@ -13,18 +14,18 @@ public class SdkEvaluatorService : ISdkEvaluatorService
 {
     private readonly AppDbContext _db;
     private readonly IRuleEngine _ruleEngine;
-    private readonly HybridCache _cache;
+    private readonly IDatabase _redis;
     private readonly IMemoryCache _memoryCache;
 
     public SdkEvaluatorService(
         AppDbContext db, 
         IRuleEngine ruleEngine, 
-        HybridCache cache, 
+        IConnectionMultiplexer redis, 
         IMemoryCache memoryCache)
     {
         _db = db;
         _ruleEngine = ruleEngine;
-        _cache = cache;
+        _redis = redis.GetDatabase();
         _memoryCache = memoryCache;
     }
 
@@ -40,16 +41,21 @@ public class SdkEvaluatorService : ISdkEvaluatorService
             entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5);
             var redisCacheKey = $"sdk:flags:states:{envId}";
             
-            var dtoList = await _cache.GetOrCreateAsync(redisCacheKey, async ct1 =>
+            var redisValue = await _redis.StringGetAsync(redisCacheKey);
+            List<FlagStateDto> dtoList;
+
+            if (redisValue.HasValue)
+                dtoList = JsonSerializer.Deserialize<List<FlagStateDto>>((string)redisValue!) ?? [];
+            else
             {
                 var states = await _db.FlagEnvironmentStates
                     .AsNoTracking()
                     .Include(x => x.FeatureFlag)
                     .Include(x => x.Rules)
                     .Where(x => x.EnvironmentId == envId)
-                    .ToListAsync(ct1);
+                    .ToListAsync(ct);
 
-                return states.Select(x => new FlagStateDto(
+                dtoList = states.Select(x => new FlagStateDto(
                     x.FeatureFlag.Key,
                     x.IsEnabled,
                     x.RolloutPercentage,
@@ -62,7 +68,10 @@ public class SdkEvaluatorService : ISdkEvaluatorService
                             xx.Value)
                     ).ToList()
                 )).ToList();
-            }, cancellationToken: ct);
+
+                var json = System.Text.Json.JsonSerializer.Serialize(dtoList);
+                await _redis.StringSetAsync(redisCacheKey, json, TimeSpan.FromMinutes(10));
+            }
 
             var result = new List<CompiledFlagState>(dtoList.Count);
             foreach (var dto in dtoList)

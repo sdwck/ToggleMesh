@@ -162,7 +162,7 @@ public class AuditTests : IClassFixture<TestWebApplicationFactory>
             { Project = project, UserId = Guid.Parse(TestAuthHandler.TestUserId), Role = ProjectRole.Owner });
 
         var targetUser = new ApplicationUser
-            { Id = Guid.NewGuid(), Email = "new_member@test.com", UserName = "new_member@test.com" };
+            { Id = Guid.CreateVersion7(), Email = "new_member@test.com", UserName = "new_member@test.com" };
         db.Users.Add(targetUser);
 
         await db.SaveChangesAsync();
@@ -201,7 +201,7 @@ public class AuditTests : IClassFixture<TestWebApplicationFactory>
             { Project = project, UserId = Guid.Parse(TestAuthHandler.TestUserId), Role = ProjectRole.Owner });
 
         var targetUser = new ApplicationUser
-            { Id = Guid.NewGuid(), Email = "target@test.com", UserName = "target@test.com" };
+            { Id = Guid.CreateVersion7(), Email = "target@test.com", UserName = "target@test.com" };
         db.Users.Add(targetUser);
         db.ProjectMembers.Add(
             new ProjectMember { Project = project, UserId = targetUser.Id, Role = ProjectRole.Viewer });

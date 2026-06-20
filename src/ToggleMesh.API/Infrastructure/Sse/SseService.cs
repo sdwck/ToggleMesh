@@ -1,11 +1,14 @@
 using System.Collections.Concurrent;
 using System.Text.Json;
+using StackExchange.Redis;
 
 namespace ToggleMesh.API.Infrastructure.Sse;
 
-public class SseService : ISseService
+public class SseService : ISseService, IDisposable
 {
     private readonly ConcurrentDictionary<Guid, ClientConnection> _connections = new();
+    private readonly ISubscriber _subscriber;
+    private readonly RedisChannel _channel = RedisChannel.Literal("sse-broadcast");
 
     private class ClientConnection
     {
@@ -19,9 +22,43 @@ public class SseService : ISseService
         }
     }
 
+    public SseService(IConnectionMultiplexer redis)
+    {
+        _subscriber = redis.GetSubscriber();
+        _subscriber.Subscribe(_channel, OnRedisMessage);
+    }
+
+    private void OnRedisMessage(RedisChannel channel, RedisValue message)
+    {
+        if (message.IsNullOrEmpty) 
+            return;
+
+        var payload = JsonSerializer.Deserialize<SseMessagePayload>((string)message!);
+        if (payload == null) 
+            return;
+
+        var activeConnections = _connections.Values.ToList();
+        foreach (var conn in activeConnections)
+        {
+            if (conn.CancellationToken.IsCancellationRequested) continue;
+            
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await conn.OnMessage(payload.EventName, payload.DataJson);
+                }
+                catch
+                {
+                    // ignore
+                }
+            });
+        }
+    }
+
     public void Subscribe(Guid userId, Func<string, string, Task> onMessage, CancellationToken ct)
     {
-        var connectionId = Guid.NewGuid();
+        var connectionId = Guid.CreateVersion7();
         var connection = new ClientConnection(onMessage, ct);
         _connections.TryAdd(connectionId, connection);
 
@@ -33,22 +70,17 @@ public class SseService : ISseService
 
     public async Task BroadcastAsync(string eventName, object data)
     {
-        var json = JsonSerializer.Serialize(data);
-        var activeConnections = _connections.Values.ToList();
-        
-        var tasks = activeConnections.Select(async conn =>
-        {
-            if (conn.CancellationToken.IsCancellationRequested) return;
-            try
-            {
-                await conn.OnMessage(eventName, json);
-            }
-            catch
-            {
-                // ignore
-            }
-        });
+        var dataJson = JsonSerializer.Serialize(data);
+        var payload = new SseMessagePayload(eventName, dataJson);
+        var json = JsonSerializer.Serialize(payload);
 
-        await Task.WhenAll(tasks);
+        await _subscriber.PublishAsync(_channel, json);
     }
+
+    public void Dispose()
+    {
+        _subscriber.Unsubscribe(_channel);
+    }
+
+    private record SseMessagePayload(string EventName, string DataJson);
 }

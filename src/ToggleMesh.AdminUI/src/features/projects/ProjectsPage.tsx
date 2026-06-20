@@ -158,6 +158,11 @@ export function ProjectsPage() {
                                     placeholder="e.g., e-commerce-api"
                                     value={newProjectName}
                                     onChange={(e) => setNewProjectName(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter' && !isSubmitDisabled) {
+                                            handleCreate();
+                                        }
+                                    }}
                                     autoFocus
                                 />
                             </div>
@@ -205,6 +210,11 @@ export function ProjectsPage() {
                             placeholder="e.g., Acme Corp"
                             value={newOrgName}
                             onChange={(e) => setNewOrgName(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter' && !createOrganization.isPending && newOrgName.trim()) {
+                                    handleCreateOrg();
+                                }
+                            }}
                             autoFocus
                         />
                     </div>

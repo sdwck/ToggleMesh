@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Box, ArrowRightLeft, FileClock, Settings, Key, GripVertical } from 'lucide-react';
 import { useCreateEnvironment, useCloneEnvironment, useAuditLogs, useReorderEnvironments } from '@/api/queries';
@@ -17,7 +17,6 @@ import {
 } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { PaginationControls } from '@/components/ui/PaginationControls';
 import { ProjectRole, type AuditLog, type Environment, type ProjectDetails } from '@/api/types';
 import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -51,29 +50,52 @@ const getEnvBadgeStyle = (name: string) => {
 };
 
 function EnvironmentAuditLogs({ envId }: { envId: string }) {
-    const [page, setPage] = useState(1);
     const pageSize = 6;
 
     const [filterAction, setFilterAction] = useState<string>('all');
     const [filterEntity, setFilterEntity] = useState<string>('all');
     const [sortOrder, setSortOrder] = useState<string>('desc');
 
-    const { data, isLoading } = useAuditLogs(envId, page, pageSize, filterAction, filterEntity, sortOrder);
+    const { 
+        data, 
+        isLoading, 
+        fetchNextPage, 
+        hasNextPage, 
+        isFetchingNextPage 
+    } = useAuditLogs(envId, pageSize, filterAction, filterEntity, sortOrder);
+    
+    const items = data?.pages.flatMap(p => p.items) || [];
     const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
+
+    const loadMoreRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const observer = new IntersectionObserver(
+            (entries) => {
+                if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) {
+                    fetchNextPage();
+                }
+            },
+            { threshold: 0.1 }
+        );
+
+        if (loadMoreRef.current) {
+            observer.observe(loadMoreRef.current);
+        }
+
+        return () => observer.disconnect();
+    }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
     const handleActionChange = (val: string) => {
         setFilterAction(val);
-        setPage(1);
     };
 
     const handleEntityChange = (val: string) => {
         setFilterEntity(val);
-        setPage(1);
     };
 
     const handleSortChange = (val: string) => {
         setSortOrder(val);
-        setPage(1);
     };
 
     return (
@@ -136,14 +158,14 @@ function EnvironmentAuditLogs({ envId }: { envId: string }) {
                                         </div>
                                     </TableCell>
                                 </TableRow>
-                            ) : !data || data.items.length === 0 ? (
+                            ) : items.length === 0 ? (
                                 <TableRow>
                                     <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
                                         No audit logs for this environment.
                                     </TableCell>
                                 </TableRow>
                             ) : (
-                                data.items.map((log) => (
+                                items.map((log) => (
                                     <TableRow key={log.id} className="hover:bg-muted/30 text-sm">
                                         <TableCell className="text-muted-foreground whitespace-nowrap font-mono text-xs">
                                             {formatDate(log.timestamp)}
@@ -173,22 +195,19 @@ function EnvironmentAuditLogs({ envId }: { envId: string }) {
                                     </TableRow>
                                 ))
                             )}
+                            {hasNextPage && (
+                                <TableRow>
+                                    <TableCell colSpan={5} className="h-14 text-center">
+                                        <div ref={loadMoreRef} className="flex justify-center items-center h-full">
+                                            <span className="text-sm text-muted-foreground animate-pulse">Loading more...</span>
+                                        </div>
+                                    </TableCell>
+                                </TableRow>
+                            )}
                         </TableBody>
                     </Table>
                 </div>
             </div>
-
-            {data && data.totalPages > 1 && (
-                <div className="pt-2 border-t border-border/40 shrink-0">
-                    <PaginationControls
-                        currentPage={page}
-                        totalPages={data.totalPages}
-                        onPageChange={setPage}
-                        hasNextPage={data.hasNextPage}
-                        hasPreviousPage={data.hasPreviousPage}
-                    />
-                </div>
-            )}
 
             {selectedLog && (
                 <Dialog open={!!selectedLog} onOpenChange={(open) => !open && setSelectedLog(null)}>
@@ -337,6 +356,11 @@ export function ProjectEnvironmentsTab({ project, isLoading }: { project?: Proje
                                     placeholder="e.g., Production, Staging"
                                     value={newEnvName}
                                     onChange={(e) => setNewEnvName(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter' && !createEnvironment.isPending && newEnvName.trim()) {
+                                            handleCreateEnv();
+                                        }
+                                    }}
                                     autoFocus
                                 />
                             </div>

@@ -1,13 +1,14 @@
-﻿using ToggleMesh.API.Features.Flags;
+using ToggleMesh.API.Persistence;
+using ToggleMesh.API.Persistence.Abstractions;
 
 namespace ToggleMesh.API.Features.Projects;
 
-public class ProjectEnvironment
+public class ProjectEnvironment : AuditableEntity, ISoftDeletable
 {
-    public Guid Id { get; set; }
     public string Name { get; set; } = string.Empty;
     public Guid ProjectId { get; set; }
     public Project Project { get; set; } = null!;
     public int SortOrder { get; set; }
+    public bool IsDeleted { get; set; }
     public ICollection<EnvironmentKey> Keys { get; set; } = [];
 }

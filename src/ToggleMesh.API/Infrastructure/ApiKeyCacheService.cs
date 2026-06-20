@@ -1,6 +1,6 @@
+using Microsoft.Extensions.Caching.Memory;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Caching.Hybrid;
 using StackExchange.Redis;
 using ToggleMesh.API.Features.Projects;
 using ToggleMesh.API.Infrastructure.Security;
@@ -17,17 +17,17 @@ public class ApiKeyCacheService : IApiKeyCacheService
 
     private readonly AppDbContext _db;
     private readonly IConnectionMultiplexer _redis;
-    private readonly HybridCache _cache;
+    private readonly IMemoryCache _memoryCache;
     private readonly TimeSpan _cacheTtl = TimeSpan.FromMinutes(5);
 
     public ApiKeyCacheService(
         AppDbContext db,
         IConnectionMultiplexer redis,
-        HybridCache cache)
+        IMemoryCache memoryCache)
     {
         _db = db;
         _redis = redis;
-        _cache = cache;
+        _memoryCache = memoryCache;
     }
 
     public async Task<CachedKeyInfo?> GetKeyInfoAsync(string apiKey, CancellationToken ct = default)
@@ -35,46 +35,58 @@ public class ApiKeyCacheService : IApiKeyCacheService
         var keyHash = ApiKeyHasher.Hash(apiKey);
         var cacheKey = $"apikey:{keyHash}";
 
-        return await _cache.GetOrCreateAsync<CachedKeyInfo?>(
-            cacheKey,
-            async ct1 =>
-            {
-                var envKey = await _db.EnvironmentKeys
-                    .AsNoTracking()
-                    .FirstOrDefaultAsync(
-                        x => x.KeyHash == keyHash && (x.ExpireOn == null || x.ExpireOn > DateTime.UtcNow), ct1);
+        return await _memoryCache.GetOrCreateAsync<CachedKeyInfo?>(cacheKey, async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = _cacheTtl;
+            
+            var db = _redis.GetDatabase();
+            var redisValue = await db.StringGetAsync(cacheKey);
+            if (redisValue.HasValue)
+                return JsonSerializer.Deserialize<CachedKeyInfo>((string)redisValue!);
+            
 
-                if (envKey == null)
+            var envKey = await _db.EnvironmentKeys
+                .AsNoTracking()
+                .FirstOrDefaultAsync(
+                    x => x.KeyHash == keyHash && (x.ExpireOn == null || x.ExpireOn > DateTime.UtcNow), ct);
+
+            if (envKey == null)
+                return null;
+
+            await _db.EnvironmentKeys
+                .Where(x => x.Id == envKey.Id)
+                .ExecuteUpdateAsync(s => 
+                    s.SetProperty(k => 
+                        k.LastUsedAt, DateTime.UtcNow), ct);
+
+            var info = new CachedKeyInfo(envKey.EnvironmentId, envKey.KeyType);
+
+            if (envKey.ExpireOn.HasValue)
+            {
+                var timeToExpire = envKey.ExpireOn.Value - DateTime.UtcNow;
+                if (timeToExpire <= TimeSpan.Zero)
                     return null;
 
-                await _db.EnvironmentKeys
-                    .Where(x => x.Id == envKey.Id)
-                    .ExecuteUpdateAsync(s => 
-                        s.SetProperty(k => 
-                            k.LastUsedAt, DateTime.UtcNow), ct1);
-
-                var info = new CachedKeyInfo(envKey.EnvironmentId, envKey.KeyType);
-
-                if (envKey.ExpireOn.HasValue)
+                if (timeToExpire < _cacheTtl)
                 {
-                    var timeToExpire = envKey.ExpireOn.Value - DateTime.UtcNow;
-                    if (timeToExpire <= TimeSpan.Zero)
-                        return null;
-
-                    if (timeToExpire < _cacheTtl)
-                        await _cache.SetAsync(cacheKey, info, new HybridCacheEntryOptions { Expiration = timeToExpire },
-                            cancellationToken: ct1);
+                    entry.AbsoluteExpirationRelativeToNow = timeToExpire;
+                    await db.StringSetAsync(cacheKey, JsonSerializer.Serialize(info), timeToExpire);
                 }
+                else
+                    await db.StringSetAsync(cacheKey, JsonSerializer.Serialize(info), _cacheTtl);
+            }
+            else
+                await db.StringSetAsync(cacheKey, JsonSerializer.Serialize(info), _cacheTtl);
 
-                return info;
-            },
-            cancellationToken: ct);
+            return info;
+        });
     }
 
     public async Task RemoveEnvironmentIdAsync(string keyHash, CancellationToken ct = default)
     {
         var cacheKey = $"apikey:{keyHash}";
-        await _cache.RemoveAsync(cacheKey, ct);
+        _memoryCache.Remove(cacheKey);
+        await _redis.GetDatabase().KeyDeleteAsync(cacheKey);
 
         var sub = _redis.GetSubscriber();
         await sub.PublishAsync(
@@ -89,10 +101,7 @@ public class ApiKeyCacheService : IApiKeyCacheService
         var keyType = isClient ? KeyType.Client : KeyType.Server;
         var keyInfo = new CachedKeyInfo(environmentId, keyType);
 
-        await _cache.SetAsync(
-            cacheKey, 
-            keyInfo, 
-            new HybridCacheEntryOptions { Expiration = _cacheTtl }, 
-            cancellationToken: ct);
+        _memoryCache.Set(cacheKey, keyInfo, _cacheTtl);
+        await _redis.GetDatabase().StringSetAsync(cacheKey, JsonSerializer.Serialize(keyInfo), _cacheTtl);
     }
 }

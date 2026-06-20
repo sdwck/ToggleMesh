@@ -22,5 +22,7 @@ public sealed class ProjectEnvironmentConfiguration
             .WithOne(x => x.Environment)
             .HasForeignKey(x => x.EnvironmentId)
             .OnDelete(DeleteBehavior.Cascade);
+        
+        entity.HasQueryFilter(x => !x.IsDeleted);
     }
 }

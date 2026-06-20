@@ -107,6 +107,13 @@ export interface PaginatedResponse<T> {
     hasPreviousPage: boolean;
 }
 
+export interface CursorPagedResponse<T> {
+    items: T[];
+    totalCount: number;
+    nextCursor: string | null;
+    hasNextPage: boolean;
+}
+
 export interface AuditLog {
     id: string;
     entityName: string;

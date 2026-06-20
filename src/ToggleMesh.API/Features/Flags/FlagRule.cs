@@ -1,8 +1,9 @@
+using ToggleMesh.API.Persistence.Abstractions;
+
 namespace ToggleMesh.API.Features.Flags;
 
-public class FlagRule
+public class FlagRule : AuditableEntity
 {
-    public Guid Id { get; set; }
     public Guid FlagEnvironmentStateId { get; set; }
     public FlagEnvironmentState FlagEnvironmentState { get; set; } = null!;
     public int GroupId { get; set; } 

@@ -232,7 +232,7 @@ export function PaymentComponent() {
                                         <DropdownMenu>
                                             <DropdownMenuTrigger asChild>
                                                 <Button variant="ghost" size="icon"
-                                                        className="h-8 w-8 text-muted-foreground hover:text-foreground cursor-pointer rounded-md">
+                                                        className="h-8 w-8 text-muted-foreground hover:text-foreground cursor-pointer rounded-md mt-1">
                                                     <MoreHorizontal className="h-4 w-4"/>
                                                 </Button>
                                             </DropdownMenuTrigger>
@@ -576,6 +576,11 @@ export function PaymentComponent() {
                         <Input
                             value={envNameInput}
                             onChange={(e) => setEnvNameInput(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter' && !updateEnvironment.isPending && envNameInput.trim()) {
+                                    handleSaveName();
+                                }
+                            }}
                             className="bg-zinc-950/20"
                             autoFocus
                         />
@@ -641,6 +646,11 @@ export function PaymentComponent() {
                                 placeholder="e.g. Production Backend"
                                 value={keyName}
                                 onChange={(e) => setKeyName(e.target.value)}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter' && !createKey.isPending && keyName.trim()) {
+                                        handleCreateKeySubmit();
+                                    }
+                                }}
                             />
                         </div>
 

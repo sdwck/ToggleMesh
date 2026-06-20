@@ -1,10 +1,10 @@
 using System.ComponentModel.DataAnnotations.Schema;
+using ToggleMesh.API.Persistence.Abstractions;
 
 namespace ToggleMesh.API.Features.Auth.Models;
 
-public class RefreshToken
+public class RefreshToken : Entity
 {
-    public Guid Id { get; set; }
     public Guid UserId { get; set; }
     public string Token { get; set; } = string.Empty;
     public DateTime Expires { get; set; }

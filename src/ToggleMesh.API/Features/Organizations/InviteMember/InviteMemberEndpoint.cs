@@ -55,7 +55,6 @@ public class InviteMemberEndpoint : ToggleEndpoint<InviteMemberRequest, GetMembe
 
         var newMember = new OrganizationMember
         {
-            Id = Guid.NewGuid(),
             OrganizationId = req.OrganizationId,
             UserId = targetUser.Id,
             Role = req.Role

@@ -21,7 +21,7 @@ public static class TokenGenerator
             new(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
             new("email", user.Email ?? ""),
             new("username", user.UserName ?? ""),
-            new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
+            new(JwtRegisteredClaimNames.Jti, Guid.CreateVersion7().ToString())
         };
         
         var userClaims = await userManager.GetClaimsAsync(user);

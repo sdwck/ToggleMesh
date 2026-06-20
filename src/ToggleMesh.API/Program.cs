@@ -68,12 +68,16 @@ builder.Services.AddScoped<IApiKeyCacheService, ApiKeyCacheService>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddMemoryCache();
 builder.Services.AddFastEndpoints();
+builder.Services.AddSingleton<SoftDeletableInterceptor>();
+builder.Services.AddSingleton<UpdateAuditableInterceptor>();
 builder.Services.AddSingleton<AuditInterceptor>();
 builder.Services.AddSingleton<RealTimeInvalidationInterceptor>();
 builder.Services.AddDbContext<AppDbContext>((serviceProvider, options) =>
 {
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"));
     options.AddInterceptors(
+        serviceProvider.GetRequiredService<SoftDeletableInterceptor>(),
+        serviceProvider.GetRequiredService<UpdateAuditableInterceptor>(),
         serviceProvider.GetRequiredService<AuditInterceptor>(),
         serviceProvider.GetRequiredService<RealTimeInvalidationInterceptor>());
 });
@@ -113,6 +117,28 @@ builder.Services.AddAuthentication(options =>
         };
     })
     .AddScheme<AuthenticationSchemeOptions, PatAuthenticationHandler>("PAT", _ => { })
+    .AddCookie("TempCookie");
+
+var oidcSettings = builder.Configuration.GetSection("OIDC");
+if (!string.IsNullOrEmpty(oidcSettings["ClientId"]))
+{
+    builder.Services.AddAuthentication()
+        .AddOpenIdConnect(options =>
+        {
+            options.SignInScheme = "TempCookie";
+            options.Authority = oidcSettings["Authority"];
+            options.ClientId = oidcSettings["ClientId"];
+            options.ClientSecret = oidcSettings["ClientSecret"];
+            options.ResponseType = "code";
+            options.SaveTokens = true;
+            options.Scope.Add("openid");
+            options.Scope.Add("profile");
+            options.Scope.Add("email");
+            options.CallbackPath = "/api/v1/auth/sso/callback";
+        });
+}
+
+builder.Services.AddAuthentication()
     .AddJwtBearer(options =>
     {
         options.MapInboundClaims = false;
@@ -189,15 +215,6 @@ builder.Services.Scan(x =>
         .AddClasses(xx => xx.AssignableTo<ICacheInvalidationHandler>())
         .AsImplementedInterfaces()
         .WithSingletonLifetime());
-builder.Services.AddHybridCache(options =>
-{
-    options.MaximumPayloadBytes = 10 * 1024 * 1024;
-    options.DefaultEntryOptions = new HybridCacheEntryOptions
-    {
-        Expiration = TimeSpan.FromMinutes(10),
-        LocalCacheExpiration = TimeSpan.FromMinutes(5)
-    };
-});
 builder.Services.AddHttpClient("WebhookClient", client =>
 {
     client.Timeout = TimeSpan.FromSeconds(10);
@@ -214,10 +231,11 @@ builder.Services.AddHostedService<RefreshTokenCleanupService>();
 
 var app = builder.Build();
 
+app.UseExceptionHandler();
+
 if (app.Environment.IsStaging() || app.Environment.IsProduction())
 {
     app.UseHttpsRedirection();
-    app.UseExceptionHandler();
 }
 
 app.Use(async (context, next) =>

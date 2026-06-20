@@ -2,7 +2,8 @@ using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
-using Microsoft.Extensions.Caching.Hybrid;
+using Microsoft.Extensions.Caching.Memory;
+using StackExchange.Redis;
 using ToggleMesh.API.Features.Flags;
 using ToggleMesh.API.Features.Organizations;
 using ToggleMesh.API.Features.Projects;
@@ -13,7 +14,8 @@ namespace ToggleMesh.API.Persistence.Interceptors;
 public class RealTimeInvalidationInterceptor : SaveChangesInterceptor
 {
     private readonly ISseService _sseService;
-    private readonly HybridCache _cache;
+    private readonly IDatabase _redis;
+    private readonly IMemoryCache _memoryCache;
 
     private class ContextState
     {
@@ -31,10 +33,11 @@ public class RealTimeInvalidationInterceptor : SaveChangesInterceptor
 
     private readonly ConditionalWeakTable<DbContext, ContextState> _contextStates = new();
 
-    public RealTimeInvalidationInterceptor(ISseService sseService, HybridCache cache)
+    public RealTimeInvalidationInterceptor(ISseService sseService, IConnectionMultiplexer redis, IMemoryCache memoryCache)
     {
         _sseService = sseService;
-        _cache = cache;
+        _redis = redis.GetDatabase();
+        _memoryCache = memoryCache;
     }
 
     public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
@@ -109,7 +112,8 @@ public class RealTimeInvalidationInterceptor : SaveChangesInterceptor
                 if (snapshot.Type == typeof(ProjectMember))
                 {
                     var cacheKey = $"project-member-state:{snapshot.ProjectId}:{snapshot.UserId}";
-                    await _cache.RemoveAsync(cacheKey, cancellationToken);
+                    _memoryCache.Remove(cacheKey);
+                    await _redis.KeyDeleteAsync(cacheKey);
                 }
                 else if (snapshot.Type == typeof(OrganizationMember))
                 {
@@ -122,7 +126,8 @@ public class RealTimeInvalidationInterceptor : SaveChangesInterceptor
                     foreach (var projectId in projectIds)
                     {
                         var cacheKey = $"project-member-state:{projectId}:{snapshot.UserId}";
-                        await _cache.RemoveAsync(cacheKey, cancellationToken);
+                        _memoryCache.Remove(cacheKey);
+                        await _redis.KeyDeleteAsync(cacheKey);
                     }
                 }
             }

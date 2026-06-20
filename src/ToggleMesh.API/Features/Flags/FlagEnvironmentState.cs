@@ -1,12 +1,11 @@
 using ToggleMesh.API.Features.Projects;
 using ToggleMesh.API.Infrastructure;
+using ToggleMesh.API.Persistence.Abstractions;
 
 namespace ToggleMesh.API.Features.Flags;
 
-public class FlagEnvironmentState : IHasEnvironment
+public class FlagEnvironmentState : AuditableEntity, IHasEnvironment
 {
-    public Guid Id { get; set; }
-    
     public Guid FeatureFlagId { get; set; }
     public FeatureFlag FeatureFlag { get; set; } = null!;
     

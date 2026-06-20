@@ -1,12 +1,13 @@
 using Microsoft.EntityFrameworkCore;
 using ToggleMesh.API.Extensions;
-using ToggleMesh.API.Infrastructure;
 using ToggleMesh.API.Infrastructure.Endpoints;
 using ToggleMesh.API.Persistence;
 
+using ToggleMesh.Common.Pagination;
+
 namespace ToggleMesh.API.Features.Flags.GetAll;
 
-public class GetFlagsEndpoint : ToggleEndpoint<GetFlagsRequest, List<ProjectFlagDto>>
+public class GetFlagsEndpoint : ToggleEndpoint<GetFlagsRequest, CursorPagedResponse<ProjectFlagDto>>
 {
     private readonly AppDbContext _db;
 
@@ -26,7 +27,7 @@ public class GetFlagsEndpoint : ToggleEndpoint<GetFlagsRequest, List<ProjectFlag
     {
         var projectId = Route<Guid>("projectId");
 
-        (var role, var envRoles) = await _db.GetProjectRoleAndEnvOverridesAsync(projectId, UserId, ct);
+        var (role, envRoles) = await _db.GetProjectRoleAndEnvOverridesAsync(projectId, UserId, ct);
 
         if (role == null)
         {
@@ -51,7 +52,25 @@ public class GetFlagsEndpoint : ToggleEndpoint<GetFlagsRequest, List<ProjectFlag
             rawFlagsQuery = rawFlagsQuery.Where(x =>
                 x.Tags.Any(t => req.Tags.Contains(t)));
 
-        var rawFlags = await rawFlagsQuery.ToListAsync(ct);
+        var query = rawFlagsQuery;
+
+        if (req.Cursor.HasValue)
+            query = query.Where(x => x.Id < req.Cursor.Value);
+
+        var totalCount = await rawFlagsQuery.CountAsync(ct);
+
+        var rawFlags = await query
+            .OrderByDescending(x => x.Id)
+            .Take(req.PageSize + 1)
+            .ToListAsync(ct);
+
+        var hasNextPage = rawFlags.Count > req.PageSize;
+        if (hasNextPage)
+            rawFlags.RemoveAt(rawFlags.Count - 1);
+
+        var nextCursor = rawFlags.Count > 0 
+            ? rawFlags.Last().Id 
+            : (Guid?)null;
 
         var flags = rawFlags.Select(x => new ProjectFlagDto(
                 x.Id,
@@ -78,6 +97,6 @@ public class GetFlagsEndpoint : ToggleEndpoint<GetFlagsRequest, List<ProjectFlag
                 x.Tags))
             .ToList();
 
-        await Send.OkAsync(flags, ct);
+        await Send.OkAsync(new CursorPagedResponse<ProjectFlagDto>(flags, totalCount, nextCursor, hasNextPage), ct);
     }
 }

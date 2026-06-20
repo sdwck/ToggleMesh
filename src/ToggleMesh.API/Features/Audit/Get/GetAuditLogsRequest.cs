@@ -1,11 +1,11 @@
-﻿namespace ToggleMesh.API.Features.Audit.Get;
+﻿using ToggleMesh.Common.Pagination;
 
-public class GetAuditLogsRequest
+namespace ToggleMesh.API.Features.Audit.Get;
+
+public class GetAuditLogsRequest : CursorPagedRequest
 {
     public Guid? ProjectId { get; set; }
     public Guid? EnvironmentId { get; set; }
-    public int Page { get; set; } = 1;
-    public int PageSize { get; set; } = 20;
     public string? Action { get; set; }
     public string? EntityName { get; set; }
     public string? SortOrder { get; set; }

@@ -1,10 +1,10 @@
 using ToggleMesh.API.Features.Auth.Models;
+using ToggleMesh.API.Persistence.Abstractions;
 
 namespace ToggleMesh.API.Features.Organizations;
 
-public class OrganizationMember
+public class OrganizationMember : AuditableEntity
 {
-    public Guid Id { get; set; }
     
     public Guid OrganizationId { get; set; }
     public Organization Organization { get; set; } = null!;

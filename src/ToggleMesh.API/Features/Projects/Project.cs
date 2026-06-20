@@ -1,13 +1,14 @@
-using ToggleMesh.API.Features.Auth.Models;
 using ToggleMesh.API.Features.Organizations;
+
+using ToggleMesh.API.Persistence;
+using ToggleMesh.API.Persistence.Abstractions;
 
 namespace ToggleMesh.API.Features.Projects;
 
-public class Project
+public class Project : AuditableEntity, ISoftDeletable
 {
-    public Guid Id { get; set; }
     public string Name { get; set; } = string.Empty;
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public bool IsDeleted { get; set; }
     
     public Guid OrganizationId { get; set; }
     public Organization Organization { get; set; } = null!;

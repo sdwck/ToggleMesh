@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
+using ToggleMesh.API.Extensions;
 using ToggleMesh.API.Features.Audit;
 using ToggleMesh.API.Features.Auth.Models;
 using ToggleMesh.API.Features.Flags;
@@ -35,6 +37,15 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
     {
         base.OnModelCreating(modelBuilder);
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
+        modelBuilder.ApplyGlobalUuidV7();
+    }
+
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+    {
+        base.OnConfiguring(optionsBuilder);
+        optionsBuilder.ConfigureWarnings(warnings => 
+            warnings.Ignore(CoreEventId
+                .PossibleIncorrectRequiredNavigationWithQueryFilterInteractionWarning));
     }
 
     public async Task<(ProjectRole? Role, Dictionary<Guid, ProjectRole> EnvRoles)> GetProjectRoleAndEnvOverridesAsync(

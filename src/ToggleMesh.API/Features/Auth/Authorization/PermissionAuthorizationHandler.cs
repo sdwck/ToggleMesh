@@ -1,10 +1,10 @@
+using Microsoft.Extensions.Caching.Memory;
 using System.IdentityModel.Tokens.Jwt;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using ToggleMesh.API.Features.Auth.Models;
 using ToggleMesh.API.Features.Projects;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Caching.Hybrid;
 using ToggleMesh.API.Persistence;
 using StackExchange.Redis;
 
@@ -14,16 +14,19 @@ public class PermissionAuthorizationHandler : AuthorizationHandler<PermissionReq
 {
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly AppDbContext _dbContext;
-    private readonly HybridCache _cache;
+    private readonly IDatabase _redis;
+    private readonly IMemoryCache _memoryCache;
 
     public PermissionAuthorizationHandler(
         IHttpContextAccessor httpContextAccessor, 
         AppDbContext dbContext, 
-        HybridCache cache)
+        IConnectionMultiplexer redis,
+        IMemoryCache memoryCache)
     {
         _httpContextAccessor = httpContextAccessor;
         _dbContext = dbContext;
-        _cache = cache;
+        _redis = redis.GetDatabase();
+        _memoryCache = memoryCache;
     }
 
     protected override async Task HandleRequirementAsync(AuthorizationHandlerContext context, PermissionRequirement requirement)
@@ -63,47 +66,52 @@ public class PermissionAuthorizationHandler : AuthorizationHandler<PermissionReq
         var cacheKey = $"project-member-state:{projectId.Value}:{userId}";
         var ct = httpContext.RequestAborted;
 
-        var memberState = await _cache.GetOrCreateAsync<CachedMemberState?>(
-            cacheKey,
-            async ct1 =>
+        var memberState = await _memoryCache.GetOrCreateAsync<CachedMemberState?>(cacheKey, async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5);
+            var redisValue = await _redis.StringGetAsync(cacheKey);
+
+            if (redisValue.HasValue)
+                return JsonSerializer.Deserialize<CachedMemberState>((string)redisValue!);
+
+            var project = await _dbContext.Projects
+                .AsNoTracking()
+                .FirstOrDefaultAsync(p => p.Id == projectId.Value, ct);
+            
+            if (project == null) 
+                return null;
+
+            var orgMember = await _dbContext.OrganizationMembers
+                .AsNoTracking()
+                .FirstOrDefaultAsync(om => om.OrganizationId == project.OrganizationId && om.UserId == userId, ct);
+
+            if (orgMember == null) 
+                return null;
+
+            if (orgMember.Role == Organizations.OrganizationRole.Admin)
             {
-                var project = await _dbContext.Projects
-                    .AsNoTracking()
-                    .FirstOrDefaultAsync(p => p.Id == projectId.Value, ct1);
-                
-                if (project == null) 
-                    return null;
+                var state = new CachedMemberState(ProjectRole.Owner, new Dictionary<Guid, ProjectRole>());
+                await _redis.StringSetAsync(cacheKey, JsonSerializer.Serialize(state), TimeSpan.FromMinutes(5));
+                return state;
+            }
+            
 
-                var orgMember = await _dbContext.OrganizationMembers
-                    .AsNoTracking()
-                    .FirstOrDefaultAsync(om => om.OrganizationId == project.OrganizationId && om.UserId == userId, ct1);
+            var projectMember = await _dbContext.ProjectMembers
+                .AsNoTracking()
+                .Include(pm => pm.EnvironmentRoles)
+                .FirstOrDefaultAsync(pm => 
+                    pm.ProjectId == projectId.Value &&
+                    pm.UserId == userId, ct);
 
-                if (orgMember == null) 
-                    return null;
+            if (projectMember == null)
+                return null;
 
-                if (orgMember.Role == Organizations.OrganizationRole.Admin)
-                    return new CachedMemberState(ProjectRole.Owner, new Dictionary<Guid, ProjectRole>());
-                
-
-                var projectMember = await _dbContext.ProjectMembers
-                    .AsNoTracking()
-                    .Include(pm => pm.EnvironmentRoles)
-                    .FirstOrDefaultAsync(pm => 
-                        pm.ProjectId == projectId.Value &&
-                        pm.UserId == userId, ct1);
-
-                if (projectMember == null)
-                    return null;
-
-                var envRoles = projectMember.EnvironmentRoles.ToDictionary(er => er.EnvironmentId, er => er.Role);
-                return new CachedMemberState(projectMember.Role, envRoles);
-            },
-            new HybridCacheEntryOptions
-            {
-                Expiration = TimeSpan.FromMinutes(5)
-            },
-            cancellationToken: ct
-        );
+            var envRoles = projectMember.EnvironmentRoles.ToDictionary(er => er.EnvironmentId, er => er.Role);
+            var resultState = new CachedMemberState(projectMember.Role, envRoles);
+            
+            await _redis.StringSetAsync(cacheKey, JsonSerializer.Serialize(resultState), TimeSpan.FromMinutes(5));
+            return resultState;
+        });
         
         if (memberState == null)
             return;

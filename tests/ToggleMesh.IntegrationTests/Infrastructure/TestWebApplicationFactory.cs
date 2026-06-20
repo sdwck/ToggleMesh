@@ -57,6 +57,8 @@ public class TestWebApplicationFactory : WebApplicationFactory<Program>, IAsyncL
             if (webhookServiceDescriptor != null)
                 services.Remove(webhookServiceDescriptor);
 
+            services.AddSingleton<SoftDeletableInterceptor>();
+            services.AddSingleton<UpdateAuditableInterceptor>();
             services.AddSingleton<AuditInterceptor>();
             services.AddSingleton<RealTimeInvalidationInterceptor>();
             services.AddSingleton<TestOrganizationInterceptor>();
@@ -65,6 +67,8 @@ public class TestWebApplicationFactory : WebApplicationFactory<Program>, IAsyncL
             {
                 options.UseNpgsql(_db.GetConnectionString());
                 options.AddInterceptors(
+                    sp.GetRequiredService<SoftDeletableInterceptor>(),
+                    sp.GetRequiredService<UpdateAuditableInterceptor>(),
                     sp.GetRequiredService<TestOrganizationInterceptor>(),
                     sp.GetRequiredService<RealTimeInvalidationInterceptor>());
             });
@@ -95,7 +99,7 @@ public class TestWebApplicationFactory : WebApplicationFactory<Program>, IAsyncL
         await db.SaveChangesAsync();
 
         var testOrgId = Guid.Parse("11111111-1111-1111-1111-111111111111");
-        var testOrg = new ToggleMesh.API.Features.Organizations.Organization
+        var testOrg = new API.Features.Organizations.Organization
         {
             Id = testOrgId,
             Name = "Test Organization",
@@ -103,12 +107,12 @@ public class TestWebApplicationFactory : WebApplicationFactory<Program>, IAsyncL
         };
         db.Organizations.Add(testOrg);
 
-        var testOrgMember = new ToggleMesh.API.Features.Organizations.OrganizationMember
+        var testOrgMember = new API.Features.Organizations.OrganizationMember
         {
-            Id = Guid.NewGuid(),
+            Id = Guid.CreateVersion7(),
             OrganizationId = testOrgId,
             UserId = testUser.Id,
-            Role = ToggleMesh.API.Features.Organizations.OrganizationRole.Admin
+            Role = API.Features.Organizations.OrganizationRole.Admin
         };
         db.OrganizationMembers.Add(testOrgMember);
         await db.SaveChangesAsync();
@@ -127,7 +131,7 @@ public class TestOrganizationInterceptor : Microsoft.EntityFrameworkCore.Diagnos
     public override ValueTask<Microsoft.EntityFrameworkCore.Diagnostics.InterceptionResult<int>> SavingChangesAsync(
         Microsoft.EntityFrameworkCore.Diagnostics.DbContextEventData eventData,
         Microsoft.EntityFrameworkCore.Diagnostics.InterceptionResult<int> result,
-        System.Threading.CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default)
     {
         if (eventData.Context is AppDbContext dbContext)
         {

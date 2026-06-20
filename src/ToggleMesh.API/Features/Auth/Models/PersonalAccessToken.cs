@@ -1,8 +1,9 @@
-﻿namespace ToggleMesh.API.Features.Auth.Models;
+﻿using ToggleMesh.API.Persistence.Abstractions;
 
-public class PersonalAccessToken
+namespace ToggleMesh.API.Features.Auth.Models;
+
+public class PersonalAccessToken : Entity
 {
-    public Guid Id { get; set; }
     public Guid UserId { get; set; }
     public ApplicationUser User { get; set; } = null!;
     

@@ -1,14 +1,17 @@
-﻿using Microsoft.Extensions.Caching.Hybrid;
+using StackExchange.Redis;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace ToggleMesh.API.BackgroundServices.Caching.Handlers;
 
 public class EnvironmentFlagsInvalidationHandler : ICacheInvalidationHandler
 {
-    private readonly HybridCache _cache;
+    private readonly IDatabase _redis;
+    private readonly IMemoryCache _memoryCache;
 
-    public EnvironmentFlagsInvalidationHandler(HybridCache cache)
+    public EnvironmentFlagsInvalidationHandler(IConnectionMultiplexer redis, IMemoryCache memoryCache)
     {
-        _cache = cache;
+        _redis = redis.GetDatabase();
+        _memoryCache = memoryCache;
     }
 
     public bool CanHandle(string message) => 
@@ -21,8 +24,8 @@ public class EnvironmentFlagsInvalidationHandler : ICacheInvalidationHandler
             var l1CacheKey = $"sdk:compiled_rules:{envId}";
             var l2CacheKey = $"sdk:flags:states:{envId}";
 
-            await _cache.RemoveAsync(l1CacheKey, ct);
-            await _cache.RemoveAsync(l2CacheKey, ct);
+            _memoryCache.Remove(l1CacheKey);
+            await _redis.KeyDeleteAsync(l2CacheKey);
         }
     }
 }

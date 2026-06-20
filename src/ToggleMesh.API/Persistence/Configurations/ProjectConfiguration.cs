@@ -26,5 +26,7 @@ public sealed class ProjectConfiguration : IEntityTypeConfiguration<Project>
             .WithMany(o => o.Projects)
             .HasForeignKey(x => x.OrganizationId)
             .OnDelete(DeleteBehavior.Cascade);
+        
+        entity.HasQueryFilter(x => !x.IsDeleted);
     }
 }

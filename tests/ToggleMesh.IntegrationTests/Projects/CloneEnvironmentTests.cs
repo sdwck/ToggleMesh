@@ -116,9 +116,9 @@ public class CloneEnvironmentTests : IClassFixture<TestWebApplicationFactory>
     public async Task CloneEnvironment_WithNonExistentTarget_ShouldReturn404()
     {
         // Arrange
-        var projectId = Guid.NewGuid();
-        var sourceEnvId = Guid.NewGuid();
-        var targetEnvId = Guid.NewGuid();
+        var projectId = Guid.CreateVersion7();
+        var sourceEnvId = Guid.CreateVersion7();
+        var targetEnvId = Guid.CreateVersion7();
 
         // Act
         var response = await _client.PostAsync($"/api/projects/{projectId}/environments/{sourceEnvId}/clone-to/{targetEnvId}", null);

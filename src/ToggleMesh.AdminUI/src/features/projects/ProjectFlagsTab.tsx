@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ToggleRight, Trash2, MoreHorizontal, Settings2, Copy, ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react';
-import { useProjectFlags, useToggleFeatureFlag, useUpdateFlagPrivacy, useDeleteFeatureFlag } from '@/api/queries';
+import { useProjectFlagsInfinite, useToggleFeatureFlag, useUpdateFlagPrivacy, useDeleteFeatureFlag } from '@/api/queries';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -32,7 +32,15 @@ export function ProjectFlagsTab({ project, search, tags, sortBy, isLoadingProjec
     const navigate = useNavigate();
     const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-    const { data: flags, isLoading: isLoadingFlags } = useProjectFlags(project.id, search, tags);
+    const { 
+        data: flagsData, 
+        isLoading: isLoadingFlags,
+        fetchNextPage,
+        hasNextPage,
+        isFetchingNextPage
+    } = useProjectFlagsInfinite(project.id, search, tags, 20);
+
+    const flags = useMemo(() => flagsData?.pages.flatMap(p => p.items) || [], [flagsData]);
     const toggleFlag = useToggleFeatureFlag(project.id);
     const updatePrivacy = useUpdateFlagPrivacy(project.id);
     const deleteFlag = useDeleteFeatureFlag(project.id);
@@ -107,6 +115,8 @@ export function ProjectFlagsTab({ project, search, tags, sortBy, isLoadingProjec
         scrollContainerRef.current?.scrollTo({ top: 0 });
     }, [search, tags, sortBy]);
 
+
+
     const confirmDeleteFlag = useCallback((flagKey: string) => {
         setFlagToDelete(flagKey);
         setIsDeleteOpen(true);
@@ -167,6 +177,19 @@ export function ProjectFlagsTab({ project, search, tags, sortBy, isLoadingProjec
 
     const virtualItems = rowVirtualizer.getVirtualItems();
     const totalSize = rowVirtualizer.getTotalSize();
+
+    useEffect(() => {
+        const lastItem = virtualItems[virtualItems.length - 1];
+        if (!lastItem) return;
+
+        if (
+            lastItem.index >= orderedFlags.length - 1 &&
+            hasNextPage &&
+            !isFetchingNextPage
+        ) {
+            fetchNextPage();
+        }
+    }, [virtualItems, orderedFlags.length, hasNextPage, isFetchingNextPage, fetchNextPage]);
 
     return (
         <div className="space-y-6">
@@ -354,6 +377,12 @@ export function ProjectFlagsTab({ project, search, tags, sortBy, isLoadingProjec
                     </Table>
                 </div>
             </Card>
+
+            {isFetchingNextPage && (
+                <div className="flex justify-center pt-2 pb-4">
+                    <span className="text-sm text-muted-foreground animate-pulse">Loading more...</span>
+                </div>
+            )}
 
             <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
                 <DialogContent className="border-border/40 bg-zinc-950">

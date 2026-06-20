@@ -1,10 +1,12 @@
 using Microsoft.AspNetCore.Identity;
 using ToggleMesh.API.Features.Projects;
 using ToggleMesh.API.Features.Organizations;
+using ToggleMesh.API.Persistence;
+using ToggleMesh.API.Persistence.Abstractions;
 
 namespace ToggleMesh.API.Features.Auth.Models;
 
-public class ApplicationUser : IdentityUser<Guid>
+public class ApplicationUser : IdentityUser<Guid>, ISoftDeletable
 {
 
     // ReSharper disable once CollectionNeverUpdated.Global
@@ -15,4 +17,6 @@ public class ApplicationUser : IdentityUser<Guid>
 
     // ReSharper disable once CollectionNeverUpdated.Global
     public ICollection<RefreshToken> RefreshTokens { get; set; } = [];
+
+    public bool IsDeleted { get; set; }
 }

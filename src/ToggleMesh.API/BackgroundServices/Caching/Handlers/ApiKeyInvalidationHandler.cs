@@ -1,14 +1,17 @@
-﻿using Microsoft.Extensions.Caching.Hybrid;
+using Microsoft.Extensions.Caching.Memory;
+using StackExchange.Redis;
 
 namespace ToggleMesh.API.BackgroundServices.Caching.Handlers;
 
 public class ApiKeyInvalidationHandler : ICacheInvalidationHandler
 {
-    private readonly HybridCache _cache;
+    private readonly IDatabase _redis;
+    private readonly IMemoryCache _memoryCache;
 
-    public ApiKeyInvalidationHandler(HybridCache cache)
+    public ApiKeyInvalidationHandler(IConnectionMultiplexer redis, IMemoryCache memoryCache)
     {
-        _cache = cache;
+        _redis = redis.GetDatabase();
+        _memoryCache = memoryCache;
     }
 
     public bool CanHandle(string message) => 
@@ -16,6 +19,7 @@ public class ApiKeyInvalidationHandler : ICacheInvalidationHandler
 
     public async Task HandleAsync(string message, CancellationToken ct)
     {
-        await _cache.RemoveAsync(message, ct);
+        _memoryCache.Remove(message);
+        await _redis.KeyDeleteAsync(message);
     }
 }

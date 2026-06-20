@@ -1,11 +1,10 @@
 using ToggleMesh.API.Infrastructure;
+using ToggleMesh.API.Persistence.Abstractions;
 
 namespace ToggleMesh.API.Features.Projects;
 
-public class MemberEnvironmentRole : IHasEnvironment
+public class MemberEnvironmentRole : AuditableEntity, IHasEnvironment
 {
-    public Guid Id { get; set; }
-    
     public Guid ProjectMemberId { get; set; }
     public ProjectMember ProjectMember { get; set; } = null!;
     

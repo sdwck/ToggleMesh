@@ -144,6 +144,11 @@ export function ProjectFlagsPage() {
                                         placeholder="e.g. new-billing-ui"
                                         value={newFlagKey}
                                         onChange={(e) => setNewFlagKey(e.target.value)}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter' && !isCreating && newFlagKey.trim()) {
+                                                handleCreateFlag();
+                                            }
+                                        }}
                                         autoFocus
                                         className="font-mono"
                                     />

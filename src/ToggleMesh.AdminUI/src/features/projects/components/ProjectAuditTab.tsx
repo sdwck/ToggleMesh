@@ -8,7 +8,6 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import type { ProjectDetails, AuditLog } from '@/api/types';
-import { PaginationControls } from '@/components/ui/PaginationControls';
 import { EmptyState } from "@/components/EmptyState.tsx";
 import { ClipboardList, Clock, Calendar, ChevronDown, Check } from "lucide-react";
 import { Input } from "@/components/ui/input.tsx";
@@ -41,7 +40,6 @@ const formatDate = (dateString: string) => {
 };
 
 export function ProjectAuditTab({ project, isLoading }: { project?: ProjectDetails; isLoading: boolean }) {
-    const [auditPage, setAuditPage] = useState(1);
     const [filterAction, setFilterAction] = useState<string>('all');
     const [filterEntity, setFilterEntity] = useState<string>('all');
     const [sortOrder, setSortOrder] = useState<string>('desc');
@@ -55,9 +53,14 @@ export function ProjectAuditTab({ project, isLoading }: { project?: ProjectDetai
 
     const projectId = project?.id ?? '';
 
-    const { data: auditData, isLoading: isLoadingAudit } = useProjectAuditLogs(
+    const { 
+        data: auditData, 
+        isLoading: isLoadingAudit,
+        fetchNextPage,
+        hasNextPage,
+        isFetchingNextPage
+    } = useProjectAuditLogs(
         projectId,
-        auditPage,
         10,
         filterAction,
         filterEntity,
@@ -67,7 +70,28 @@ export function ProjectAuditTab({ project, isLoading }: { project?: ProjectDetai
         customTo
     );
 
+    const items = auditData?.pages.flatMap(p => p.items) || [];
+
     const [selectedAuditLog, setSelectedAuditLog] = useState<AuditLog | null>(null);
+
+    const loadMoreRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const observer = new IntersectionObserver(
+            (entries) => {
+                if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) {
+                    fetchNextPage();
+                }
+            },
+            { threshold: 0.1 }
+        );
+
+        if (loadMoreRef.current) {
+            observer.observe(loadMoreRef.current);
+        }
+
+        return () => observer.disconnect();
+    }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
     useEffect(() => {
         function handleClickOutside(event: MouseEvent) {
@@ -81,13 +105,11 @@ export function ProjectAuditTab({ project, isLoading }: { project?: ProjectDetai
 
     const handleQuickRangeSelect = (val: string) => {
         setRangeType(val);
-        setAuditPage(1);
         setIsTimePickerOpen(false);
     };
 
     const handleApplyCustomRange = () => {
         setRangeType('custom');
-        setAuditPage(1);
         setIsTimePickerOpen(false);
     };
 
@@ -111,7 +133,7 @@ export function ProjectAuditTab({ project, isLoading }: { project?: ProjectDetai
                     <p className="text-sm text-muted-foreground">Review project activity and audit trail.</p>
                 </div>
                 <div className="flex gap-3 flex-wrap items-center self-end">
-                    <Select value={filterAction} onValueChange={(val) => { setFilterAction(val); setAuditPage(1); }}>
+                    <Select value={filterAction} onValueChange={setFilterAction}>
                         <SelectTrigger className="w-[160px] h-10 bg-zinc-950/20 border-border/40 text-xs">
                             <SelectValue placeholder="Filter by action" />
                         </SelectTrigger>
@@ -123,7 +145,7 @@ export function ProjectAuditTab({ project, isLoading }: { project?: ProjectDetai
                         </SelectContent>
                     </Select>
 
-                    <Select value={filterEntity} onValueChange={(val) => { setFilterEntity(val); setAuditPage(1); }}>
+                    <Select value={filterEntity} onValueChange={setFilterEntity}>
                         <SelectTrigger className="w-[160px] h-10 bg-zinc-950/20 border-border/40 text-xs">
                             <SelectValue placeholder="Filter by entity" />
                         </SelectTrigger>
@@ -135,7 +157,7 @@ export function ProjectAuditTab({ project, isLoading }: { project?: ProjectDetai
                         </SelectContent>
                     </Select>
 
-                    <Select value={sortOrder} onValueChange={(val) => { setSortOrder(val); setAuditPage(1); }}>
+                    <Select value={sortOrder} onValueChange={setSortOrder}>
                         <SelectTrigger className="w-[160px] h-10 bg-zinc-950/20 border-border/40 font-mono text-xs">
                             <SelectValue placeholder="Sort order" />
                         </SelectTrigger>
@@ -258,7 +280,7 @@ export function ProjectAuditTab({ project, isLoading }: { project?: ProjectDetai
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {isLoadingAudit ? (
+                            {isLoadingAudit && items.length === 0 ? (
                                 Array.from({ length: 3 }).map((_, i) => (
                                     <TableRow key={i} className="border-border/40 h-[40px]">
                                         <TableCell><Skeleton className="h-4 w-32 rounded font-mono" /></TableCell>
@@ -269,7 +291,7 @@ export function ProjectAuditTab({ project, isLoading }: { project?: ProjectDetai
                                         <TableCell className="text-right"><Skeleton className="h-4 w-12 ml-auto rounded" /></TableCell>
                                     </TableRow>
                                 ))
-                            ) : !auditData || auditData.items.length === 0 ? (
+                            ) : items.length === 0 ? (
                                 <TableRow className="hover:bg-transparent">
                                     <TableCell colSpan={6} className="p-0 border-none">
                                         <EmptyState
@@ -280,7 +302,7 @@ export function ProjectAuditTab({ project, isLoading }: { project?: ProjectDetai
                                     </TableCell>
                                 </TableRow>
                             ) : (
-                                auditData.items.map((log) => (
+                                items.map((log) => (
                                     <TableRow key={log.id} className="border-border/40 hover:bg-muted/30 text-sm h-4">
                                         <TableCell className="text-muted-foreground py-[0.95rem] font-mono text-xs">
                                             {formatDate(log.timestamp)}
@@ -312,15 +334,9 @@ export function ProjectAuditTab({ project, isLoading }: { project?: ProjectDetai
                 </div>
             </Card>
 
-            {auditData && auditData.totalPages > 1 && (
-                <div className="shrink-0 pt-2">
-                    <PaginationControls
-                        currentPage={auditPage}
-                        totalPages={auditData.totalPages}
-                        onPageChange={setAuditPage}
-                        hasNextPage={auditData.hasNextPage}
-                        hasPreviousPage={auditData.hasPreviousPage}
-                    />
+            {hasNextPage && (
+                <div ref={loadMoreRef} className="flex justify-center pt-2 h-10 items-center">
+                    <span className="text-sm text-muted-foreground animate-pulse">Loading more...</span>
                 </div>
             )}
 

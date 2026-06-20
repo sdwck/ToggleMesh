@@ -33,7 +33,7 @@ public class ProjectMembersApiTests : IClassFixture<TestWebApplicationFactory>
         
         var targetUser = new ApplicationUser
         {
-            Id = Guid.NewGuid(),
+            Id = Guid.CreateVersion7(),
             Email = "targetuser@example.com",
             UserName = "targetuser@example.com"
         };

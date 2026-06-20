@@ -2,10 +2,11 @@ using Microsoft.EntityFrameworkCore;
 using ToggleMesh.API.Infrastructure;
 using ToggleMesh.API.Infrastructure.Endpoints;
 using ToggleMesh.API.Persistence;
+using ToggleMesh.Common.Pagination;
 
 namespace ToggleMesh.API.Features.Audit.Get;
 
-public class GetAuditLogsEndpoint : ToggleEndpoint<GetAuditLogsRequest, GetAuditLogsResponse>
+public class GetAuditLogsEndpoint : ToggleEndpoint<GetAuditLogsRequest, CursorPagedResponse<AuditLogDto>>
 {
     private readonly AppDbContext _db;
 
@@ -37,7 +38,7 @@ public class GetAuditLogsEndpoint : ToggleEndpoint<GetAuditLogsRequest, GetAudit
             projectIdToCheck = env.ProjectId;
         }
 
-        (var role, var envRoles) = await _db.GetProjectRoleAndEnvOverridesAsync(projectIdToCheck, UserId, ct);
+        var (role, envRoles) = await _db.GetProjectRoleAndEnvOverridesAsync(projectIdToCheck, UserId, ct);
 
         if (role == null)
         {
@@ -98,37 +99,43 @@ public class GetAuditLogsEndpoint : ToggleEndpoint<GetAuditLogsRequest, GetAudit
         if (dateTo.HasValue)
             query = query.Where(x => x.Timestamp <= dateTo.Value);
 
-        query = req.SortOrder?.ToLower() == "desc"
-            ? query.OrderByDescending(x => x.Timestamp)
-            : query.OrderBy(x => x.Timestamp);
+        var isAscending = req.SortOrder?.ToLower() == "asc";
+        query = isAscending 
+            ? query.OrderBy(x => x.Id) 
+            : query.OrderByDescending(x => x.Id);
+
+        if (req.Cursor.HasValue)
+        {
+            if (isAscending)
+                query = query.Where(x => x.Id > req.Cursor.Value);
+            else
+                query = query.Where(x => x.Id < req.Cursor.Value);
+        }
 
         var totalCount = await query.CountAsync(ct);
-        var totalPages = (int)Math.Ceiling(totalCount / (double)req.PageSize);
 
         var logs = await query
-            .Skip((req.Page - 1) * req.PageSize)
-            .Take(req.PageSize)
+            .Take(req.PageSize + 1)
             .ToListAsync(ct);
 
-        var response = new GetAuditLogsResponse
-        {
-            Items = logs.Select(x => new AuditLogDto(
-                x.Id,
-                x.EnvironmentId,
-                x.EntityName,
-                x.EntityFriendlyName,
-                x.EntityId,
-                x.Action,
-                x.OldValues,
-                x.NewValues,
-                x.PerformedByEmail,
-                x.Timestamp)).ToList(),
-            TotalCount = totalCount,
-            TotalPages = totalPages,
-            HasPreviousPage = req.Page > 1,
-            HasNextPage = req.Page < totalPages
-        };
+        var hasNextPage = logs.Count > req.PageSize;
+        if (hasNextPage)
+            logs.RemoveAt(logs.Count - 1);
 
-        await Send.OkAsync(response, ct);
+        var nextCursor = logs.Count > 0 ? logs.Last().Id : (Guid?)null;
+
+        var items = logs.Select(x => new AuditLogDto(
+            x.Id,
+            x.EnvironmentId,
+            x.EntityName,
+            x.EntityFriendlyName,
+            x.EntityId,
+            x.Action,
+            x.OldValues,
+            x.NewValues,
+            x.PerformedByEmail,
+            x.Timestamp)).ToList();
+
+        await Send.OkAsync(new CursorPagedResponse<AuditLogDto>(items, totalCount, nextCursor, hasNextPage), ct);
     }
 }
