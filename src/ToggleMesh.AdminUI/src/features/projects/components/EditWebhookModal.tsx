@@ -43,7 +43,14 @@ export function EditWebhookModal({ webhook, open, onOpenChange }: Props) {
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="border-border/40 bg-zinc-950">
+            <DialogContent 
+                className="border-border/40 bg-zinc-950"
+                onKeyDown={(e) => {
+                    if (e.key === 'Enter' && webhookName.trim() && webhookUrl.trim()) {
+                        handleUpdateWebhook();
+                    }
+                }}
+            >
                 <DialogHeader>
                     <DialogTitle>Edit Webhook</DialogTitle>
                     <DialogDescription>Update webhook name, URL, or events.</DialogDescription>

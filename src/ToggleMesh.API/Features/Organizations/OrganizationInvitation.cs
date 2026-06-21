@@ -1,0 +1,15 @@
+using ToggleMesh.API.Persistence.Abstractions;
+
+namespace ToggleMesh.API.Features.Organizations;
+
+public class OrganizationInvitation : AuditableEntity
+{
+    public Guid OrganizationId { get; set; }
+    public Organization Organization { get; set; } = null!;
+    
+    public string Email { get; set; } = string.Empty;
+    public OrganizationRole Role { get; set; } = OrganizationRole.Member;
+    
+    public string Token { get; set; } = string.Empty;
+    public DateTimeOffset ExpiresAt { get; set; }
+}

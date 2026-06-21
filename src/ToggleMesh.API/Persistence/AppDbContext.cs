@@ -16,6 +16,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
 {
     public DbSet<Organization> Organizations { get; set; }
     public DbSet<OrganizationMember> OrganizationMembers { get; set; }
+    public DbSet<OrganizationInvitation> OrganizationInvitations { get; set; }
     public DbSet<Project> Projects { get; set; }
     public DbSet<ProjectEnvironment> Environments { get; set; }
     public DbSet<EnvironmentKey> EnvironmentKeys { get; set; }
@@ -29,6 +30,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
     public DbSet<Webhook> Webhooks { get; set; }
     public DbSet<WebhookDelivery> WebhookDeliveries { get; set; }
     public DbSet<PersonalAccessToken> PersonalAccessTokens { get; set; }
+    public DbSet<ToggleMesh.API.Infrastructure.Email.Models.EmailOutboxMessage> EmailOutboxMessages { get; set; }
 
     public AppDbContext(DbContextOptions<AppDbContext> options) : base(options)
     {

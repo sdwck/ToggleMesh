@@ -1,21 +1,24 @@
-using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
 using ToggleMesh.API.Extensions;
 using ToggleMesh.API.Features.Projects.GetMembers;
-using ToggleMesh.API.Infrastructure;
 using ToggleMesh.API.Infrastructure.Endpoints;
 using ToggleMesh.API.Persistence;
+using StackExchange.Redis;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace ToggleMesh.API.Features.Projects.AddMember;
 
 public class AddMemberEndpoint : ToggleEndpoint<AddMemberRequest, MemberDto>
 {
     private readonly AppDbContext _db;
+    private readonly IDatabase _redis;
+    private readonly IMemoryCache _memoryCache;
 
-    public AddMemberEndpoint(AppDbContext db)
+    public AddMemberEndpoint(AppDbContext db, IConnectionMultiplexer redis, IMemoryCache memoryCache)
     {
         _db = db;
+        _redis = redis.GetDatabase();
+        _memoryCache = memoryCache;
     }
 
     public override void Configure()
@@ -48,6 +51,25 @@ public class AddMemberEndpoint : ToggleEndpoint<AddMemberRequest, MemberDto>
             return;
         }
 
+        var project = await _db.Projects.FirstOrDefaultAsync(p => p.Id == projectId, ct);
+        if (project == null)
+        {
+            await Send.NotFoundAsync(ct);
+            return;
+        }
+
+        var isOrgMember = await _db.OrganizationMembers
+            .AnyAsync(om => om.OrganizationId == project.OrganizationId && om.UserId == user.Id, ct);
+            
+        if (!isOrgMember)
+        {
+            AddError("User must be a member of the organization first.");
+            await Send.ErrorsAsync(cancellation: ct);
+            return;
+        }
+
+
+
         if (currentUserRole.Value == ProjectRole.Admin
             && req.Role 
                 is ProjectRole.Owner 
@@ -79,6 +101,10 @@ public class AddMemberEndpoint : ToggleEndpoint<AddMemberRequest, MemberDto>
 
         _db.ProjectMembers.Add(newMember);
         await _db.SaveChangesAsync(ct);
+
+        var cacheKey = $"project-member-state:{projectId}:{user.Id}";
+        await _redis.KeyDeleteAsync(cacheKey);
+        _memoryCache.Remove(cacheKey);
 
         await Send.OkAsync(new MemberDto
         {

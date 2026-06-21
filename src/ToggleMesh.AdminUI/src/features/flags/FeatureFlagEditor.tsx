@@ -210,6 +210,12 @@ export function FeatureFlagEditor({ flag, projectId, envId, open, onOpenChange }
                                                             <Input
                                                                 placeholder="Attribute (e.g. Email)"
                                                                 {...form.register(`rules.${field.index}.attribute`)}
+                                                                onKeyDown={(e) => {
+                                                                    if (e.key === 'Enter') {
+                                                                        e.preventDefault();
+                                                                        form.handleSubmit(onSubmit)();
+                                                                    }
+                                                                }}
                                                             />
                                                         </div>
                                                         <div className="w-[180px]">
@@ -232,6 +238,12 @@ export function FeatureFlagEditor({ flag, projectId, envId, open, onOpenChange }
                                                             <Input
                                                                 placeholder="Value"
                                                                 {...form.register(`rules.${field.index}.value`)}
+                                                                onKeyDown={(e) => {
+                                                                    if (e.key === 'Enter') {
+                                                                        e.preventDefault();
+                                                                        form.handleSubmit(onSubmit)();
+                                                                    }
+                                                                }}
                                                             />
                                                         </div>
                                                         <Button type="button" variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive shrink-0" onClick={() => remove(field.index)}>

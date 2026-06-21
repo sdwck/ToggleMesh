@@ -33,13 +33,21 @@ public class LoginEndpoint : ToggleEndpoint<LoginRequest, LoginResponse>
         if (user == null || !await _userManager.CheckPasswordAsync(user, req.Password))
             ThrowError("Invalid email or password");
 
+        if (!user.EmailConfirmed)
+            ThrowError("Please confirm your email address before logging in.");
+
         var (accessToken, refreshToken) = await TokenGenerator.GenerateTokensAsync(user, _userManager, _configuration);
 
+        if (!int.TryParse(
+                _configuration["Auth:RefreshTokenLifetimeDays"], 
+                out var tokenLifetime))
+            tokenLifetime = 7;
+        
         var rt = new RefreshToken
         {
             Token = refreshToken,
             UserId = user.Id,
-            Expires = DateTime.UtcNow.AddDays(7),
+            Expires = DateTime.UtcNow.AddDays(tokenLifetime),
             Created = DateTime.UtcNow
         };
         

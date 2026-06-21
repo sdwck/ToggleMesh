@@ -103,7 +103,14 @@ export function AccountSettingsPage() {
                             <Plus className="mr-2 h-4 w-4" /> Generate Token
                         </Button>
                     </DialogTrigger>
-                    <DialogContent className="border-border/40 bg-zinc-950">
+                    <DialogContent 
+                        className="border-border/40 bg-zinc-950"
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter' && tokenName.trim()) {
+                                handleCreateToken();
+                            }
+                        }}
+                    >
                         <DialogHeader>
                             <DialogTitle>Generate Access Token</DialogTitle>
                             <DialogDescription>Access tokens authenticate CLI connections.</DialogDescription>
@@ -180,6 +187,11 @@ export function AccountSettingsPage() {
                                 <Input
                                     value={username}
                                     onChange={(e) => setUsername(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter' && username.trim() && username !== profile?.username) {
+                                            handleUpdateProfile();
+                                        }
+                                    }}
                                     placeholder="Username"
                                     className="border-border/40 bg-zinc-950/40"
                                 />

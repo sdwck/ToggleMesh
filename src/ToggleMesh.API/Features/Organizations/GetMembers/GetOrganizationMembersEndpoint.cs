@@ -22,9 +22,9 @@ public class GetOrganizationMembersEndpoint : ToggleEndpoint<GetOrganizationMemb
 
     public override async Task HandleAsync(GetOrganizationMembersRequest req, CancellationToken ct)
     {
-        var isMember = await _db.OrganizationMembers.AnyAsync(m => 
+        var currentUserMember = await _db.OrganizationMembers.FirstOrDefaultAsync(m => 
             m.OrganizationId == req.OrganizationId && m.UserId == UserId, ct);
-        if (!isMember)
+        if (currentUserMember is not { Role: OrganizationRole.Admin })
         {
             await Send.ForbiddenAsync(ct);
             return;
@@ -39,7 +39,8 @@ public class GetOrganizationMembersEndpoint : ToggleEndpoint<GetOrganizationMemb
             {
                 UserId = m.UserId,
                 Email = m.User.Email!,
-                Role = m.Role
+                Role = m.Role,
+                CreatedAt = m.CreatedAt
             })
             .ToListAsync(ct);
 

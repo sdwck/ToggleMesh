@@ -15,6 +15,9 @@ import { OrganizationSettingsPage } from '@/features/organizations/OrganizationS
 import { GlobalError } from '@/components/GlobalError';
 import { PlaygroundPage } from "@/PlaygroundPage.tsx";
 
+import { ConfirmEmailPage } from '@/features/auth/ConfirmEmailPage';
+import { InvitePage } from '@/features/organizations/InvitePage';
+
 export const router = createBrowserRouter([
     {
         path: '/login',
@@ -24,6 +27,16 @@ export const router = createBrowserRouter([
     {
         path: '/register',
         element: <Register />,
+        errorElement: <GlobalError />,
+    },
+    {
+        path: '/auth/confirm-email',
+        element: <ConfirmEmailPage />,
+        errorElement: <GlobalError />,
+    },
+    {
+        path: '/invites/:token',
+        element: <InvitePage />,
         errorElement: <GlobalError />,
     },
     {

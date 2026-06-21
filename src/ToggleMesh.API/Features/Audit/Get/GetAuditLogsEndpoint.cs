@@ -53,7 +53,7 @@ public class GetAuditLogsEndpoint : ToggleEndpoint<GetAuditLogsRequest, CursorPa
                 effectiveRole = envRoleOverride;
         }
 
-        if (effectiveRole == Projects.ProjectRole.None)
+        if (effectiveRole == Projects.ProjectRole.None || effectiveRole == Projects.ProjectRole.Viewer)
         {
             await Send.ForbiddenAsync(ct);
             return;

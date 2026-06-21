@@ -2,11 +2,10 @@ using System.Net.Http.Json;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using ToggleMesh.API.Features.Audit.Get;
+using Microsoft.Extensions.Configuration;
 using ToggleMesh.API.Features.Auth.Models;
 using ToggleMesh.API.Features.Flags;
 using ToggleMesh.API.Features.Flags.Create;
-using ToggleMesh.API.Features.Flags.Get;
 using ToggleMesh.API.Features.Flags.Toggle;
 using ToggleMesh.API.Features.Flags.Update;
 using ToggleMesh.API.Features.Projects;
@@ -164,6 +163,14 @@ public class AuditTests : IClassFixture<TestWebApplicationFactory>
         var targetUser = new ApplicationUser
             { Id = Guid.CreateVersion7(), Email = "new_member@test.com", UserName = "new_member@test.com" };
         db.Users.Add(targetUser);
+
+        db.OrganizationMembers.Add(new ToggleMesh.API.Features.Organizations.OrganizationMember
+        {
+            Id = Guid.CreateVersion7(),
+            OrganizationId = Guid.Parse("11111111-1111-1111-1111-111111111111"),
+            UserId = targetUser.Id,
+            Role = ToggleMesh.API.Features.Organizations.OrganizationRole.Member
+        });
 
         await db.SaveChangesAsync();
         db.AuditLogs.RemoveRange(db.AuditLogs);
@@ -349,12 +356,18 @@ public class AuditTests : IClassFixture<TestWebApplicationFactory>
         db.AuditLogs.RemoveRange(db.AuditLogs);
         await db.SaveChangesAsync();
 
+        var configuration = scope.ServiceProvider.GetRequiredService<IConfiguration>();
+        if (!int.TryParse(
+                configuration["Auth:RefreshTokenLifetimeDays"], 
+                out var tokenLifetime))
+            tokenLifetime = 7;
+
         var token = new RefreshToken
         {
             Id = Guid.CreateVersion7(),
             UserId = user.Id,
             Token = "some_refresh_token",
-            Expires = DateTime.UtcNow.AddDays(7),
+            Expires = DateTime.UtcNow.AddDays(tokenLifetime),
             Created = DateTime.UtcNow
         };
 

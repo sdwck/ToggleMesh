@@ -58,6 +58,8 @@ export function ProjectSettingsPage() {
     const navigate = useNavigate();
 
     const { data: project, isLoading: isProjectLoading } = useProjectDetails(projectId!);
+    const canManageProject = project?.userRole === 0 || project?.userRole === 1;
+
     const { data: webhooks, isLoading: isWebhooksLoading } = useProjectWebhooks(projectId!);
     const { data: flags, isLoading: isFlagsLoading } = useProjectFlags(projectId!);
     const { data: members, isLoading: isMembersLoading } = useProjectMembers(projectId!);
@@ -210,14 +212,16 @@ export function ProjectSettingsPage() {
             <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-5">
                 <TabsList className="bg-zinc-950 border border-border/40 p-1">
                     <TabsTrigger value="general" className="text-xs">General</TabsTrigger>
-                    <TabsTrigger value="webhooks" className="text-xs gap-1.5">
-                        <Settings className="h-3.5 w-3.5" /> Webhooks
-                        {!isWebhooksLoading && (
-                            <Badge variant="outline" className="px-1 py-0 text-[10px] bg-zinc-900 border-zinc-800">
-                                {webhooks?.length ?? 0}
-                            </Badge>
-                        )}
-                    </TabsTrigger>
+                    {canManageProject && (
+                        <TabsTrigger value="webhooks" className="text-xs gap-1.5">
+                            <Settings className="h-3.5 w-3.5" /> Webhooks
+                            {!isWebhooksLoading && (
+                                <Badge variant="outline" className="px-1 py-0 text-[10px] bg-zinc-900 border-zinc-800">
+                                    {webhooks?.length ?? 0}
+                                </Badge>
+                            )}
+                        </TabsTrigger>
+                    )}
                 </TabsList>
 
                 <TabsContent value="general" className="m-0">
@@ -225,121 +229,121 @@ export function ProjectSettingsPage() {
                         <div className="lg:col-span-4 flex flex-col">
                             <Card className="border-border/40 bg-zinc-950/20 backdrop-blur-sm shadow-sm w-full flex-1 flex flex-col">
                                 <CardHeader className="pb-2 px-5 pt-4 shrink-0">
-                                        <CardTitle className="text-xs font-semibold tracking-wider uppercase text-zinc-400">Project Metadata</CardTitle>
-                                        <CardDescription className="text-[11px] text-muted-foreground mt-0.5">Key details, configurations, and access level.</CardDescription>
-                                    </CardHeader>
-                                    <CardContent className="pt-0 px-5 pb-4 flex-1 flex flex-col">
-                                        <div className="border-t border-border/10 pt-3 space-y-2 flex-1">
-                                            <div className="flex flex-col gap-1.5 text-xs">
-                                                <span className="text-muted-foreground font-medium">Project ID</span>
-                                                {isProjectLoading ? (
-                                                    <Skeleton className="h-8 w-full rounded border border-border/5" />
-                                                ) : (
-                                                    <div className="flex items-center justify-between gap-1 bg-zinc-900/40 px-2 py-1 rounded border border-border/10">
-                                                        <code className="text-zinc-300 font-mono select-all text-[10px] break-all leading-relaxed" title={project?.id}>{project?.id}</code>
-                                                        <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0 text-muted-foreground hover:text-zinc-100" onClick={handleCopyProjectId}>
-                                                            <Copy className="h-3.5 w-3.5" />
-                                                        </Button>
-                                                    </div>
-                                                )}
-                                            </div>
-
-                                            <div className="flex justify-between items-center text-xs py-1">
-                                                <span className="text-muted-foreground font-medium">Your Role</span>
-                                                {isProjectLoading ? (
-                                                    <Skeleton className="h-5 w-20 rounded-full" />
-                                                ) : (
-                                                    <Badge variant="secondary" className="flex items-center gap-1 py-0 px-2 text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border-emerald-500/20 animate-pulse-subtle">
-                                                        <Shield className="h-2.5 w-2.5" />
-                                                        {getRoleLabel(project?.userRole)}
-                                                    </Badge>
-                                                )}
-                                            </div>
-
-                                            <div className="flex justify-between items-center text-xs py-1">
-                                                <span className="text-muted-foreground font-medium">Environments</span>
-                                                {isProjectLoading ? (
-                                                    <Skeleton className="h-6 w-28 rounded" />
-                                                ) : (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleTabChange('environments')}
-                                                        className="flex items-center gap-1.5 font-mono text-zinc-300 hover:text-blue-400 bg-zinc-900/30 hover:bg-blue-500/10 px-2 py-1 rounded border border-border/10 hover:border-blue-500/20 transition-all text-[11px]"
-                                                    >
-                                                        <Layers className="h-3.5 w-3.5 text-blue-500" />
-                                                        <span>{project?.environments?.length || 0} configured</span>
-                                                    </button>
-                                                )}
-                                            </div>
-
-                                            <div className="flex justify-between items-center text-xs py-1">
-                                                <span className="text-muted-foreground font-medium">Feature Flags</span>
-                                                {isFlagsLoading ? (
-                                                    <Skeleton className="h-6 w-28 rounded" />
-                                                ) : (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleTabChange('flags')}
-                                                        className="flex items-center gap-1.5 font-mono text-zinc-300 hover:text-purple-400 bg-zinc-900/30 hover:bg-purple-500/10 px-2 py-1 rounded border border-border/10 hover:border-purple-500/20 transition-all text-[11px]"
-                                                    >
-                                                        <Flag className="h-3.5 w-3.5 text-purple-500" />
-                                                        <span>{flags?.length || 0} defined</span>
-                                                    </button>
-                                                )}
-                                            </div>
-
-                                            <div className="flex justify-between items-center text-xs py-1">
-                                                <span className="text-muted-foreground font-medium">Webhooks</span>
-                                                {isWebhooksLoading ? (
-                                                    <Skeleton className="h-6 w-28 rounded" />
-                                                ) : (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleTabChange('webhooks')}
-                                                        className="flex items-center gap-1.5 font-mono text-zinc-300 hover:text-orange-400 bg-zinc-900/30 hover:bg-orange-500/10 px-2 py-1 rounded border border-border/10 hover:border-orange-500/20 transition-all text-[11px]"
-                                                    >
-                                                        <Globe className="h-3.5 w-3.5 text-orange-500" />
-                                                        <span>{webhooks?.length || 0} enabled</span>
-                                                    </button>
-                                                )}
-                                            </div>
-
-                                            <div className="flex justify-between items-center text-xs py-1">
-                                                <span className="text-muted-foreground font-medium">Members</span>
-                                                {isMembersLoading ? (
-                                                    <Skeleton className="h-6 w-28 rounded" />
-                                                ) : (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleTabChange('members')}
-                                                        className="flex items-center gap-1.5 font-mono text-zinc-300 hover:text-emerald-400 bg-zinc-900/30 hover:bg-emerald-500/10 px-2 py-1 rounded border border-border/10 hover:border-emerald-500/20 transition-all text-[11px]"
-                                                    >
-                                                        <Users className="h-3.5 w-3.5 text-emerald-500" />
-                                                        <span>{members?.length || 0} users</span>
-                                                    </button>
-                                                )}
-                                            </div>
-
-                                            <div className="flex justify-between items-center text-xs py-1">
-                                                <span className="text-muted-foreground font-medium">Created On</span>
-                                                {isProjectLoading ? (
-                                                    <Skeleton className="h-6 w-24 rounded" />
-                                                ) : (
-                                                    <span className="font-mono text-zinc-300 bg-zinc-900/30 hover:bg-zinc-900/50 px-2 py-1 rounded border border-border/10 transition-all text-[11px] font-semibold">
-                                                        {formatProjectDate(project?.createdAt)}
-                                                    </span>
-                                                )}
-                                            </div>
+                                    <CardTitle className="text-xs font-semibold tracking-wider uppercase text-zinc-400">Project Metadata</CardTitle>
+                                    <CardDescription className="text-[11px] text-muted-foreground mt-0.5">Key details, configurations, and access level.</CardDescription>
+                                </CardHeader>
+                                <CardContent className="pt-0 px-5 pb-4 flex-1 flex flex-col">
+                                    <div className="border-t border-border/10 pt-3 space-y-2 flex-1">
+                                        <div className="flex flex-col gap-1.5 text-xs">
+                                            <span className="text-muted-foreground font-medium">Project ID</span>
+                                            {isProjectLoading ? (
+                                                <Skeleton className="h-8 w-full rounded border border-border/5" />
+                                            ) : (
+                                                <div className="flex items-center justify-between gap-1 bg-zinc-900/40 px-2 py-1 rounded border border-border/10">
+                                                    <code className="text-zinc-300 font-mono select-all text-[10px] break-all leading-relaxed" title={project?.id}>{project?.id}</code>
+                                                    <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0 text-muted-foreground hover:text-zinc-100" onClick={handleCopyProjectId}>
+                                                        <Copy className="h-3.5 w-3.5" />
+                                                    </Button>
+                                                </div>
+                                            )}
                                         </div>
 
-                                        <div className="mt-4 pt-3 border-t border-border/10 flex items-center justify-between shrink-0">
-                                            <span className="text-[10px] text-zinc-500">Need help configuring SDKs?</span>
-                                            <a href="https://github.com/sdwck/ToggleMesh" target="_blank" rel="noopener noreferrer" className="text-[10px] text-blue-400 hover:text-blue-300 flex items-center gap-1 font-medium transition-colors">
-                                                <BookOpen className="h-3 w-3" />
-                                                View Docs
-                                            </a>
+                                        <div className="flex justify-between items-center text-xs py-1">
+                                            <span className="text-muted-foreground font-medium">Your Role</span>
+                                            {isProjectLoading ? (
+                                                <Skeleton className="h-5 w-20 rounded-full" />
+                                            ) : (
+                                                <Badge variant="secondary" className="flex items-center gap-1 py-0 px-2 text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border-emerald-500/20 animate-pulse-subtle">
+                                                    <Shield className="h-2.5 w-2.5" />
+                                                    {getRoleLabel(project?.userRole)}
+                                                </Badge>
+                                            )}
                                         </div>
-                                    </CardContent>
+
+                                        <div className="flex justify-between items-center text-xs py-1">
+                                            <span className="text-muted-foreground font-medium">Environments</span>
+                                            {isProjectLoading ? (
+                                                <Skeleton className="h-6 w-28 rounded" />
+                                            ) : (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleTabChange('environments')}
+                                                    className="flex items-center gap-1.5 font-mono text-zinc-300 hover:text-blue-400 bg-zinc-900/30 hover:bg-blue-500/10 px-2 py-1 rounded border border-border/10 hover:border-blue-500/20 transition-all text-[11px]"
+                                                >
+                                                    <Layers className="h-3.5 w-3.5 text-blue-500" />
+                                                    <span>{project?.environments?.length || 0} configured</span>
+                                                </button>
+                                            )}
+                                        </div>
+
+                                        <div className="flex justify-between items-center text-xs py-1">
+                                            <span className="text-muted-foreground font-medium">Feature Flags</span>
+                                            {isFlagsLoading ? (
+                                                <Skeleton className="h-6 w-28 rounded" />
+                                            ) : (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleTabChange('flags')}
+                                                    className="flex items-center gap-1.5 font-mono text-zinc-300 hover:text-purple-400 bg-zinc-900/30 hover:bg-purple-500/10 px-2 py-1 rounded border border-border/10 hover:border-purple-500/20 transition-all text-[11px]"
+                                                >
+                                                    <Flag className="h-3.5 w-3.5 text-purple-500" />
+                                                    <span>{flags?.length || 0} defined</span>
+                                                </button>
+                                            )}
+                                        </div>
+
+                                        <div className={`flex justify-between items-center text-xs py-1 ${canManageProject ? '' : 'invisible pointer-events-none'}`} aria-hidden={!canManageProject}>
+                                            <span className="text-muted-foreground font-medium">Webhooks</span>
+                                            {isWebhooksLoading ? (
+                                                <Skeleton className="h-6 w-28 rounded" />
+                                            ) : (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleTabChange('webhooks')}
+                                                    className="flex items-center gap-1.5 font-mono text-zinc-300 hover:text-orange-400 bg-zinc-900/30 hover:bg-orange-500/10 px-2 py-1 rounded border border-border/10 hover:border-orange-500/20 transition-all text-[11px]"
+                                                >
+                                                    <Globe className="h-3.5 w-3.5 text-orange-500" />
+                                                    <span>{webhooks?.length || 0} enabled</span>
+                                                </button>
+                                            )}
+                                        </div>
+
+                                        <div className={`flex justify-between items-center text-xs py-1 ${canManageProject ? '' : 'invisible pointer-events-none'}`} aria-hidden={!canManageProject}>
+                                            <span className="text-muted-foreground font-medium">Members</span>
+                                            {isMembersLoading ? (
+                                                <Skeleton className="h-6 w-28 rounded" />
+                                            ) : (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleTabChange('members')}
+                                                    className="flex items-center gap-1.5 font-mono text-zinc-300 hover:text-emerald-400 bg-zinc-900/30 hover:bg-emerald-500/10 px-2 py-1 rounded border border-border/10 hover:border-emerald-500/20 transition-all text-[11px]"
+                                                >
+                                                    <Users className="h-3.5 w-3.5 text-emerald-500" />
+                                                    <span>{members?.length || 0} users</span>
+                                                </button>
+                                            )}
+                                        </div>
+
+                                        <div className="flex justify-between items-center text-xs py-1">
+                                            <span className="text-muted-foreground font-medium">Created On</span>
+                                            {isProjectLoading ? (
+                                                <Skeleton className="h-6 w-24 rounded" />
+                                            ) : (
+                                                <span className="font-mono text-zinc-300 bg-zinc-900/30 hover:bg-zinc-900/50 px-2 py-1 rounded border border-border/10 transition-all text-[11px] font-semibold">
+                                                    {formatProjectDate(project?.createdAt)}
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    <div className="mt-4 pt-3 border-t border-border/10 flex items-center justify-between shrink-0">
+                                        <span className="text-[10px] text-zinc-500">Need help configuring SDKs?</span>
+                                        <a href="https://github.com/sdwck/ToggleMesh" target="_blank" rel="noopener noreferrer" className="text-[10px] text-blue-400 hover:text-blue-300 flex items-center gap-1 font-medium transition-colors">
+                                            <BookOpen className="h-3 w-3" />
+                                            View Docs
+                                        </a>
+                                    </div>
+                                </CardContent>
                             </Card>
                         </div>
 
@@ -356,6 +360,11 @@ export function ProjectSettingsPage() {
                                             placeholder="Enter project name"
                                             value={projectName}
                                             onChange={(e) => setProjectName(e.target.value)}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter' && projectName.trim() && projectName !== project?.name) {
+                                                    handleUpdateName();
+                                                }
+                                            }}
                                             disabled={isProjectLoading}
                                             className="border-zinc-800 bg-zinc-900/30 w-full h-8 text-xs text-zinc-200 focus-visible:ring-1 focus-visible:ring-zinc-700"
                                         />
@@ -473,7 +482,14 @@ export function ProjectSettingsPage() {
                                     <Plus className="mr-2 h-4 w-4" /> Add Webhook
                                 </Button>
                             </DialogTrigger>
-                            <DialogContent className="border-border/40 bg-zinc-950">
+                            <DialogContent
+                                className="border-border/40 bg-zinc-950"
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter' && webhookName.trim() && webhookUrl.trim()) {
+                                        handleCreateWebhook();
+                                    }
+                                }}
+                            >
                                 <DialogHeader>
                                     <DialogTitle>Configure Webhook</DialogTitle>
                                     <DialogDescription>Add a new integration URL to push
@@ -670,10 +686,10 @@ export function ProjectSettingsPage() {
                 </DialogContent>
             </Dialog>
 
-            <WebhookDeliveriesModal 
-                webhook={deliveriesWebhook} 
-                open={!!deliveriesWebhook} 
-                onOpenChange={(open) => !open && setDeliveriesWebhook(null)} 
+            <WebhookDeliveriesModal
+                webhook={deliveriesWebhook}
+                open={!!deliveriesWebhook}
+                onOpenChange={(open) => !open && setDeliveriesWebhook(null)}
             />
 
             <EditWebhookModal

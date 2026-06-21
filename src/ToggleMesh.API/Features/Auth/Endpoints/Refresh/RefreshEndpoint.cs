@@ -70,12 +70,17 @@ public class RefreshEndpoint : ToggleEndpoint<RefreshRequest, LoginResponse>
         rt.Revoked ??= _timeProvider.GetUtcNow().UtcDateTime;
 
         var (newAccessToken, newRefreshToken) = await TokenGenerator.GenerateTokensAsync(rt.User, _userManager, _configuration);
+        
+        if (!int.TryParse(
+                _configuration["Auth:RefreshTokenLifetimeDays"], 
+                out var tokenLifetime))
+            tokenLifetime = 7;
 
         var newRt = new RefreshToken
         {
             Token = newRefreshToken,
             UserId = rt.UserId,
-            Expires = _timeProvider.GetUtcNow().UtcDateTime.AddDays(7),
+            Expires = _timeProvider.GetUtcNow().UtcDateTime.AddDays(tokenLifetime),
             Created = _timeProvider.GetUtcNow().UtcDateTime
         };
 

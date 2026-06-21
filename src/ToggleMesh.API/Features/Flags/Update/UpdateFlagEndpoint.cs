@@ -1,11 +1,9 @@
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Caching.Memory;
 using StackExchange.Redis;
 using ToggleMesh.API.Extensions;
 using ToggleMesh.API.Features.Flags.Get;
 using ToggleMesh.API.Hubs;
-using ToggleMesh.API.Infrastructure;
 using ToggleMesh.API.Infrastructure.Caching;
 using ToggleMesh.API.Infrastructure.Endpoints;
 using ToggleMesh.API.Persistence;
@@ -59,7 +57,6 @@ public class UpdateFlagEndpoint : ToggleEndpoint<UpdateFlagRequest, GetFlagRespo
         
         state.IsEnabled = req.IsEnabled;
         state.RolloutPercentage = req.RolloutPercentage;
-        state.FeatureFlag.Tags = req.Tags.ToArray();
 
         var existingRules = state.Rules.ToList();
         foreach (var oldRule in existingRules)

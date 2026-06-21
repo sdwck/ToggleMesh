@@ -11,10 +11,14 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useMemo } from 'react';
 import { jwtDecode } from "jwt-decode";
+import { useQueryClient } from '@tanstack/react-query';
 import { OrganizationSwitcher } from './OrganizationSwitcher';
 import { ProjectSwitcher } from './ProjectSwitcher';
 import { useRealTimeStream } from '@/hooks/useRealTimeStream';
-import { useUserProfile } from '@/api/queries';
+import { useUserProfile, useProjectDetails, useOrganizations } from '@/api/queries';
+import { useEffect } from 'react';
+import { useOrganizationStore } from '@/stores/useOrganizationStore';
+import { OrganizationRole } from '@/api/types';
 
 export function AppLayout() {
     const token = localStorage.getItem('accessToken');
@@ -28,6 +32,22 @@ export function AppLayout() {
     const location = useLocation();
     const { projectId } = useParams();
     const navigate = useNavigate();
+
+    const { data: project, isError: isProjectError } = useProjectDetails(projectId || '');
+    const canManageProject = project?.userRole === 0 || project?.userRole === 1;
+
+    const { activeOrganizationId } = useOrganizationStore();
+    const { data: organizations } = useOrganizations();
+    const activeOrg = organizations?.find(o => o.id === activeOrganizationId);
+    const isOrgAdmin = activeOrg?.role === OrganizationRole.Admin;
+    const queryClient = useQueryClient();
+
+    useEffect(() => {
+        if (projectId && isProjectError) {
+            queryClient.invalidateQueries({ queryKey: ['projects'] });
+            navigate('/projects', { replace: true });
+        }
+    }, [projectId, isProjectError, navigate, queryClient]);
 
     const userEmail = useMemo(() => {
         try {
@@ -130,10 +150,12 @@ export function AppLayout() {
                                 <Settings className="h-4 w-4 text-zinc-400" />
                                 <span>Account Settings</span>
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => navigate('/settings/organization')} className="cursor-pointer px-2.5 py-2 text-xs flex items-center gap-2 rounded-lg text-zinc-300 hover:text-white focus:bg-white/10 focus:text-white transition-all">
-                                <Building2 className="h-4 w-4 text-zinc-400" />
-                                <span>Organization Settings</span>
-                            </DropdownMenuItem>
+                            {isOrgAdmin && (
+                                <DropdownMenuItem onClick={() => navigate('/settings/organization')} className="cursor-pointer px-2.5 py-2 text-xs flex items-center gap-2 rounded-lg text-zinc-300 hover:text-white focus:bg-white/10 focus:text-white transition-all">
+                                    <Building2 className="h-4 w-4 text-zinc-400" />
+                                    <span>Organization Settings</span>
+                                </DropdownMenuItem>
+                            )}
                             <DropdownMenuSeparator className="bg-white/10 my-1" />
                             <DropdownMenuItem onClick={handleLogout} className="text-red-400 focus:text-red-300 focus:bg-red-500/15 cursor-pointer px-2.5 py-2 text-xs flex items-center gap-2 rounded-lg transition-all">
                                 <LogOut className="h-4 w-4" />
@@ -183,30 +205,34 @@ export function AppLayout() {
                                 <Network className="h-4 w-4" />
                                 Environments
                             </NavLink>
-                            <NavLink
-                                to={`/projects/${projectId}/members`}
-                                className={({ isActive }) =>
-                                    `flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors ${isActive
-                                        ? 'bg-primary/10 text-primary'
-                                        : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
-                                    }`
-                                }
-                            >
-                                <Users className="h-4 w-4" />
-                                Members
-                            </NavLink>
-                            <NavLink
-                                to={`/projects/${projectId}/audit`}
-                                className={({ isActive }) =>
-                                    `flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors ${isActive
-                                        ? 'bg-primary/10 text-primary'
-                                        : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
-                                    }`
-                                }
-                            >
-                                <FileText className="h-4 w-4" />
-                                Audit Logs
-                            </NavLink>
+                            {canManageProject && (
+                                <NavLink
+                                    to={`/projects/${projectId}/members`}
+                                    className={({ isActive }) =>
+                                        `flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors ${isActive
+                                            ? 'bg-primary/10 text-primary'
+                                            : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
+                                        }`
+                                    }
+                                >
+                                    <Users className="h-4 w-4" />
+                                    Members
+                                </NavLink>
+                            )}
+                            {project && project.userRole < 3 && (
+                                <NavLink
+                                    to={`/projects/${projectId}/audit`}
+                                    className={({ isActive }) =>
+                                        `flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors ${isActive
+                                            ? 'bg-primary/10 text-primary'
+                                            : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
+                                        }`
+                                    }
+                                >
+                                    <FileText className="h-4 w-4" />
+                                    Audit Logs
+                                </NavLink>
+                            )}
                             <NavLink
                                 to={`/projects/${projectId}/settings`}
                                 className={({ isActive }) =>

@@ -35,10 +35,19 @@ export function OrganizationSwitcher() {
     const [dropdownOpen, setDropdownOpen] = useState(false);
 
     useEffect(() => {
-        if (organizations?.length && !activeOrganizationId) {
-            setActiveOrganizationId(organizations[0].id);
+        if (organizations && organizations.length > 0) {
+            const isActiveOrgValid = activeOrganizationId && organizations.some(o => o.id === activeOrganizationId);
+            if (!activeOrganizationId || !isActiveOrgValid) {
+                setActiveOrganizationId(organizations[0].id);
+                navigate('/projects', { replace: true });
+            }
+        } else if (organizations && organizations.length === 0) {
+            if (activeOrganizationId) {
+                setActiveOrganizationId(null);
+                navigate('/projects', { replace: true });
+            }
         }
-    }, [organizations, activeOrganizationId, setActiveOrganizationId]);
+    }, [organizations, activeOrganizationId, setActiveOrganizationId, navigate]);
 
     if (isLoading) {
         return <Skeleton className="h-9 w-[150px]" />;
@@ -117,6 +126,11 @@ export function OrganizationSwitcher() {
                             placeholder="e.g., Acme Corp"
                             value={newOrgName}
                             onChange={(e) => setNewOrgName(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter' && !createOrganization.isPending && newOrgName.trim()) {
+                                    handleCreate();
+                                }
+                            }}
                             autoFocus
                         />
                     </div>

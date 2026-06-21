@@ -26,6 +26,7 @@ using ToggleMesh.API.Features.Webhooks;
 using ToggleMesh.API.Hubs;
 using ToggleMesh.API.Infrastructure;
 using ToggleMesh.API.Infrastructure.Caching;
+using ToggleMesh.API.Infrastructure.Email;
 using ToggleMesh.API.Infrastructure.Security;
 using ToggleMesh.API.Infrastructure.Sse;
 using ToggleMesh.API.Persistence;
@@ -63,6 +64,9 @@ builder.Services.AddSingleton<IRuleOperator, SemVerLessThanOrEqualOperator>();
 builder.Services.AddSingleton<IRuleOperator, StartsWithOperator>();
 builder.Services.AddSingleton<IRuleEngine, RuleEngine>();
 builder.Services.AddScoped<ISdkEvaluatorService, SdkEvaluatorService>();
+builder.Services.AddScoped<SmtpEmailSender>();
+builder.Services.AddScoped<IEmailSender, DatabaseOutboxEmailSender>();
+builder.Services.AddHostedService<ToggleMesh.API.BackgroundServices.Email.EmailOutboxWorker>();
 
 builder.Services.AddScoped<IApiKeyCacheService, ApiKeyCacheService>();
 builder.Services.AddSingleton(TimeProvider.System);
@@ -96,6 +100,7 @@ builder.Services.AddIdentityCore<ApplicationUser>(options =>
         options.Password.RequireNonAlphanumeric = false;
         options.Password.RequireUppercase = false;
         options.Password.RequiredLength = 6;
+        options.User.RequireUniqueEmail = true;
     })
     .AddRoles<IdentityRole<Guid>>()
     .AddEntityFrameworkStores<AppDbContext>()
@@ -179,8 +184,8 @@ builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = 429;
     
-    var authLimit = builder.Configuration.GetValue<int>("RateLimits:Auth", 10);
-    var sdkLimit = builder.Configuration.GetValue<int>("RateLimits:Sdk", 1000);
+    var authLimit = builder.Configuration.GetValue("RateLimits:Auth", 10);
+    var sdkLimit = builder.Configuration.GetValue("RateLimits:Sdk", 1000);
     
     options.AddFixedWindowLimiter("auth", o =>
     {

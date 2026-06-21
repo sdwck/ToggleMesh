@@ -6,6 +6,7 @@ using ToggleMesh.API.Features.Flags;
 using ToggleMesh.API.Features.Flags.Create;
 using ToggleMesh.API.Features.Flags.Get;
 using ToggleMesh.API.Features.Flags.Update;
+using ToggleMesh.API.Features.Flags.UpdateMetadata;
 using ToggleMesh.API.Features.Projects;
 using ToggleMesh.API.Infrastructure.Security;
 using ToggleMesh.API.Persistence;
@@ -151,21 +152,26 @@ public class FlagRulesApiTests : IClassFixture<TestWebApplicationFactory>
         };
         await _client.PostAsJsonAsync($"/api/v1/projects/{projectId}/flags", createRequest);
 
-        var updateRequest = new UpdateFlagRequest
+        var updateRequest = new UpdateFlagMetadataRequest
         {
-            IsEnabled = true,
+            Name = "tag_update_flag",
+            Description = "Updated metadata",
             Tags = ["new1", "new2"]
         };
 
         // Act
         var updateResponse = await _client.PutAsJsonAsync(
-            $"/api/v1/projects/{projectId}/environments/{envId}/flags/tag_update_flag", 
+            $"/api/v1/projects/{projectId}/flags/tag_update_flag/metadata", 
             updateRequest);
 
         // Assert
-        updateResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        updateResponse.StatusCode.Should().Be(HttpStatusCode.NoContent);
 
-        var result = await updateResponse.Content.ReadFromJsonAsync<GetFlagResponse>();
+        var getResponse = await _client.GetAsync(
+            $"/api/v1/projects/{projectId}/environments/{envId}/flags/tag_update_flag");
+        getResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var result = await getResponse.Content.ReadFromJsonAsync<GetFlagResponse>();
         result.Should().NotBeNull();
         result.Tags.Should().HaveCount(2);
         result.Tags.Should().NotContain("old");

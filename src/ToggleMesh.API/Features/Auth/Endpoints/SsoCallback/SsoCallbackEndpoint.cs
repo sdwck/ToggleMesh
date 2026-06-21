@@ -1,27 +1,32 @@
 using System.Security.Claims;
+using System.Text.Json;
 using FastEndpoints;
 using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
-using ToggleMesh.API.Features.Auth.Endpoints.Login;
+using StackExchange.Redis;
+using ToggleMesh.API.Features.Auth.Endpoints.SsoTicketExchange;
 using ToggleMesh.API.Features.Auth.Models;
-using ToggleMesh.API.Infrastructure.Endpoints;
-using ToggleMesh.API.Infrastructure.Security;
 using ToggleMesh.API.Persistence;
 
-namespace ToggleMesh.API.Features.Auth.Sso;
+namespace ToggleMesh.API.Features.Auth.Endpoints.SsoCallback;
 
-public class SsoCallbackEndpoint : ToggleEndpoint<EmptyRequest, LoginResponse>
+public class SsoCallbackEndpoint : EndpointWithoutRequest
 {
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly IConfiguration _configuration;
     private readonly AppDbContext _db;
+    private readonly IDatabase _redis;
 
-    public SsoCallbackEndpoint(UserManager<ApplicationUser> userManager, IConfiguration configuration, AppDbContext db)
+    public SsoCallbackEndpoint(
+        UserManager<ApplicationUser> userManager, 
+        IConfiguration configuration, 
+        AppDbContext db,
+        IConnectionMultiplexer redisConnection)
     {
         _userManager = userManager;
         _configuration = configuration;
         _db = db;
+        _redis = redisConnection.GetDatabase();
     }
 
     public override void Configure()
@@ -31,7 +36,7 @@ public class SsoCallbackEndpoint : ToggleEndpoint<EmptyRequest, LoginResponse>
         AllowAnonymous();
     }
 
-    public override async Task HandleAsync(EmptyRequest req, CancellationToken ct)
+    public override async Task HandleAsync(CancellationToken ct)
     {
         var result = await HttpContext.AuthenticateAsync("TempCookie");
 
@@ -62,18 +67,21 @@ public class SsoCallbackEndpoint : ToggleEndpoint<EmptyRequest, LoginResponse>
 
             var createResult = await _userManager.CreateAsync(user);
             if (!createResult.Succeeded)
-            {
                 ThrowError("Could not provision SSO user");
-            }
         }
 
         var (accessToken, refreshToken) = await TokenGenerator.GenerateTokensAsync(user, _userManager, _configuration);
+        
+        if (!int.TryParse(
+                _configuration["Auth:RefreshTokenLifetimeDays"], 
+                out var tokenLifetime))
+            tokenLifetime = 7;
 
         var rt = new RefreshToken
         {
             Token = refreshToken,
             UserId = user.Id,
-            Expires = DateTime.UtcNow.AddDays(7),
+            Expires = DateTime.UtcNow.AddDays(tokenLifetime),
             Created = DateTime.UtcNow
         };
         
@@ -82,10 +90,20 @@ public class SsoCallbackEndpoint : ToggleEndpoint<EmptyRequest, LoginResponse>
 
         await HttpContext.SignOutAsync("TempCookie");
 
-        await Send.OkAsync(new LoginResponse
+        var ticket = Guid.CreateVersion7().ToString();
+        var key = $"sso:ticket:{ticket}";
+        var data = JsonSerializer.Serialize(new SsoTicketData
         {
-            Token = accessToken,
+            AccessToken = accessToken, 
             RefreshToken = refreshToken
-        }, cancellation: ct);
+        });
+        
+        await _redis.StringSetAsync(key, data, TimeSpan.FromSeconds(30));
+
+        var frontendUrl = _configuration["Auth:FrontendUrl"] 
+                          ?? "http://localhost:5173";
+        var redirectUrl = $"{frontendUrl.TrimEnd('/')}/login?ticket={ticket}";
+
+        await Send.RedirectAsync(redirectUrl, allowRemoteRedirects: true);
     }
 }

@@ -6,16 +6,31 @@ using ToggleMesh.API.Features.Auth.Endpoints.Login;
 using ToggleMesh.API.Features.Auth.Endpoints.Refresh;
 using ToggleMesh.API.Features.Auth.Endpoints.Register;
 using ToggleMesh.IntegrationTests.Infrastructure;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace ToggleMesh.IntegrationTests.Auth;
 
 public class AuthApiTests : IClassFixture<TestWebApplicationFactory>
 {
     private readonly HttpClient _client;
+    private readonly TestWebApplicationFactory _factory;
 
     public AuthApiTests(TestWebApplicationFactory factory)
     {
+        _factory = factory;
         _client = factory.CreateClient();
+    }
+
+    private async Task ConfirmUserEmailAsync(string email)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ToggleMesh.API.Persistence.AppDbContext>();
+        var user = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.FirstOrDefaultAsync(db.Users, u => u.Email == email);
+        if (user != null)
+        {
+            user.EmailConfirmed = true;
+            await db.SaveChangesAsync();
+        }
     }
 
     [Fact]
@@ -47,6 +62,7 @@ public class AuthApiTests : IClassFixture<TestWebApplicationFactory>
             Email = email,
             Password = password
         });
+        await ConfirmUserEmailAsync(email);
 
         var loginRequest = new LoginRequest
         {
@@ -93,6 +109,7 @@ public class AuthApiTests : IClassFixture<TestWebApplicationFactory>
             Email = email,
             Password = password
         });
+        await ConfirmUserEmailAsync(email);
 
         var loginResponse = await _client.PostAsJsonAsync("/api/v1/auth/login", new LoginRequest
         {
@@ -134,6 +151,7 @@ public class AuthApiTests : IClassFixture<TestWebApplicationFactory>
             Email = email,
             Password = password
         });
+        await ConfirmUserEmailAsync(email);
 
         var loginResponse = await _client.PostAsJsonAsync("/api/v1/auth/login", new LoginRequest
         {

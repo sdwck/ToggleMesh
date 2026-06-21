@@ -1,5 +1,5 @@
 import {useState, useMemo} from 'react';
-import {Plus, Users, Trash2} from 'lucide-react';
+import {Plus, Users, Trash2, Pencil} from 'lucide-react';
 import {
     useProjectMembers,
     useAddProjectMember,
@@ -73,6 +73,14 @@ export function ProjectMembersTab({ project, isLoading }: { project?: ProjectDet
         }
     }, []);
 
+    const sortedMembers = useMemo(() => {
+        if (!members) return [];
+        return [...members].sort((a, b) => {
+            if (a.role !== b.role) return a.role - b.role;
+            return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        });
+    }, [members]);
+
     const handleAddMember = async () => {
         if (!newMemberEmail.trim()) return;
         try {
@@ -141,7 +149,14 @@ export function ProjectMembersTab({ project, isLoading }: { project?: ProjectDet
                             Add Member
                         </Button>
                     </DialogTrigger>
-                    <DialogContent className="border-border/40 bg-zinc-950">
+                    <DialogContent 
+                        className="border-border/40 bg-zinc-950"
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter' && newMemberEmail.trim()) {
+                                handleAddMember();
+                            }
+                        }}
+                    >
                         <DialogHeader>
                             <DialogTitle>Add Team Member</DialogTitle>
                             <DialogDescription>
@@ -224,7 +239,7 @@ export function ProjectMembersTab({ project, isLoading }: { project?: ProjectDet
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {members?.map((member) => {
+                                    {sortedMembers.map((member) => {
                                         const isSelf = member.email === userEmail;
                                         return (
                                             <TableRow key={member.id} className="border-border/40 hover:bg-muted/30 h-[53px]">
@@ -243,24 +258,30 @@ export function ProjectMembersTab({ project, isLoading }: { project?: ProjectDet
                                                     </div>
                                                 </TableCell>
                                                 <TableCell className="py-2">
-                    <span className="inline-flex items-center rounded bg-secondary/50 px-2 py-0.5 text-xs font-medium text-secondary-foreground border border-border/10">
-                        {getRoleName(member.role)}
-                    </span>
+                                                    <div className="flex items-center gap-2">
+                                                        <span 
+                                                            title={member.isOrganizationAdmin ? "Inherited from Organization" : undefined}
+                                                            className={`inline-flex items-center rounded bg-secondary/50 px-2 py-0.5 text-xs font-medium text-secondary-foreground border border-border/10 ${member.isOrganizationAdmin ? 'cursor-help' : ''}`}
+                                                        >
+                                                            {getRoleName(member.role)}
+                                                        </span>
+                                                    </div>
                                                 </TableCell>
                                                 <TableCell className="text-right py-2">
-                                                    {!isSelf && !(project.userRole === ProjectRole.Admin && member.role === ProjectRole.Owner) && (
+                                                    {!isSelf && !member.isOrganizationAdmin && !(project.userRole === ProjectRole.Admin && member.role === ProjectRole.Owner) && (
                                                         <div className="flex items-center justify-end gap-2 pr-2">
                                                             <Button
                                                                 variant="ghost"
-                                                                size="sm"
-                                                                className="text-muted-foreground hover:text-foreground h-8 cursor-pointer"
+                                                                size="icon"
+                                                                className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-md cursor-pointer"
                                                                 onClick={() => {
                                                                     setMemberToEdit(member);
                                                                     setEditRoleValue(member.role.toString());
                                                                     setEditEnvRoles(member.environmentRoles || []);
                                                                 }}
+                                                                title="Edit Role"
                                                             >
-                                                                Edit Role
+                                                                <Pencil className="h-4 w-4"/>
                                                             </Button>
                                                             <Button
                                                                 variant="ghost"
@@ -296,7 +317,13 @@ export function ProjectMembersTab({ project, isLoading }: { project?: ProjectDet
             </Card>
 
             <Dialog open={!!memberToEdit} onOpenChange={(open) => !open && setMemberToEdit(null)}>
-                <DialogContent>
+                <DialogContent
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                            handleUpdateMember();
+                        }
+                    }}
+                >
                     <DialogHeader>
                         <DialogTitle>Edit Member Access</DialogTitle>
                         <DialogDescription>

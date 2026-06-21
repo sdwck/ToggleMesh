@@ -16,6 +16,22 @@ export interface OrganizationMemberDto {
     userId: string;
     email: string;
     role: OrganizationRole;
+    createdAt: string;
+}
+
+export interface OrganizationInvitationDto {
+    organizationName: string;
+    email: string;
+    role: OrganizationRole;
+}
+
+export interface PendingInvitationDto {
+    id: string;
+    email: string;
+    role: OrganizationRole;
+    invitedAt: string;
+    expiresAt: string;
+    token: string;
 }
 
 export interface ProjectEnvironmentDto {
@@ -172,7 +188,9 @@ export interface ProjectMember {
     userId: string;
     email: string;
     role: ProjectRole;
+    isOrganizationAdmin: boolean;
     environmentRoles: EnvironmentRoleDto[];
+    createdAt: string;
 }
 
 export interface UpdateFlagRequest {

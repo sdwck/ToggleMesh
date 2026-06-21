@@ -1,4 +1,4 @@
-﻿namespace ToggleMesh.API.Features.Projects.GetMembers;
+namespace ToggleMesh.API.Features.Projects.GetMembers;
 
 public class MemberDto
 {
@@ -6,11 +6,7 @@ public class MemberDto
     public string UserId { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
     public ProjectRole Role { get; set; }
+    public bool IsOrganizationAdmin { get; set; }
     public List<EnvironmentRoleDto> EnvironmentRoles { get; set; } = new();
-}
-
-public class EnvironmentRoleDto
-{
-    public Guid EnvironmentId { get; set; }
-    public ProjectRole Role { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
 }

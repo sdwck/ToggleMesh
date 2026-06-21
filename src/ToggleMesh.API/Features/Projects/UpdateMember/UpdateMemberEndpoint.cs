@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using ToggleMesh.API.Extensions;
 using ToggleMesh.API.Infrastructure.Endpoints;
 using ToggleMesh.API.Persistence;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace ToggleMesh.API.Features.Projects.UpdateMember;
 
@@ -10,11 +11,13 @@ public class UpdateMemberEndpoint : ToggleEndpoint<UpdateMemberRequest>
 {
     private readonly AppDbContext _db;
     private readonly IDatabase _redis;
+    private readonly IMemoryCache _memoryCache;
 
-    public UpdateMemberEndpoint(AppDbContext db, IConnectionMultiplexer redis)
+    public UpdateMemberEndpoint(AppDbContext db, IConnectionMultiplexer redis, IMemoryCache memoryCache)
     {
         _db = db;
         _redis = redis.GetDatabase();
+        _memoryCache = memoryCache;
     }
 
     public override void Configure()
@@ -96,6 +99,7 @@ public class UpdateMemberEndpoint : ToggleEndpoint<UpdateMemberRequest>
 
         var cacheKey = $"project-member-state:{projectId}:{userId}";
         await _redis.KeyDeleteAsync(cacheKey);
+        _memoryCache.Remove(cacheKey);
 
         await Send.NoContentAsync(ct);
     }

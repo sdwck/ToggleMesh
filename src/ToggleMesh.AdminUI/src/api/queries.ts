@@ -20,7 +20,8 @@ import type {
     TokenDto,
     OrganizationDto,
     OrganizationMemberDto,
-    UserProfile
+    UserProfile,
+    PendingInvitationDto
 } from './types';
 
 export const useOrganizations = () => {
@@ -89,11 +90,36 @@ export const useInviteOrganizationMember = () => {
     const queryClient = useQueryClient();
     return useMutation({
         mutationFn: async (req: { organizationId: string; email: string; role: number }) => {
-            const { data } = await api.post<OrganizationMemberDto>(`/organizations/${req.organizationId}/members/invite`, req);
-            return data;
+            await api.post(`/organizations/${req.organizationId}/members/invite`, req);
         },
         onSuccess: (_, variables) => {
             queryClient.invalidateQueries({ queryKey: ['organizations', variables.organizationId, 'members'] });
+            queryClient.invalidateQueries({ queryKey: ['organizations', variables.organizationId, 'invitations'] });
+        },
+    });
+};
+
+export const useOrganizationInvitations = (organizationId: string | null) => {
+    return useQuery({
+        queryKey: ['organizations', organizationId, 'invitations'],
+        queryFn: async () => {
+            if (!organizationId) return [];
+            const { data } = await api.get<PendingInvitationDto[]>(`/organizations/${organizationId}/invites`);
+            return data;
+        },
+        enabled: !!organizationId,
+        placeholderData: keepPreviousData,
+    });
+};
+
+export const useRevokeOrganizationInvitation = () => {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async (req: { organizationId: string; inviteId: string }) => {
+            await api.delete(`/organizations/${req.organizationId}/invites/${req.inviteId}`);
+        },
+        onSuccess: (_, variables) => {
+            queryClient.invalidateQueries({ queryKey: ['organizations', variables.organizationId, 'invitations'] });
         },
     });
 };

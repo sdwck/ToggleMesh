@@ -1,9 +1,8 @@
 using FastEndpoints;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
-using Microsoft.AspNetCore.Authorization;
 
-namespace ToggleMesh.API.Features.Auth.Sso;
+namespace ToggleMesh.API.Features.Auth.Endpoints.SsoLogin;
 
 public class SsoLoginEndpoint : EndpointWithoutRequest
 {
@@ -21,6 +20,9 @@ public class SsoLoginEndpoint : EndpointWithoutRequest
             RedirectUri = "/api/v1/auth/sso/callback-handler"
         };
 
-        await HttpContext.ChallengeAsync(OpenIdConnectDefaults.AuthenticationScheme, properties);
+        await Send.ResultAsync(
+            Results.Challenge(
+                properties, 
+                [OpenIdConnectDefaults.AuthenticationScheme]));
     }
 }

@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useOrganizationStore } from '@/stores/useOrganizationStore';
 import {
     useOrganizationMembers,
@@ -8,7 +8,9 @@ import {
     useUpdateOrganizationMember,
     useRemoveOrganizationMember,
     useUpdateOrganization,
-    useDeleteOrganization
+    useDeleteOrganization,
+    useOrganizationInvitations,
+    useRevokeOrganizationInvitation
 } from '@/api/queries';
 import { OrganizationRole } from '@/api/types';
 import type { OrganizationMemberDto } from '@/api/types';
@@ -56,13 +58,24 @@ function RoleBadge({ role }: { role: OrganizationRole }) {
 export function OrganizationSettingsPage() {
     const { activeOrganizationId, setActiveOrganizationId } = useOrganizationStore();
     const { data: organizations } = useOrganizations();
-    const { data: members, isLoading } = useOrganizationMembers(activeOrganizationId);
+    const activeOrg = organizations?.find(o => o.id === activeOrganizationId);
+    const isAdmin = activeOrg?.role === OrganizationRole.Admin;
+
+    const { data: members, isLoading } = useOrganizationMembers(isAdmin ? activeOrganizationId : null);
     const inviteMember = useInviteOrganizationMember();
     const updateMember = useUpdateOrganizationMember();
     const removeMember = useRemoveOrganizationMember();
+    const { data: invitations, isLoading: isLoadingInvites } = useOrganizationInvitations(activeOrganizationId);
+    const revokeInvitation = useRevokeOrganizationInvitation();
     const updateOrg = useUpdateOrganization();
     const deleteOrg = useDeleteOrganization();
     const navigate = useNavigate();
+    const [searchParams, setSearchParams] = useSearchParams();
+    let currentTab = searchParams.get('tab') || 'general';
+
+    if (currentTab === 'members' && !isAdmin) {
+        currentTab = 'general';
+    }
 
     const [isInviteOpen, setIsInviteOpen] = useState(false);
     const [inviteEmail, setInviteEmail] = useState('');
@@ -72,9 +85,6 @@ export function OrganizationSettingsPage() {
     const [orgName, setOrgName] = useState('');
     const [isDeleteOpen, setIsDeleteOpen] = useState(false);
     const [confirmName, setConfirmName] = useState('');
-
-    const activeOrg = organizations?.find(o => o.id === activeOrganizationId);
-    const isAdmin = activeOrg?.role === OrganizationRole.Admin;
 
     useEffect(() => {
         if (activeOrg) {
@@ -92,6 +102,14 @@ export function OrganizationSettingsPage() {
             return '';
         }
     }, []);
+
+    const sortedMembers = useMemo(() => {
+        if (!members) return [];
+        return [...members].sort((a, b) => {
+            if (a.role !== b.role) return b.role - a.role;
+            return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        });
+    }, [members]);
 
     const handleInvite = async () => {
         if (!activeOrganizationId || !inviteEmail.trim()) return;
@@ -124,6 +142,19 @@ export function OrganizationSettingsPage() {
         }
     };
 
+    const handleRevokeInvite = async (inviteId: string) => {
+        if (!activeOrganizationId) return;
+        try {
+            await revokeInvitation.mutateAsync({
+                organizationId: activeOrganizationId,
+                inviteId
+            });
+            toast.success('Invitation revoked');
+        } catch {
+            toast.error('Failed to revoke invitation');
+        }
+    };
+
     const handleRename = async () => {
         if (!activeOrganizationId || !orgName.trim()) return;
         try {
@@ -142,14 +173,14 @@ export function OrganizationSettingsPage() {
         try {
             await deleteOrg.mutateAsync(activeOrganizationId);
             toast.success(`Organization "${activeOrg.name}" deleted successfully`);
-            
+
             const remainingOrgs = organizations?.filter(o => o.id !== activeOrganizationId);
             if (remainingOrgs && remainingOrgs.length > 0) {
                 setActiveOrganizationId(remainingOrgs[0].id);
             } else {
                 setActiveOrganizationId(null);
             }
-            
+
             setIsDeleteOpen(false);
             setConfirmName('');
             navigate('/projects');
@@ -188,17 +219,28 @@ export function OrganizationSettingsPage() {
                 </div>
             </div>
 
-            <Tabs defaultValue="general" className="space-y-6">
+            <Tabs
+                value={currentTab}
+                onValueChange={(val) => {
+                    setSearchParams(prev => {
+                        prev.set('tab', val);
+                        return prev;
+                    });
+                }}
+                className="space-y-6"
+            >
                 <TabsList className="bg-zinc-950 border border-border/40 p-1">
                     <TabsTrigger value="general" className="text-xs">General</TabsTrigger>
-                    <TabsTrigger value="members" className="text-xs gap-1.5">
-                        <Users className="h-3.5 w-3.5" /> Members
-                        {!isLoading && (
-                            <Badge variant="outline" className="px-1 py-0 text-[10px] bg-zinc-900 border-zinc-800">
-                                {members?.length ?? 0}
-                            </Badge>
-                        )}
-                    </TabsTrigger>
+                    {isAdmin && (
+                        <TabsTrigger value="members" className="text-xs gap-1.5">
+                            <Users className="h-3.5 w-3.5" /> Members
+                            {!isLoading && (
+                                <Badge variant="outline" className="px-1 py-0 text-[10px] bg-zinc-900 border-zinc-800">
+                                    {members?.length ?? 0}
+                                </Badge>
+                            )}
+                        </TabsTrigger>
+                    )}
                 </TabsList>
 
                 <TabsContent value="general" className="space-y-6 outline-none">
@@ -219,6 +261,11 @@ export function OrganizationSettingsPage() {
                                             <Input
                                                 value={orgName}
                                                 onChange={(e) => setOrgName(e.target.value)}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter' && orgName.trim() && orgName !== activeOrg?.name) {
+                                                        handleRename();
+                                                    }
+                                                }}
                                                 placeholder="Enter organization name"
                                                 className="border-border/40 bg-zinc-950/40"
                                             />
@@ -268,125 +315,170 @@ export function OrganizationSettingsPage() {
                     )}
                 </TabsContent>
 
-                <TabsContent value="members" className="outline-none">
-                    <Card className="border-border/40 bg-zinc-950/20">
-                        <CardHeader>
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                    <Users className="h-4 w-4 text-muted-foreground" />
-                                    <CardTitle className="text-base">Members</CardTitle>
+                {isAdmin && (
+                    <TabsContent value="members" className="outline-none">
+                        <Card className="border-border/40 bg-zinc-950/20">
+                            <CardHeader>
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <Users className="h-4 w-4 text-muted-foreground" />
+                                        <CardTitle className="text-base">Members</CardTitle>
+                                    </div>
+                                    {isAdmin && (
+                                        <Button
+                                            size="sm"
+                                            className="gap-2"
+                                            onClick={() => setIsInviteOpen(true)}
+                                        >
+                                            <UserPlus className="h-4 w-4" />
+                                            Invite Member
+                                        </Button>
+                                    )}
                                 </div>
-                                {isAdmin && (
-                                    <Button
-                                        size="sm"
-                                        className="gap-2"
-                                        onClick={() => setIsInviteOpen(true)}
-                                    >
-                                        <UserPlus className="h-4 w-4" />
-                                        Invite Member
-                                    </Button>
-                                )}
-                            </div>
-                            <CardDescription>People with access to this organization</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            {isLoading ? (
-                                <div className="space-y-3">
-                                    {Array.from({ length: 3 }).map((_, i) => (
-                                        <div key={i} className="flex items-center justify-between p-3 rounded-lg border border-border/20">
-                                            <div className="flex items-center gap-3">
-                                                <Skeleton className="h-8 w-8 rounded-full" />
-                                                <Skeleton className="h-4 w-40" />
-                                            </div>
-                                            <Skeleton className="h-5 w-16 rounded-full" />
-                                        </div>
-                                    ))}
-                                </div>
-                            ) : members?.length === 0 ? (
-                                <div className="text-center py-8 text-muted-foreground text-sm">
-                                    No members found
-                                </div>
-                            ) : (
-                                <div className="space-y-2">
-                                    {members?.map((member) => {
-                                        const isSelf = member.email === userEmail;
-                                        return (
-                                            <div
-                                                key={member.userId}
-                                                className="flex items-center justify-between px-3 py-2.5 rounded-lg border border-border/20 hover:border-border/40 transition-colors"
-                                            >
-                                                <div className="flex items-center gap-3 min-w-0">
-                                                    <Avatar className="h-8 w-8 shrink-0">
-                                                        <AvatarFallback className="bg-zinc-800 text-xs font-medium">
-                                                            {member.email.charAt(0).toUpperCase()}
-                                                        </AvatarFallback>
-                                                    </Avatar>
-                                                    <span className="text-sm truncate">
-                                                        {member.email}
-                                                        {isSelf && (
-                                                            <span className="ml-2 text-xs text-muted-foreground font-normal">
-                                                                (You)
-                                                            </span>
-                                                        )}
-                                                    </span>
+                                <CardDescription>People with access to this organization</CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                {isLoading ? (
+                                    <div className="space-y-3">
+                                        {Array.from({ length: 3 }).map((_, i) => (
+                                            <div key={i} className="flex items-center justify-between p-3 rounded-lg border border-border/20">
+                                                <div className="flex items-center gap-3">
+                                                    <Skeleton className="h-8 w-8 rounded-full" />
+                                                    <Skeleton className="h-4 w-40" />
                                                 </div>
-                                                <div className="flex items-center gap-2">
-                                                    {isAdmin && !isSelf ? (
+                                                <Skeleton className="h-5 w-16 rounded-full" />
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : members?.length === 0 ? (
+                                    <div className="text-center py-8 text-muted-foreground text-sm">
+                                        No members found
+                                    </div>
+                                ) : (
+                                    <div className="space-y-2">
+                                        {sortedMembers.map((member) => {
+                                            const isSelf = member.email === userEmail;
+                                            return (
+                                                <div
+                                                    key={member.userId}
+                                                    className="flex items-center justify-between px-3 py-2.5 rounded-lg border border-border/20 hover:border-border/40 transition-colors"
+                                                >
+                                                    <div className="flex items-center gap-3 min-w-0">
+                                                        <Avatar className="h-8 w-8 shrink-0">
+                                                            <AvatarFallback className="bg-zinc-800 text-xs font-medium">
+                                                                {member.email.charAt(0).toUpperCase()}
+                                                            </AvatarFallback>
+                                                        </Avatar>
+                                                        <span className="text-sm truncate">
+                                                            {member.email}
+                                                            {isSelf && (
+                                                                <span className="ml-2 text-xs text-muted-foreground font-normal">
+                                                                    (You)
+                                                                </span>
+                                                            )}
+                                                        </span>
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        {isAdmin && !isSelf ? (
+                                                            <div className="flex items-center gap-2">
+                                                                <Select
+                                                                    value={String(member.role)}
+                                                                    onValueChange={async (value) => {
+                                                                        try {
+                                                                            await updateMember.mutateAsync({
+                                                                                organizationId: activeOrganizationId,
+                                                                                userId: member.userId,
+                                                                                role: parseInt(value),
+                                                                            });
+                                                                            toast.success(`Updated role for ${member.email}`);
+                                                                        } catch {
+                                                                            toast.error('Failed to update role');
+                                                                        }
+                                                                    }}
+                                                                    disabled={updateMember.isPending}
+                                                                >
+                                                                    <SelectTrigger className="h-7 w-[100px] text-xs bg-zinc-900 border-border/40 hover:bg-zinc-800/50 transition-colors animate-in fade-in zoom-in-95 duration-150">
+                                                                        <SelectValue />
+                                                                    </SelectTrigger>
+                                                                    <SelectContent className="bg-zinc-950 border-border/40">
+                                                                        <SelectItem value={String(OrganizationRole.Member)}>
+                                                                            <span className="flex items-center gap-1.5 text-xs">
+                                                                                <User className="h-3 w-3" /> Member
+                                                                            </span>
+                                                                        </SelectItem>
+                                                                        <SelectItem value={String(OrganizationRole.Admin)}>
+                                                                            <span className="flex items-center gap-1.5 text-xs text-violet-400">
+                                                                                <Crown className="h-3 w-3 text-violet-400" /> Admin
+                                                                            </span>
+                                                                        </SelectItem>
+                                                                    </SelectContent>
+                                                                </Select>
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="icon"
+                                                                    className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded transition-colors"
+                                                                    onClick={() => setMemberToRemove(member)}
+                                                                    disabled={removeMember.isPending}
+                                                                >
+                                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                                </Button>
+                                                            </div>
+                                                        ) : (
+                                                            <RoleBadge role={member.role} />
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+
+                                        {isAdmin && !isLoadingInvites && invitations && invitations.length > 0 && (
+                                            <>
+                                                <div className="pt-4 pb-1">
+                                                    <h4 className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                                                        <UserPlus className="h-3 w-3" />
+                                                        Pending Invitations
+                                                    </h4>
+                                                </div>
+                                                {invitations.map((invite) => (
+                                                    <div
+                                                        key={invite.id}
+                                                        className="flex items-center justify-between px-3 py-2.5 rounded-lg border border-border/20 hover:border-border/40 transition-colors opacity-80"
+                                                    >
+                                                        <div className="flex items-center gap-3 min-w-0">
+                                                            <Avatar className="h-8 w-8 shrink-0 border border-dashed border-zinc-600">
+                                                                <AvatarFallback className="bg-zinc-900/50 text-xs font-medium text-muted-foreground">
+                                                                    {invite.email.charAt(0).toUpperCase()}
+                                                                </AvatarFallback>
+                                                            </Avatar>
+                                                            <div className="flex flex-col">
+                                                                <span className="text-sm truncate">{invite.email}</span>
+                                                                <span className="text-[10px] text-muted-foreground">
+                                                                    Invited on {new Date(invite.invitedAt).toLocaleDateString()}
+                                                                </span>
+                                                            </div>
+                                                        </div>
                                                         <div className="flex items-center gap-2">
-                                                            <Select
-                                                                value={String(member.role)}
-                                                                onValueChange={async (value) => {
-                                                                    try {
-                                                                        await updateMember.mutateAsync({
-                                                                            organizationId: activeOrganizationId,
-                                                                            userId: member.userId,
-                                                                            role: parseInt(value),
-                                                                        });
-                                                                        toast.success(`Updated role for ${member.email}`);
-                                                                    } catch {
-                                                                        toast.error('Failed to update role');
-                                                                    }
-                                                                }}
-                                                                disabled={updateMember.isPending}
-                                                            >
-                                                                <SelectTrigger className="h-7 w-[100px] text-xs bg-zinc-900 border-border/40 hover:bg-zinc-800/50 transition-colors animate-in fade-in zoom-in-95 duration-150">
-                                                                    <SelectValue />
-                                                                </SelectTrigger>
-                                                                <SelectContent className="bg-zinc-950 border-border/40">
-                                                                    <SelectItem value={String(OrganizationRole.Member)}>
-                                                                        <span className="flex items-center gap-1.5 text-xs">
-                                                                            <User className="h-3 w-3" /> Member
-                                                                        </span>
-                                                                    </SelectItem>
-                                                                    <SelectItem value={String(OrganizationRole.Admin)}>
-                                                                        <span className="flex items-center gap-1.5 text-xs text-violet-400">
-                                                                            <Crown className="h-3 w-3 text-violet-400" /> Admin
-                                                                        </span>
-                                                                    </SelectItem>
-                                                                </SelectContent>
-                                                            </Select>
+                                                            <RoleBadge role={invite.role} />
                                                             <Button
                                                                 variant="ghost"
-                                                                size="icon"
-                                                                className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded transition-colors"
-                                                                onClick={() => setMemberToRemove(member)}
-                                                                disabled={removeMember.isPending}
+                                                                size="sm"
+                                                                className="h-7 text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors px-2 ml-1"
+                                                                onClick={() => handleRevokeInvite(invite.id)}
+                                                                disabled={revokeInvitation.isPending}
                                                             >
-                                                                <Trash2 className="h-3.5 w-3.5" />
+                                                                Revoke
                                                             </Button>
                                                         </div>
-                                                    ) : (
-                                                        <RoleBadge role={member.role} />
-                                                    )}
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
-                </TabsContent>
+                                                    </div>
+                                                ))}
+                                            </>
+                                        )}
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
+                    </TabsContent>
+                )}
             </Tabs>
 
             <Dialog open={isInviteOpen} onOpenChange={setIsInviteOpen}>

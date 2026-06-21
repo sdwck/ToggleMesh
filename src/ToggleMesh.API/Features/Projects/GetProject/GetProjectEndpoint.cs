@@ -73,13 +73,13 @@ public class GetProjectEndpoint : ToggleEndpointWithoutRequest<GetProjectRespons
                     Id = e.Id,
                     Name = e.Name,
                     UserRole = effectiveRole,
-                    Keys = e.Keys.Where(k => k.ExpireOn == null || k.ExpireOn > DateTime.UtcNow).Select(k => new EnvironmentKeyDto
+                    Keys = effectiveRole < ProjectRole.Editor ? e.Keys.Where(k => k.ExpireOn == null || k.ExpireOn > DateTime.UtcNow).Select(k => new EnvironmentKeyDto
                     {
                         Id = k.Id,
                         KeyPrefix = k.KeyPreview,
                         KeyType = k.KeyType,
                         CreatedAt = k.CreatedOn
-                    }).ToList()
+                    }).ToList() : new List<EnvironmentKeyDto>()
                 };
             }).ToList()
         };

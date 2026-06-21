@@ -106,6 +106,14 @@ public class ProjectApiTests : IClassFixture<TestWebApplicationFactory>
             Email = "newuser@example.com"
         };
         db.Users.Add(newUser);
+        
+        db.OrganizationMembers.Add(new ToggleMesh.API.Features.Organizations.OrganizationMember
+        {
+            Id = Guid.CreateVersion7(),
+            OrganizationId = Guid.Parse("11111111-1111-1111-1111-111111111111"),
+            UserId = newUser.Id,
+            Role = ToggleMesh.API.Features.Organizations.OrganizationRole.Member
+        });
         await db.SaveChangesAsync();
 
         var request = new AddMemberRequest
@@ -142,5 +150,57 @@ public class ProjectApiTests : IClassFixture<TestWebApplicationFactory>
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var members = await response.Content.ReadFromJsonAsync<List<MemberDto>>();
         members.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task GetMembers_ShouldIncludeOrganizationAdmins()
+    {
+        // Arrange
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        var org = new API.Features.Organizations.Organization { Name = "Org Admin Test Org" };
+        db.Organizations.Add(org);
+
+        var adminUser = new ToggleMesh.API.Features.Auth.Models.ApplicationUser
+        {
+            Id = Guid.CreateVersion7(),
+            UserName = "admin@example.com",
+            Email = "admin@example.com"
+        };
+        db.Users.Add(adminUser);
+
+        db.OrganizationMembers.Add(new ToggleMesh.API.Features.Organizations.OrganizationMember
+        {
+            Organization = org,
+            UserId = adminUser.Id,
+            Role = ToggleMesh.API.Features.Organizations.OrganizationRole.Admin
+        });
+
+        var project = new Project { Name = "Org Admin Test Project", Organization = org };
+        db.Projects.Add(project); 
+        
+        var testUserId = Guid.Parse(TestAuthHandler.TestUserId);
+        db.OrganizationMembers.Add(new API.Features.Organizations.OrganizationMember
+        {
+            Organization = org,
+            UserId = testUserId,
+            Role = ToggleMesh.API.Features.Organizations.OrganizationRole.Admin
+        });
+
+        await db.SaveChangesAsync();
+
+        // Act
+        var response = await _client.GetAsync($"/api/v1/projects/{project.Id}/members");
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var members = await response.Content.ReadFromJsonAsync<List<MemberDto>>();
+        members.Should().NotBeNull();
+        
+        var adminMember = members.FirstOrDefault(m => m.UserId == adminUser.Id.ToString());
+        adminMember.Should().NotBeNull();
+        adminMember.Role.Should().Be(ProjectRole.Owner);
+        members.Should().Contain(m => m.UserId == testUserId.ToString());
     }
 }

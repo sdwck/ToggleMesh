@@ -32,7 +32,7 @@ export function PlaygroundPage() {
 
     const handleConnect = async () => {
         if (!clientKey.trim()) {
-            toast.error('Client API Key is required');
+            toast.error('API Key is required');
             return;
         }
 
@@ -85,10 +85,10 @@ export function PlaygroundPage() {
                             <Input value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} className="bg-zinc-950/40 text-xs font-mono" />
                         </div>
                         <div className="space-y-1.5">
-                            <Label>Client API Key (tm_client_...)</Label>
+                            <Label>API Key (Server or Client)</Label>
                             <Input
                                 type="password"
-                                placeholder="Paste your client API key"
+                                placeholder="Paste your API key"
                                 value={clientKey}
                                 onChange={(e) => setClientKey(e.target.value)}
                                 className="bg-zinc-950/40 text-xs font-mono"
@@ -123,7 +123,7 @@ export function PlaygroundPage() {
                             <HelpCircle className="h-10 w-10 text-muted-foreground mb-4 animate-bounce" />
                             <h3 className="font-semibold text-lg">Waiting for connection</h3>
                             <p className="text-muted-foreground text-sm max-w-sm mt-1">
-                                Configure your Client API Key and click "Connect" to spin up the live React evaluation sandbox.
+                                Configure your API Key and click "Connect" to spin up the live React evaluation sandbox.
                             </p>
                         </Card>
                     )}
