@@ -1,4 +1,6 @@
-﻿# 🔌 ToggleMesh.SDK
+# 🔌 ToggleMesh.SDK
+
+[![GitHub Repo](https://img.shields.io/badge/GitHub-ToggleMesh-blue?logo=github)](https://github.com/sdwck/ToggleMesh)
 
 The official, ultra-high-performance C# Client SDK for **ToggleMesh** — a real-time, self-hosted feature flag and configuration management engine.
 
@@ -6,15 +8,20 @@ ToggleMesh SDK is engineered for **hardcore, high-throughput backend services**.
 
 ## 🚀 Performance Metrics
 
-*   **Evaluation Latency:** **~37.7 nanoseconds** (Mean) on standard hardware.
-*   **Memory Allocations:** **0 Bytes** (Zero managed allocations per check).
+*   **Evaluation Latency:** **~24-77 nanoseconds** (Mean) on standard hardware depending on context structure.
+*   **Memory Allocations:** **0 Bytes** (Zero managed allocations per check, including complex string matching and segment evaluations).
 *   **Synchronization:** Real-time push via SignalR over Redis backplane (no polling).
 
 *Benchmarks executed using BenchmarkDotNet on .NET 10.0 / Intel Core i7-14700K:*
 ```text
-| Method              | Mean     | Error   | StdDev  | Gen0   | Allocated |
-|-------------------- |---------:|--------:|--------:|-------:|----------:|
-| IsEnabled_WithRules | 37.73 ns | 0.325 ns| 0.304 ns|      - |         - |
+| Method                         | Mean     | Error    | StdDev   | Allocated |
+|------------------------------- |---------:|---------:|---------:|----------:|
+| IsEnabled_WithRules_Typed      | 52.40 ns | 0.352 ns | 0.329 ns |         - |
+| IsEnabled_WithRules_AOT        | 24.68 ns | 0.169 ns | 0.158 ns |         - |
+| IsEnabled_WithRules_Dictionary | 49.38 ns | 0.269 ns | 0.252 ns |         - |
+| IsEnabled_Complex_Typed        | 98.90 ns | 0.337 ns | 0.315 ns |         - |
+| IsEnabled_Complex_AOT          | 77.42 ns | 0.295 ns | 0.261 ns |         - |
+| Track_Event                    | 46.37 ns | 0.136 ns | 0.127 ns |         - |
 ```
 
 ---
@@ -86,6 +93,19 @@ ToggleMesh SDK is designed to keep your application alive no matter what:
 1.  **Non-Blocking Startup:** The SDK connects asynchronously in the background. If the ToggleMesh server is offline, your application boots up instantly using offline fallbacks.
 2.  **Polly Integration:** Under the hood, the SDK utilizes **Polly** Resilience Pipelines. It features a configured **Circuit Breaker** and Exponential Backoff Retries to protect your services and prevent self-DDoS during outages.
 3.  **Local Fallback Cache:** If configured, the SDK writes the latest valid configuration to a local `.togglemesh/` JSON file. On startup, if the API is unreachable, it seamlessly loads from this file.
+
+---
+
+## 🛠️ Supported Features & Capabilities
+
+- **Zero-Allocation Rule Evaluation:** Advanced caching and optimization ensures GC-free evaluation.
+- **AOT Context Generation:** Uses Source Generators (`[ToggleMeshContext]`) to eliminate reflection when resolving user context.
+- **Contextual Rollouts & Experiments:** First-class support for A/B testing and contextual targeting.
+- **Segment Evaluation:** Evaluate flags against synchronized audience segments instantly.
+- **Analytics Event Tracking:** Send custom telemetry and experiment conversions securely and asynchronously:
+  ```csharp
+  _toggleMesh.Track("checkout_completed", value: 120.50);
+  ```
 
 ---
 

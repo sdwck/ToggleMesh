@@ -1,5 +1,7 @@
 # 🔌 togglemesh-js
 
+[![GitHub Repo](https://img.shields.io/badge/GitHub-ToggleMesh-blue?logo=github)](https://github.com/sdwck/ToggleMesh)
+
 Official, lightweight, and reactive JavaScript/TypeScript Client SDK for **ToggleMesh** — the real-time, high-performance feature flag and configuration management engine.
 
 This SDK is specifically designed for **Client-Side (Browser, Mobile/React Native) environments**, leveraging secure **Remote Evaluation** to evaluate targeting rules on the server side, preventing sensitive rule leakage to the client.
@@ -9,6 +11,10 @@ This SDK is specifically designed for **Client-Side (Browser, Mobile/React Nativ
 *   **Zero Dependencies:** Designed on top of native `fetch` API, keeping your bundle size tiny (~2KB).
 *   **Reactive Hooks:** Out-of-the-box React Context Provider and hooks that trigger automatic re-renders when flags update.
 *   **Automatic Background Polling:** SDK automatically syncs flag states with the API in the background.
+*   **Analytics Event Tracking:** Send custom telemetry and experiment conversions seamlessly:
+    ```javascript
+    tmClient.track('button_clicked', { color: 'red' });
+    ```
 *   **Dual-Module Export:** Full support for ESM (`import`) and TypeScript definitions.
 *   **Zero Client-Side Rule Leakage:** All targeting rules are evaluated secure-side on the ToggleMesh server, returning only flat boolean results to the client.
 

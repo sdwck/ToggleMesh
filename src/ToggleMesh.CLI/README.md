@@ -1,4 +1,6 @@
-﻿# 🚀 ToggleMesh CLI Tool
+# 🚀 ToggleMesh CLI Tool
+
+[![GitHub Repo](https://img.shields.io/badge/GitHub-ToggleMesh-blue?logo=github)](https://github.com/sdwck/ToggleMesh)
 
 `ToggleMesh.CLI` is a powerful, lightweight .NET Global Tool designed to synchronize feature flags and configuration schemas directly from your **ToggleMesh** Control Plane into your local codebase as strongly-typed constants.
 
