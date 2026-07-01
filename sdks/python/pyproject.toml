@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "togglemesh"
+version = "0.2.5"
+description = "ToggleMesh Python SDK"
+readme = "README.md"
+authors = [
+  { name="sdwck" },
+]
+dependencies = [
+    "requests>=2.25.0",
+    "packaging>=21.3",
+]
+requires-python = ">=3.7"
+
+[project.scripts]
+togglemesh = "togglemesh.cli:main"
