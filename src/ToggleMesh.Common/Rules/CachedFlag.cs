@@ -7,6 +7,7 @@ public class CachedFlag
     public int? RolloutPercentage { get; init; }
     public Dictionary<string, int>? ContextualRollouts { get; init; }
     public Dictionary<string, int>? ParsedContextualRollouts { get; init; }
+    public Dictionary<string, object>? ContextualRolloutsTree { get; init; }
     public bool IsExperimentActive { get; init; }
     public CompiledRuleGroup[] Groups { get; init; } = [];
     public FeatureFlagDto OriginalDto { get; init; } = null!;

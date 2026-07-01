@@ -1,9 +1,8 @@
-﻿using System;
-
 namespace ToggleMesh.Common.Rules.Operators;
 
 public class DateBeforeOperator : RuleOperatorBase
 {
+    public override string Name => "DateBefore";
     public override object? Compile(string ruleValue) => 
         DateTime.TryParse(ruleValue, out var r) ? r : null;
 

@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 
 namespace ToggleMesh.SDK.Options;
 
@@ -33,4 +33,8 @@ public class ToggleMeshOptions
     /// Whether to enable metrics collection for flag evaluations.
     /// </summary>
     public bool IsMetricsEnabled { get; set; } = true;
+    /// <summary>
+    /// Maximum number of analytics events that can be buffered in memory before dropping new ones.
+    /// </summary>
+    public int AnalyticsChannelCapacity { get; set; } = 10000;
 }

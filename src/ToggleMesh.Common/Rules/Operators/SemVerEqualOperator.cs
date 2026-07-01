@@ -1,9 +1,10 @@
-﻿using NuGet.Versioning;
+using NuGet.Versioning;
 
 namespace ToggleMesh.Common.Rules.Operators;
 
 public class SemVerEqualOperator : RuleOperatorBase
 {
+    public override string Name => "SemVerEqual";
     public override object? Compile(string ruleValue) =>
         NuGetVersion.TryParse(ruleValue, out var r) ? r : null;
     

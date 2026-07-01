@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using ToggleMesh.Common.Contexts;
 using ToggleMesh.Common.Rules;
@@ -46,6 +46,7 @@ public static class ServiceCollectionExtensions
         
         services.AddSingleton<ToggleMeshClient>();
         services.AddSingleton<IToggleMeshClient>(sp => sp.GetRequiredService<ToggleMeshClient>());
+        services.AddSingleton<ISegmentProvider, SdkSegmentProviderProxy>();
         services.AddHostedService(sp => sp.GetRequiredService<ToggleMeshClient>());
         return services;
     }

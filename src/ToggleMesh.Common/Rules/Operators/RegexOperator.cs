@@ -1,9 +1,10 @@
-﻿using System.Text.RegularExpressions;
+using System.Text.RegularExpressions;
 
 namespace ToggleMesh.Common.Rules.Operators;
 
 public class RegexOperator : RuleOperatorBase
 {
+    public override string Name => "Regex";
     private static readonly TimeSpan EvaluationTimeout = TimeSpan.FromMilliseconds(100);
 
     public override object? Compile(string ruleValue)

@@ -1,7 +1,8 @@
-﻿namespace ToggleMesh.Common.Rules.Operators;
+namespace ToggleMesh.Common.Rules.Operators;
 
 public class GreaterThanOperator : RuleOperatorBase
 {
+    public override string Name => "GreaterThan";
     public override object? Compile(string ruleValue) => 
         double.TryParse(ruleValue, out var r) ? r : null;
 

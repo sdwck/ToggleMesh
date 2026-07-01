@@ -2,6 +2,7 @@ namespace ToggleMesh.Common.Rules.Operators;
 
 public class InListOperator : RuleOperatorBase
 {
+    public override string Name => "InList";
     public override object? Compile(string ruleValue)
     {
         if (string.IsNullOrWhiteSpace(ruleValue))

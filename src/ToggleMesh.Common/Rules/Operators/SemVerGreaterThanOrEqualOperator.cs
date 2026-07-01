@@ -1,9 +1,10 @@
-﻿using NuGet.Versioning;
+using NuGet.Versioning;
 
 namespace ToggleMesh.Common.Rules.Operators;
 
 public class SemVerGreaterThanOrEqualOperator : RuleOperatorBase
 {
+    public override string Name => "SemVerGreaterThanOrEqual";
     public override object? Compile(string ruleValue) =>
         NuGetVersion.TryParse(ruleValue, out var r) ? r : null;
     
