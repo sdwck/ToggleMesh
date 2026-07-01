@@ -1,0 +1,203 @@
+using System.Text.Json;
+using System.Threading.Channels;
+using Microsoft.EntityFrameworkCore;
+using ToggleMesh.API.Features.Webhooks;
+using ToggleMesh.API.Infrastructure.Data;
+
+namespace ToggleMesh.API.BackgroundServices.Webhooks;
+
+public class WebhookDispatcherService : BackgroundService
+{
+    private readonly Channel<WebhookEvent> _channel;
+    private readonly IServiceProvider _serviceProvider;
+    private readonly ILogger<WebhookDispatcherService> _logger;
+    private readonly TimeProvider _timeProvider;
+
+    public WebhookDispatcherService(
+        Channel<WebhookEvent> channel,
+        IServiceProvider serviceProvider,
+        ILogger<WebhookDispatcherService> logger,
+        TimeProvider timeProvider)
+    {
+        _channel = channel;
+        _serviceProvider = serviceProvider;
+        _logger = logger;
+        _timeProvider = timeProvider;
+    }
+
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        await foreach (var evt in _channel.Reader.ReadAllAsync(stoppingToken))
+        {
+            try
+            {
+                await QueueDeliveriesAsync(evt, stoppingToken);
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+            catch (ObjectDisposedException)
+            {
+                break;
+            }
+            catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
+            {
+                _logger.LogError(ex, "Error occurred while queuing webhook event.");
+            }
+        }
+    }
+
+    private async Task QueueDeliveriesAsync(WebhookEvent webhookEvent, CancellationToken ct)
+    {
+        using var scope = _serviceProvider.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        var webhooks = await db.Webhooks
+            .AsNoTracking()
+            .Where(w => w.ProjectId == webhookEvent.ProjectId && w.Status == WebhookStatus.Active)
+            .ToListAsync(ct);
+
+        if (webhooks.Count == 0)
+            return;
+
+        var project = await db.Projects
+            .AsNoTracking()
+            .Select(p => new { p.Id, p.Name })
+            .FirstOrDefaultAsync(p => 
+                p.Id == webhookEvent.ProjectId, ct);
+
+        if (project == null)
+            return;
+
+        string? envName = null;
+        if (webhookEvent.EnvironmentId.HasValue)
+        {
+            envName = await db.Environments
+                .AsNoTracking()
+                .Where(e => 
+                    e.Id == webhookEvent.EnvironmentId.Value)
+                .Select(e => e.Name)
+                .FirstOrDefaultAsync(ct);
+        }
+
+        string[]? flagTags = null;
+        if (webhooks.Any(w => w.FlagTags.Length > 0) && !string.IsNullOrEmpty(webhookEvent.FlagKey))
+        {
+            flagTags = await db.FeatureFlags
+                .AsNoTracking()
+                .Where(f => f.ProjectId == webhookEvent.ProjectId && f.Key == webhookEvent.FlagKey)
+                .Select(f => f.Tags)
+                .FirstOrDefaultAsync(ct);
+        }
+
+        foreach (var webhook in webhooks)
+        {
+            if (webhook.Events.Length == 0)
+                continue;
+            
+            if (!webhook.Events.Contains(webhookEvent.EventName))
+                continue;
+            
+            if (webhookEvent.EnvironmentId.HasValue 
+                && webhook.EnvironmentIds.Length > 0 
+                && !webhook.EnvironmentIds
+                    .Contains(webhookEvent.EnvironmentId.Value))
+                continue;
+
+            if (webhook.FlagTags.Length > 0)
+            {
+                if (flagTags == null || flagTags.Length == 0)
+                    continue;
+                
+                if (!webhook.FlagTags.Intersect(flagTags).Any())
+                    continue;
+            }
+
+            await CreateDeliveryAsync(
+                webhook, 
+                webhookEvent, 
+                project.Name, 
+                envName, 
+                db, 
+                ct);
+        }
+        
+        await db.SaveChangesAsync(ct);
+    }
+
+    private async Task CreateDeliveryAsync(
+        Webhook webhook, 
+        WebhookEvent webhookEvent, 
+        string projectName,
+        string? envName,
+        AppDbContext db, 
+        CancellationToken ct)
+    {
+        object? data = null;
+
+        if (webhookEvent.EventName != "flag.deleted")
+        {
+            if (webhookEvent.EnvironmentId.HasValue)
+            {
+                var state = await db.FlagEnvironmentStates
+                    .AsNoTracking()
+                    .Include(x => x.FeatureFlag)
+                    .Include(x => x.Rules)
+                    .FirstOrDefaultAsync(x => x.EnvironmentId == webhookEvent.EnvironmentId.Value && x.FeatureFlag.Key == webhookEvent.FlagKey, ct);
+
+                if (state != null)
+                    data = new
+                    {
+                        key = state.FeatureFlag.Key,
+                        isEnabled = state.IsEnabled,
+                        rolloutPercentage = state.RolloutPercentage,
+                        tags = state.FeatureFlag.Tags,
+                        isClientSideExposed = state.FeatureFlag.IsClientSideExposed,
+                        rules = state.Rules.Select(r => new { r.GroupId, r.Attribute, r.Operator, r.Value }).ToList()
+                    };
+            }
+            else
+            {
+                var flag = await db.FeatureFlags
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(x => x.ProjectId == webhookEvent.ProjectId && x.Key == webhookEvent.FlagKey, ct);
+
+                if (flag != null)
+                    data = new
+                    {
+                        key = flag.Key,
+                        tags = flag.Tags,
+                        isClientSideExposed = flag.IsClientSideExposed
+                    };
+            }
+        }
+
+        var payloadObj = new
+        {
+            id = Guid.CreateVersion7(),
+            timestamp = _timeProvider.GetUtcNow().UtcDateTime,
+            eventName = webhookEvent.EventName,
+            projectId = webhookEvent.ProjectId,
+            projectName,
+            environmentId = webhookEvent.EnvironmentId,
+            environmentName = envName,
+            flagKey = webhookEvent.FlagKey,
+            data
+        };
+
+        var delivery = new WebhookDelivery
+        {
+            Id = Guid.CreateVersion7(),
+            WebhookId = webhook.Id,
+            EventName = webhookEvent.EventName,
+            Payload = JsonSerializer.Serialize(payloadObj),
+            Status = WebhookDeliveryStatus.Pending,
+            AttemptCount = 0,
+            NextAttemptAt = _timeProvider.GetUtcNow().UtcDateTime,
+            CreatedAt = _timeProvider.GetUtcNow().UtcDateTime
+        };
+
+        db.WebhookDeliveries.Add(delivery);
+    }
+}
