@@ -20,4 +20,16 @@ public:
 
 	UPROPERTY(Config, EditAnywhere, Category="General")
 	int32 RefreshInterval;
+
+	UPROPERTY(Config, EditAnywhere, Category="Metrics")
+	bool bIsMetricsEnabled;
+
+	UPROPERTY(Config, EditAnywhere, Category="Metrics")
+	int32 AnalyticsChannelCapacity;
+
+	UPROPERTY(Config, EditAnywhere, Category="Metrics")
+	int32 MetricsBufferCapacity;
+
+	UPROPERTY(Config, EditAnywhere, Category="Metrics")
+	int32 MaxBatchSize;
 };

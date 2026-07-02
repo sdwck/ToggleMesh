@@ -58,17 +58,27 @@ bool UToggleMeshSubsystem::GetBoolFlag(const FString& FlagKey, bool bDefaultValu
 		bIsExperiment = Found->bIsExperimentActive;
 	}
 
-	if (!MetricsBuffer.Contains(FlagKey))
+	const UToggleMeshSettings* Settings = GetDefault<UToggleMeshSettings>();
+	if (Settings->bIsMetricsEnabled)
 	{
-		MetricsBuffer.Add(FlagKey, FToggleMeshMetricCounts());
-	}
-	if (bResult)
-	{
-		MetricsBuffer[FlagKey].TrueCount++;
-	}
-	else
-	{
-		MetricsBuffer[FlagKey].FalseCount++;
+		if (!MetricsBuffer.Contains(FlagKey))
+		{
+			if (MetricsBuffer.Num() < Settings->MetricsBufferCapacity)
+			{
+				MetricsBuffer.Add(FlagKey, FToggleMeshMetricCounts());
+			}
+		}
+		if (MetricsBuffer.Contains(FlagKey))
+		{
+			if (bResult)
+			{
+				MetricsBuffer[FlagKey].TrueCount++;
+			}
+			else
+			{
+				MetricsBuffer[FlagKey].FalseCount++;
+			}
+		}
 	}
 
 	if (bIsExperiment && !CurrentUserId.IsEmpty())
@@ -87,7 +97,10 @@ bool UToggleMeshSubsystem::GetBoolFlag(const FString& FlagKey, bool bDefaultValu
 		}
 		EventObj->SetObjectField(TEXT("Properties"), ContextObj);
 
-		EventBuffer.Add(EventObj);
+		if (Settings->bIsMetricsEnabled && EventBuffer.Num() < Settings->AnalyticsChannelCapacity)
+		{
+			EventBuffer.Add(EventObj);
+		}
 	}
 
 	return bResult;
@@ -131,7 +144,7 @@ void UToggleMeshSubsystem::FetchFlags()
 	Request->SetVerb(TEXT("POST"));
 	Request->SetHeader(TEXT("Content-Type"), TEXT("application/json"));
 	Request->SetHeader(TEXT("x-api-key"), Settings->ClientKey);
-	Request->SetHeader(TEXT("x-sdk-version"), TEXT("unreal-0.2.2"));
+	Request->SetHeader(TEXT("x-sdk-version"), TEXT("unreal-1.1.0"));
 	Request->SetContentAsString(PayloadString);
 	Request->ProcessRequest();
 }
@@ -172,7 +185,12 @@ void UToggleMeshSubsystem::TrackEvent(const FString& EventName, float Value, boo
 		return;
 	}
 
-	if (CurrentUserId.IsEmpty())
+	if (CurrentUserId.IsEmpty() || !Settings->bIsMetricsEnabled)
+	{
+		return;
+	}
+
+	if (EventBuffer.Num() >= Settings->AnalyticsChannelCapacity)
 	{
 		return;
 	}
@@ -210,12 +228,13 @@ void UToggleMeshSubsystem::FlushEvents()
 		return;
 	}
 
+	int32 BatchSize = FMath::Min(Settings->MaxBatchSize, EventBuffer.Num());
 	TArray<TSharedPtr<FJsonValue>> PayloadArray;
-	for (const TSharedPtr<FJsonObject>& EventObj : EventBuffer)
+	for (int32 i = 0; i < BatchSize; ++i)
 	{
-		PayloadArray.Add(MakeShared<FJsonValueObject>(EventObj));
+		PayloadArray.Add(MakeShared<FJsonValueObject>(EventBuffer[i]));
 	}
-	EventBuffer.Empty();
+	EventBuffer.RemoveAt(0, BatchSize);
 
 	FString PayloadString;
 	TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&PayloadString);
@@ -237,7 +256,7 @@ void UToggleMeshSubsystem::FlushEvents()
 	Request->SetVerb(TEXT("POST"));
 	Request->SetHeader(TEXT("Content-Type"), TEXT("application/json"));
 	Request->SetHeader(TEXT("x-api-key"), Settings->ClientKey);
-	Request->SetHeader(TEXT("x-sdk-version"), TEXT("unreal-0.2.2"));
+	Request->SetHeader(TEXT("x-sdk-version"), TEXT("unreal-1.1.0"));
 	Request->SetContentAsString(PayloadString);
 	Request->ProcessRequest();
 }
@@ -250,7 +269,7 @@ void UToggleMeshSubsystem::FlushMetrics()
 	}
 
 	const UToggleMeshSettings* Settings = GetDefault<UToggleMeshSettings>();
-	if (Settings->ClientKey.IsEmpty() || Settings->BaseUrl.IsEmpty())
+	if (Settings->ClientKey.IsEmpty() || Settings->BaseUrl.IsEmpty() || !Settings->bIsMetricsEnabled)
 	{
 		return;
 	}
@@ -291,7 +310,7 @@ void UToggleMeshSubsystem::FlushMetrics()
 	Request->SetVerb(TEXT("POST"));
 	Request->SetHeader(TEXT("Content-Type"), TEXT("application/json"));
 	Request->SetHeader(TEXT("x-api-key"), Settings->ClientKey);
-	Request->SetHeader(TEXT("x-sdk-version"), TEXT("unreal-0.2.2"));
+	Request->SetHeader(TEXT("x-sdk-version"), TEXT("unreal-1.1.0"));
 	Request->SetContentAsString(PayloadString);
 	Request->ProcessRequest();
 }
