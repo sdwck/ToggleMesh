@@ -9,6 +9,7 @@ public readonly struct ToggleMeshUser<TContext> where TContext : IContextAccesso
 
     public ToggleMeshUser(string identity, TContext context)
     {
+        // ReSharper disable once NullCoalescingConditionIsAlwaysNotNullAccordingToAPIContract
         Identity = identity ?? string.Empty;
         Context = context;
     }

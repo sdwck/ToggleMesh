@@ -30,6 +30,8 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService, ISegmentProvi
     private readonly ConcurrentDictionary<string, FlagMetrics> _metricsBuffer = new();
     private readonly Channel<AnalyticsEvent> _eventsChannel;
     private readonly bool _isMetricsEnabled;
+    private readonly int _metricsBufferCapacity;
+    private readonly int _maxBatchSize;
     private readonly TimeProvider _timeProvider;
     private readonly ResiliencePipeline _resiliencePipeline;
     private readonly CancellationTokenSource _sdkLifetimeCts = new();
@@ -48,6 +50,8 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService, ISegmentProvi
         _contextProviders = contextProviders.ToArray();
         _timeProvider = timeProvider ?? TimeProvider.System;
         _isMetricsEnabled = options.Value.IsMetricsEnabled;
+        _metricsBufferCapacity = options.Value.MetricsBufferCapacity > 0 ? options.Value.MetricsBufferCapacity : 10000;
+        _maxBatchSize = options.Value.MaxBatchSize > 0 ? options.Value.MaxBatchSize : 2000;
         if (options.Value.IdentityKeys.Any())
             _identityKeys = options.Value.IdentityKeys.ToList();
         _client = httpClientFactory.CreateClient("ToggleMesh");
@@ -419,6 +423,9 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService, ISegmentProvi
 
     private void UpdateMetrics(string flagKey, bool result)
     {
+        if (!_metricsBuffer.ContainsKey(flagKey) && _metricsBuffer.Count >= _metricsBufferCapacity)
+            return;
+
         var metrics = _metricsBuffer.GetOrAdd(flagKey, _ => new FlagMetrics());
         if (result)
             Interlocked.Increment(ref metrics.TrueCount);
@@ -489,7 +496,7 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService, ISegmentProvi
     private async Task RunAnalyticsFlusherAsync(CancellationToken ct)
     {
         using var timer = new PeriodicTimer(TimeSpan.FromSeconds(10), _timeProvider);
-        var batch = new List<AnalyticsEvent>(1000);
+        var batch = new List<AnalyticsEvent>(_maxBatchSize);
 
         while (!ct.IsCancellationRequested)
         {
@@ -505,7 +512,7 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService, ISegmentProvi
             while (_eventsChannel.Reader.TryRead(out var evt))
             {
                 batch.Add(evt);
-                if (batch.Count >= 1000)
+                if (batch.Count >= _maxBatchSize)
                     break;
             }
 
@@ -526,9 +533,13 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService, ISegmentProvi
                 else
                     _logger.LogWarning("[ToggleMesh] Failed to flush analytics events. Status: {StatusCode}. Keeping {Count} events for next tick.", response.StatusCode, batch.Count);
             }
+            catch (BrokenCircuitException)
+            {
+                _logger.LogTrace("[ToggleMesh] Circuit breaker open. Skipping analytics flush. Keeping {Count} events for next tick.", batch.Count);
+            }
             catch (Exception e)
             {
-                _logger.LogError(e, "[ToggleMesh] Error during analytics events flush. Keeping {Count} events for next tick.", batch.Count);
+                _logger.LogWarning(e, "[ToggleMesh] Error during analytics events flush. Keeping {Count} events for next tick.", batch.Count);
             }
         }
     }
@@ -566,9 +577,10 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService, ISegmentProvi
         }
     }
 
-        private async Task EnsureConnectedLoopAsync(CancellationToken ct)
+    private async Task EnsureConnectedLoopAsync(CancellationToken ct)
     {
         if (Interlocked.CompareExchange(ref _isConnecting, 1, 0) != 0) return;
+        var backoff = 1.0;
 
         try
         {
@@ -637,9 +649,16 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService, ISegmentProvi
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogTrace(ex, "[ToggleMesh] Background connection attempt failed. Retrying in 5s.");
-                    await Task.Delay(TimeSpan.FromSeconds(5), _timeProvider, ct);
+                    _logger.LogTrace(ex, "[ToggleMesh] Background connection attempt failed. Retrying in {backoff}s.", backoff);
                 }
+
+                if (ct.IsCancellationRequested) break;
+
+                var jitter = Random.Shared.NextDouble();
+                var waitTime = TimeSpan.FromSeconds(backoff + jitter);
+                await Task.Delay(waitTime, _timeProvider, ct);
+                
+                backoff = Math.Min(backoff * 2, 30.0);
             }
         }
         finally

@@ -37,4 +37,12 @@ public class ToggleMeshOptions
     /// Maximum number of analytics events that can be buffered in memory before dropping new ones.
     /// </summary>
     public int AnalyticsChannelCapacity { get; set; } = 10000;
+    /// <summary>
+    /// Maximum number of unique metric keys (flags) that can be aggregated in memory before dropping new ones.
+    /// </summary>
+    public int MetricsBufferCapacity { get; set; } = 10000;
+    /// <summary>
+    /// Maximum number of items in a single analytics flush batch to the server.
+    /// </summary>
+    public int MaxBatchSize { get; set; } = 2000;
 }

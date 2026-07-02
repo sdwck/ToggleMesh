@@ -16,7 +16,7 @@ public class ContextAccessorGenerator : IIncrementalGenerator
             .CreateSyntaxProvider(
                 predicate: static (s, _) => s is TypeDeclarationSyntax { AttributeLists.Count: > 0 },
                 transform: static (ctx, _) => GetSemanticTargetForGeneration(ctx))
-            .Where(static m => m is not null)!;
+            .Where(static m => m is not null);
 
         var compilationAndTypes = context.CompilationProvider.Combine(provider.Collect());
 
