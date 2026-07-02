@@ -9,9 +9,15 @@ type ToggleMeshOptions struct {
 	BaseURL                string
 	APIKey                 string
 	RefreshIntervalSeconds int
-	DisableSSLVerification bool
-	Logger                 *slog.Logger
-	HTTPClient             *http.Client
+	DisableSSLVerification   bool
+	UseFallbackFile          bool
+	FallbackFilePath         string
+	IsMetricsEnabled         *bool
+	AnalyticsChannelCapacity int
+	MetricsBufferCapacity    int
+	MaxBatchSize             int
+	Logger                   *slog.Logger
+	HTTPClient               *http.Client
 }
 
 type RuleDto struct {

@@ -35,6 +35,20 @@ func NewClient(options *ToggleMeshOptions) (*ToggleMeshClient, error) {
 		options.HTTPClient = &http.Client{Transport: tr}
 	}
 
+	if options.AnalyticsChannelCapacity <= 0 {
+		options.AnalyticsChannelCapacity = 10000
+	}
+	if options.MetricsBufferCapacity <= 0 {
+		options.MetricsBufferCapacity = 10000
+	}
+	if options.MaxBatchSize <= 0 {
+		options.MaxBatchSize = 2000
+	}
+	if options.IsMetricsEnabled == nil {
+		t := true
+		options.IsMetricsEnabled = &t
+	}
+
 	client := &ToggleMeshClient{
 		options:       options,
 		flagsCache:    make(map[string]CachedFlag),
@@ -43,6 +57,8 @@ func NewClient(options *ToggleMeshOptions) (*ToggleMeshClient, error) {
 	
 	client.ruleEngine = NewRuleEngine(client)
 	client.analytics = newAnalyticsQueue(client)
+
+	client.LoadFallback()
 
 	if err := client.syncState(); err != nil {
 		fmt.Printf("ERROR: Failed initial state sync: %v\n", err)

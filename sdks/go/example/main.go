@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"time"
-
 	"github.com/sdwck/ToggleMesh/sdks/go/togglemesh"
 )
 
@@ -27,7 +26,7 @@ func main() {
 			"UserId": uid,
 		}
 
-		enabled := client.IsEnabled("gmail-21percent", false, uid, context)
+		enabled := client.IsEnabled(Gmail20percent, false, uid, context)
 		
 		if enabled {
 			client.Track("go_gmail_checked", 1.0, uid, context)

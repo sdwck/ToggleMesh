@@ -4,11 +4,17 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"math"
+	"math/rand"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -23,7 +29,7 @@ func (c *ToggleMeshClient) syncState() error {
 	}
 
 	req.Header.Set("x-api-key", c.options.APIKey)
-	req.Header.Set("x-sdk-version", "go-0.2.2")
+	req.Header.Set("x-sdk-version", "go-0.2.4")
 
 	resp, err := c.options.HTTPClient.Do(req)
 	if err != nil {
@@ -83,11 +89,73 @@ func (c *ToggleMeshClient) syncState() error {
 	}
 	c.mu.Unlock()
 
+	c.saveFallback(data)
 	return nil
+}
+
+func (c *ToggleMeshClient) resolveFallbackPath() string {
+	if c.options.FallbackFilePath != "" {
+		return c.options.FallbackFilePath
+	}
+	hash := sha256.Sum256([]byte(c.options.APIKey))
+	hashStr := hex.EncodeToString(hash[:])[:12]
+	cwd, _ := os.Getwd()
+	return filepath.Join(cwd, ".togglemesh", hashStr+".json")
+}
+
+func (c *ToggleMeshClient) saveFallback(data SdkGetFlagsResponse) {
+	if !c.options.UseFallbackFile {
+		return
+	}
+	path := c.resolveFallbackPath()
+	os.MkdirAll(filepath.Dir(path), 0755)
+	b, err := json.Marshal(data)
+	if err == nil {
+		_ = os.WriteFile(path+".tmp", b, 0644)
+		_ = os.Rename(path+".tmp", path)
+	}
+}
+
+func (c *ToggleMeshClient) LoadFallback() {
+	if !c.options.UseFallbackFile {
+		return
+	}
+	path := c.resolveFallbackPath()
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return
+	}
+	var data SdkGetFlagsResponse
+	if err := json.Unmarshal(b, &data); err != nil {
+		return
+	}
+	
+	c.mu.Lock()
+	c.flagsCache = make(map[string]CachedFlag)
+	for _, f := range data.Flags {
+		c.flagsCache[f.Key] = CachedFlag{
+			Key:                f.Key,
+			IsEnabled:          f.IsEnabled,
+			RolloutPercentage:  f.RolloutPercentage,
+			IsExperimentActive: f.IsExperimentActive,
+			Groups:             c.ruleEngine.CompileRules(f.Rules),
+			OriginalDto:        f,
+		}
+	}
+	c.segmentsCache = make(map[string]CachedSegment)
+	for _, s := range data.Segments {
+		c.segmentsCache[s.ID] = CachedSegment{
+			ID:     s.ID,
+			Name:   s.Name,
+			Groups: c.ruleEngine.CompileRules(s.Rules),
+		}
+	}
+	c.mu.Unlock()
 }
 
 func (c *ToggleMeshClient) startSSE() {
 	go func() {
+		backoff := 1.0
 		for {
 			err := c.connectSSE()
 			if err != nil {
@@ -95,7 +163,14 @@ func (c *ToggleMeshClient) startSSE() {
 					c.options.Logger.Error("SSE connection dropped", "error", err)
 				}
 			}
-			time.Sleep(3 * time.Second)
+
+			jitter := rand.Float64()
+			waitTime := time.Duration((backoff + jitter) * float64(time.Second))
+			time.Sleep(waitTime)
+
+			backoff = math.Min(backoff*2.0, 30.0)
+
+			_ = c.syncState()
 		}
 	}()
 }

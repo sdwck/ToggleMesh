@@ -36,7 +36,7 @@ func newAnalyticsQueue(client *ToggleMeshClient) *analyticsQueue {
 	q := &analyticsQueue{
 		client:        client,
 		metricsBuffer: make(map[string]*FlagMetrics),
-		eventsQueue:   make(chan EventDto, 10000),
+		eventsQueue:   make(chan EventDto, client.options.AnalyticsChannelCapacity),
 	}
 	go q.metricsWorker()
 	go q.eventsWorker()
@@ -44,11 +44,17 @@ func newAnalyticsQueue(client *ToggleMeshClient) *analyticsQueue {
 }
 
 func (q *analyticsQueue) updateMetrics(flagKey string, result bool) {
+	if q.client.options.IsMetricsEnabled != nil && !*q.client.options.IsMetricsEnabled {
+		return
+	}
 	q.metricsMu.Lock()
 	defer q.metricsMu.Unlock()
 
 	m, ok := q.metricsBuffer[flagKey]
 	if !ok {
+		if len(q.metricsBuffer) >= q.client.options.MetricsBufferCapacity {
+			return
+		}
 		m = &FlagMetrics{}
 		q.metricsBuffer[flagKey] = m
 	}
@@ -60,6 +66,9 @@ func (q *analyticsQueue) updateMetrics(flagKey string, result bool) {
 }
 
 func (q *analyticsQueue) queueEvent(eventType int, identity string, flagKey string, result *bool, eventName string, properties map[string]any, value *float64) {
+	if q.client.options.IsMetricsEnabled != nil && !*q.client.options.IsMetricsEnabled {
+		return
+	}
 	evt := EventDto{
 		Type:       eventType,
 		Timestamp:  time.Now().UnixMilli(),
@@ -147,7 +156,7 @@ func (q *analyticsQueue) flushMetrics() {
 
 func (q *analyticsQueue) flushEvents() {
 	var batch []EventDto
-	for len(batch) < 1000 {
+	for len(batch) < q.client.options.MaxBatchSize {
 		select {
 		case evt := <-q.eventsQueue:
 			batch = append(batch, evt)
