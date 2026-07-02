@@ -1,6 +1,6 @@
 using FastEndpoints;
 
-namespace ToggleMesh.API.Features.Auth.Endpoints.SsoStatus;
+namespace ToggleMesh.API.Features.Auth.SsoStatus;
 
 public class SsoStatusEndpoint : EndpointWithoutRequest<SsoStatusResponse>
 {

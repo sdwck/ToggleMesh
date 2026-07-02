@@ -1,7 +1,7 @@
 using Microsoft.Extensions.Caching.Memory;
 using StackExchange.Redis;
 
-namespace ToggleMesh.API.BackgroundServices.Caching.Handlers;
+namespace ToggleMesh.API.Infrastructure.BackgroundServices.Caching.Handlers;
 
 public class ApiKeyInvalidationHandler : ICacheInvalidationHandler
 {

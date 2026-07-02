@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Check, ChevronsUpDown, Plus } from 'lucide-react';
-import { useOrganizations, useCreateOrganization } from '@/api/queries';
+import { useOrganizations, useCreateOrganization, useSystemConfig } from '@/api/queries';
 import { useOrganizationStore } from '@/stores/useOrganizationStore';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -29,6 +29,7 @@ export function OrganizationSwitcher() {
     const { data: organizations, isLoading } = useOrganizations();
     const createOrganization = useCreateOrganization();
     const { activeOrganizationId, setActiveOrganizationId } = useOrganizationStore();
+    const { data: systemConfig } = useSystemConfig();
     
     const [isCreateOpen, setIsCreateOpen] = useState(false);
     const [newOrgName, setNewOrgName] = useState('');
@@ -98,18 +99,22 @@ export function OrganizationSwitcher() {
                         ))}
                     </div>
                     
-                    <DropdownMenuSeparator className="bg-border/40" />
-                    <DropdownMenuItem 
-                        onSelect={(e) => {
-                            e.preventDefault();
-                            setIsCreateOpen(true);
-                            setDropdownOpen(false);
-                        }}
-                        className="cursor-pointer text-muted-foreground focus:text-foreground"
-                    >
-                        <Plus className="mr-2 h-4 w-4" />
-                        <span>Create Organization</span>
-                    </DropdownMenuItem>
+                    {systemConfig?.allowUserOrganizationCreation === true && (
+                        <>
+                            <DropdownMenuSeparator className="bg-border/40" />
+                            <DropdownMenuItem 
+                                onSelect={(e) => {
+                                    e.preventDefault();
+                                    setIsCreateOpen(true);
+                                    setDropdownOpen(false);
+                                }}
+                                className="cursor-pointer text-muted-foreground focus:text-foreground"
+                            >
+                                <Plus className="mr-2 h-4 w-4" />
+                                <span>Create Organization</span>
+                            </DropdownMenuItem>
+                        </>
+                    )}
                 </DropdownMenuContent>
             </DropdownMenu>
 

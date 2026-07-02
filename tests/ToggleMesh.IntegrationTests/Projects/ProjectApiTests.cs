@@ -3,19 +3,24 @@ using System.Net.Http.Json;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using ToggleMesh.API.Features.Projects;
+using ToggleMesh.API.Features.Organizations.Domain;
 using ToggleMesh.API.Features.Projects.AddMember;
 using ToggleMesh.API.Features.Projects.CreateProject;
+using ToggleMesh.API.Features.Projects.Domain;
 using ToggleMesh.API.Features.Projects.GetMembers;
 using ToggleMesh.API.Features.Projects.GetProject;
 using ToggleMesh.API.Features.Projects.GetProjects;
-using ToggleMesh.API.Persistence;
+using ToggleMesh.API.Infrastructure.Data;
+using ToggleMesh.API.Infrastructure.Security.Authorization.Models;
 using ToggleMesh.IntegrationTests.Infrastructure;
 
 namespace ToggleMesh.IntegrationTests.Projects;
 
-public class ProjectApiTests : IClassFixture<TestWebApplicationFactory>
+[Collection("SharedEnv1")]
+public class ProjectApiTests : IAsyncLifetime
 {
+    public async Task InitializeAsync() => await _factory.ResetDatabaseAsync();
+    public Task DisposeAsync() => Task.CompletedTask;
     private readonly HttpClient _client;
     private readonly TestWebApplicationFactory _factory;
 
@@ -36,18 +41,18 @@ public class ProjectApiTests : IClassFixture<TestWebApplicationFactory>
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Created);
-        
+
         var result = await response.Content.ReadFromJsonAsync<CreateProjectResponse>();
         result.Should().NotBeNull();
-        result!.Name.Should().Be("New Integration Test Project");
+        result.Name.Should().Be("New Integration Test Project");
         result.Id.Should().NotBeEmpty();
 
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var project = await db.Projects.Include(p => p.Environments).FirstOrDefaultAsync(p => p.Id == result.Id);
-        
+
         project.Should().NotBeNull();
-        project!.Environments.Should().HaveCount(2);
+        project.Environments.Should().HaveCount(2);
         project.Environments.Select(e => e.Name).Should().Contain(["Development", "Production"]);
     }
 
@@ -63,7 +68,7 @@ public class ProjectApiTests : IClassFixture<TestWebApplicationFactory>
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
-        
+
         var result = await response.Content.ReadFromJsonAsync<Common.Pagination.PagedResponse<ProjectListDto>>();
         result.Should().NotBeNull();
         result.Items.Should().Contain(p => p.Name == "List Test Project");
@@ -81,10 +86,10 @@ public class ProjectApiTests : IClassFixture<TestWebApplicationFactory>
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
-        
+
         var result = await response.Content.ReadFromJsonAsync<GetProjectResponse>();
         result.Should().NotBeNull();
-        result!.Id.Should().Be(createdProject.Id);
+        result.Id.Should().Be(createdProject.Id);
         result.Name.Should().Be("Details Test Project");
         result.Environments.Should().HaveCount(2);
     }
@@ -97,22 +102,22 @@ public class ProjectApiTests : IClassFixture<TestWebApplicationFactory>
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
         var project = new Project { Name = "Member Test Project" };
-        db.Projects.Add(project); db.ProjectMembers.Add(new ToggleMesh.API.Features.Projects.ProjectMember { Project = project, UserId = Guid.Parse(ToggleMesh.IntegrationTests.Infrastructure.TestAuthHandler.TestUserId), Role = ToggleMesh.API.Features.Projects.ProjectRole.Owner });
+        db.Projects.Add(project); db.ProjectMembers.Add(new ProjectMember { Project = project, UserId = Guid.Parse(TestAuthHandler.TestUserId), Role = ProjectRole.Owner });
 
-        var newUser = new API.Features.Auth.Models.ApplicationUser
+        var newUser = new ApplicationUser
         {
             Id = Guid.CreateVersion7(),
             UserName = "newuser@example.com",
             Email = "newuser@example.com"
         };
         db.Users.Add(newUser);
-        
-        db.OrganizationMembers.Add(new ToggleMesh.API.Features.Organizations.OrganizationMember
+
+        db.OrganizationMembers.Add(new OrganizationMember
         {
             Id = Guid.CreateVersion7(),
             OrganizationId = Guid.Parse("11111111-1111-1111-1111-111111111111"),
             UserId = newUser.Id,
-            Role = ToggleMesh.API.Features.Organizations.OrganizationRole.Member
+            Role = OrganizationRole.Member
         });
         await db.SaveChangesAsync();
 
@@ -140,7 +145,7 @@ public class ProjectApiTests : IClassFixture<TestWebApplicationFactory>
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
         var project = new Project { Name = "Get Members Test Project" };
-        db.Projects.Add(project); db.ProjectMembers.Add(new ToggleMesh.API.Features.Projects.ProjectMember { Project = project, UserId = Guid.Parse(ToggleMesh.IntegrationTests.Infrastructure.TestAuthHandler.TestUserId), Role = ToggleMesh.API.Features.Projects.ProjectRole.Owner });
+        db.Projects.Add(project); db.ProjectMembers.Add(new ProjectMember { Project = project, UserId = Guid.Parse(TestAuthHandler.TestUserId), Role = ProjectRole.Owner });
         await db.SaveChangesAsync();
 
         // Act
@@ -159,10 +164,10 @@ public class ProjectApiTests : IClassFixture<TestWebApplicationFactory>
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
-        var org = new API.Features.Organizations.Organization { Name = "Org Admin Test Org" };
+        var org = new Organization { Name = "Org Admin Test Org" };
         db.Organizations.Add(org);
 
-        var adminUser = new ToggleMesh.API.Features.Auth.Models.ApplicationUser
+        var adminUser = new ApplicationUser
         {
             Id = Guid.CreateVersion7(),
             UserName = "admin@example.com",
@@ -170,22 +175,22 @@ public class ProjectApiTests : IClassFixture<TestWebApplicationFactory>
         };
         db.Users.Add(adminUser);
 
-        db.OrganizationMembers.Add(new ToggleMesh.API.Features.Organizations.OrganizationMember
+        db.OrganizationMembers.Add(new OrganizationMember
         {
             Organization = org,
             UserId = adminUser.Id,
-            Role = ToggleMesh.API.Features.Organizations.OrganizationRole.Admin
+            Role = OrganizationRole.Admin
         });
 
         var project = new Project { Name = "Org Admin Test Project", Organization = org };
-        db.Projects.Add(project); 
-        
+        db.Projects.Add(project);
+
         var testUserId = Guid.Parse(TestAuthHandler.TestUserId);
-        db.OrganizationMembers.Add(new API.Features.Organizations.OrganizationMember
+        db.OrganizationMembers.Add(new OrganizationMember
         {
             Organization = org,
             UserId = testUserId,
-            Role = ToggleMesh.API.Features.Organizations.OrganizationRole.Admin
+            Role = OrganizationRole.Admin
         });
 
         await db.SaveChangesAsync();
@@ -197,7 +202,7 @@ public class ProjectApiTests : IClassFixture<TestWebApplicationFactory>
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var members = await response.Content.ReadFromJsonAsync<List<MemberDto>>();
         members.Should().NotBeNull();
-        
+
         var adminMember = members.FirstOrDefault(m => m.UserId == adminUser.Id.ToString());
         adminMember.Should().NotBeNull();
         adminMember.Role.Should().Be(ProjectRole.Owner);

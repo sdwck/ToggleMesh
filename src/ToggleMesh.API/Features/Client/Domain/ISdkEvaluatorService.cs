@@ -1,6 +1,6 @@
 using ToggleMesh.API.Features.Client.SdkEvaluateFlags;
 
-namespace ToggleMesh.API.Features.Client;
+namespace ToggleMesh.API.Features.Client.Domain;
 
 public interface ISdkEvaluatorService
 {

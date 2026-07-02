@@ -1,7 +1,7 @@
 using ToggleMesh.API.Infrastructure.Endpoints;
 using ToggleMesh.API.Infrastructure.Sse;
 
-namespace ToggleMesh.API.Features.RealTime;
+namespace ToggleMesh.API.Features.RealTime.RealTimeStream;
 
 public class RealTimeStreamEndpoint : ToggleEndpointWithoutRequest
 {
@@ -42,7 +42,7 @@ public class RealTimeStreamEndpoint : ToggleEndpointWithoutRequest
             {
                 tcs.TrySetException(ex);
             }
-        }, ct);
+        }, () => tcs.TrySetResult(), ct);
 
         await response.WriteAsync("event: connected\n", ct);
         await response.WriteAsync($"data: {{\"connectionId\": \"{connectionId}\"}}\n\n", ct);
@@ -67,6 +67,7 @@ public class RealTimeStreamEndpoint : ToggleEndpointWithoutRequest
         finally
         {
             tcs.TrySetResult();
+            _sseService.RemoveConnection(connectionId);
         }
     }
 }

@@ -1,4 +1,4 @@
-﻿namespace ToggleMesh.API.Features.Flags.UpdateMetadata;
+namespace ToggleMesh.API.Features.Flags.UpdateMetadata;
 
 public class UpdateFlagMetadataRequest
 {

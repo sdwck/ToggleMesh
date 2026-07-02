@@ -1,4 +1,4 @@
-﻿namespace ToggleMesh.API.Features.Analytics.GetProjectHistoricalExperiments;
+namespace ToggleMesh.API.Features.Analytics.GetProjectHistoricalExperiments;
 
 public class ProjectHistoricalExperimentDto
 {
@@ -9,4 +9,5 @@ public class ProjectHistoricalExperimentDto
     public DateTimeOffset StartedAt { get; set; }
     public DateTimeOffset EndedAt { get; set; }
     public string FinalMetricsSnapshot { get; set; } = "[]";
+    public string FlagConfigSnapshot { get; set; } = "{}";
 }

@@ -2,17 +2,21 @@ using System.Net;
 using System.Net.Http.Json;
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
+using ToggleMesh.API.Features.Flags.Domain;
 using ToggleMesh.API.Features.Flags.Get;
-using ToggleMesh.API.Features.Projects;
 using ToggleMesh.API.Features.Projects.CreateKey;
+using ToggleMesh.API.Features.Projects.Domain;
+using ToggleMesh.API.Infrastructure.Data;
 using ToggleMesh.API.Infrastructure.Security;
-using ToggleMesh.API.Persistence;
 using ToggleMesh.IntegrationTests.Infrastructure;
 
 namespace ToggleMesh.IntegrationTests.Security;
 
-public class SecurityIntegrationTests : IClassFixture<TestWebApplicationFactory>
+[Collection("SharedEnv1")]
+public class SecurityIntegrationTests : IAsyncLifetime
 {
+    public async Task InitializeAsync() => await _factory.ResetDatabaseAsync();
+    public Task DisposeAsync() => Task.CompletedTask;
     private readonly HttpClient _client;
     private readonly TestWebApplicationFactory _factory;
 
@@ -49,13 +53,13 @@ public class SecurityIntegrationTests : IClassFixture<TestWebApplicationFactory>
 
         // Act
         var createResponse = await _client.PostAsJsonAsync(
-            $"/api/v1/projects/{project.Id}/environments/{env.Id}/keys", 
-            new CreateKeyRequest 
-            { 
-                Name = "Server Key", 
-                Type = KeyType.Server 
+            $"/api/v1/projects/{project.Id}/environments/{env.Id}/keys",
+            new CreateKeyRequest
+            {
+                Name = "Server Key",
+                Type = KeyType.Server
             });
-        
+
         createResponse.StatusCode.Should().Be(HttpStatusCode.OK);
         var createResult = await createResponse.Content.ReadFromJsonAsync<CreateKeyResponse>();
         createResult.Should().NotBeNull();
@@ -87,9 +91,9 @@ public class SecurityIntegrationTests : IClassFixture<TestWebApplicationFactory>
         db.Projects.Add(project); db.ProjectMembers.Add(new ProjectMember { Project = project, UserId = Guid.Parse(TestAuthHandler.TestUserId), Role = ProjectRole.Owner });
         var env = new ProjectEnvironment { Name = "Dev", Project = project };
         db.Environments.Add(env);
-        var flag = new API.Features.Flags.FeatureFlag { Key = "cached_flag", Project = project };
+        var flag = new FeatureFlag { Key = "cached_flag", Project = project };
         db.FeatureFlags.Add(flag);
-        var state = new API.Features.Flags.FlagEnvironmentState { FeatureFlag = flag, Environment = env, IsEnabled = true };
+        var state = new FlagEnvironmentState { FeatureFlag = flag, Environment = env, IsEnabled = true };
         db.FlagEnvironmentStates.Add(state);
         await db.SaveChangesAsync();
 
@@ -98,14 +102,14 @@ public class SecurityIntegrationTests : IClassFixture<TestWebApplicationFactory>
         resp1.StatusCode.Should().Be(HttpStatusCode.OK);
 
         var resp2 = await _client.GetAsync(url);
-        
+
         // Assert
         resp2.StatusCode.Should().Be(HttpStatusCode.OK);
         var result = await resp2.Content.ReadFromJsonAsync<GetFlagResponse>();
         result!.Key.Should().Be("cached_flag");
         result.IsEnabled.Should().BeTrue();
     }
-    
+
     [Fact]
     public async Task ApiKey_Use_ShouldUpdateLastUsedAt()
     {
@@ -118,7 +122,7 @@ public class SecurityIntegrationTests : IClassFixture<TestWebApplicationFactory>
         db.ProjectMembers.Add(new ProjectMember { Project = project, UserId = Guid.Parse(TestAuthHandler.TestUserId), Role = ProjectRole.Owner });
         var env = new ProjectEnvironment { Name = "Staging LastUsed", Project = project };
         db.Environments.Add(env);
-        
+
         var plainKey = Guid.NewGuid().ToString("N");
         var keyHash = ApiKeyHasher.Hash(plainKey);
         var key = new EnvironmentKey
@@ -134,17 +138,17 @@ public class SecurityIntegrationTests : IClassFixture<TestWebApplicationFactory>
         await db.SaveChangesAsync();
 
         key.LastUsedAt.Should().BeNull("Key should not have a LastUsedAt timestamp initially.");
-        
+
         // Act
         var sdkRequest = new HttpRequestMessage(HttpMethod.Get, "/api/v1/sdk/flags");
         sdkRequest.Headers.Add("x-api-key", plainKey);
         var response = await _client.SendAsync(sdkRequest);
         response.StatusCode.Should().Be(HttpStatusCode.OK);
-        
+
         // Assert
         db.ChangeTracker.Clear();
         var dbKey = await db.EnvironmentKeys.FindAsync(key.Id);
         dbKey!.LastUsedAt.Should().NotBeNull();
-        dbKey.LastUsedAt.Value.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
+        dbKey.LastUsedAt.Value.Should().BeCloseTo(_factory.TimeProvider.GetUtcNow().UtcDateTime, TimeSpan.FromSeconds(5));
     }
 }

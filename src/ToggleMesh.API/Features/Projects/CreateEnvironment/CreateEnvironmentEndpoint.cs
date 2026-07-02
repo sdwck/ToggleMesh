@@ -1,8 +1,11 @@
 using Microsoft.EntityFrameworkCore;
 using ToggleMesh.API.Extensions;
-using ToggleMesh.API.Infrastructure;
+using ToggleMesh.API.Features.Flags.Domain;
+using ToggleMesh.API.Features.Projects.Domain;
+using ToggleMesh.API.Infrastructure.Data;
 using ToggleMesh.API.Infrastructure.Endpoints;
-using ToggleMesh.API.Persistence;
+using AuthModels = ToggleMesh.API.Infrastructure.Security.Authorization.Models;
+
 
 namespace ToggleMesh.API.Features.Projects.CreateEnvironment;
 
@@ -19,7 +22,7 @@ public class CreateEnvironmentEndpoint : ToggleEndpoint<CreateEnvironmentRequest
     {
         Post("/projects/{projectId}/environments");
         Version(1);
-        this.RequirePermission(Auth.Models.Permissions.EnvironmentsCreate);
+        this.RequirePermission(AuthModels.Permissions.EnvironmentsCreate);
     }
 
     public override async Task HandleAsync(CreateEnvironmentRequest req, CancellationToken ct)
@@ -50,7 +53,7 @@ public class CreateEnvironmentEndpoint : ToggleEndpoint<CreateEnvironmentRequest
         var existingFlags = await _db.FeatureFlags.Where(f => f.ProjectId == projectId).ToListAsync(ct);
         foreach (var flag in existingFlags)
         {
-            _db.FlagEnvironmentStates.Add(new Flags.FlagEnvironmentState
+            _db.FlagEnvironmentStates.Add(new FlagEnvironmentState
             {
                 FeatureFlag = flag,
                 Environment = env,

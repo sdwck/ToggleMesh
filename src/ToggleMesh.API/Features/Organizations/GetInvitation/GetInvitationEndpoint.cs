@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore;
+using ToggleMesh.API.Infrastructure.Data;
 using ToggleMesh.API.Infrastructure.Endpoints;
-using ToggleMesh.API.Persistence;
 
 namespace ToggleMesh.API.Features.Organizations.GetInvitation;
 
@@ -32,9 +32,7 @@ public class GetInvitationEndpoint : ToggleEndpoint<GetInvitationRequest, Organi
         }
 
         if (invite.ExpiresAt < DateTimeOffset.UtcNow)
-        {
             ThrowError("This invitation has expired.");
-        }
 
         await Send.OkAsync(new OrganizationInvitationDto
         {

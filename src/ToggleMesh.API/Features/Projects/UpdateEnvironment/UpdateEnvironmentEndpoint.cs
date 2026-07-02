@@ -1,10 +1,10 @@
-﻿using Microsoft.EntityFrameworkCore;
-using FastEndpoints;
+using Microsoft.EntityFrameworkCore;
 using ToggleMesh.API.Extensions;
-using ToggleMesh.API.Persistence;
-using ToggleMesh.API.Infrastructure;
 using ToggleMesh.API.Infrastructure.Caching;
+using ToggleMesh.API.Infrastructure.Data;
 using ToggleMesh.API.Infrastructure.Endpoints;
+using AuthModels = ToggleMesh.API.Infrastructure.Security.Authorization.Models;
+
 
 namespace ToggleMesh.API.Features.Projects.UpdateEnvironment;
 
@@ -23,7 +23,7 @@ public class UpdateEnvironmentEndpoint : ToggleEndpoint<UpdateEnvironmentRequest
     {
         Put("/projects/{projectId:guid}/environments/{environmentId:guid}");
         Version(1);
-        this.RequirePermission(Auth.Models.Permissions.EnvironmentsEdit);
+        this.RequirePermission(AuthModels.Permissions.EnvironmentsEdit);
     }
 
     public override async Task HandleAsync(UpdateEnvironmentRequest req, CancellationToken ct)

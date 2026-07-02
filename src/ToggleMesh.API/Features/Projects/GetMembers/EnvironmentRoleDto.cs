@@ -1,4 +1,6 @@
-﻿namespace ToggleMesh.API.Features.Projects.GetMembers;
+using ToggleMesh.API.Features.Projects.Domain;
+
+namespace ToggleMesh.API.Features.Projects.GetMembers;
 
 public class EnvironmentRoleDto
 {

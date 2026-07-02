@@ -1,7 +1,7 @@
-using ToggleMesh.API.Features.Auth.Models;
 using ToggleMesh.API.Infrastructure.Data.Abstractions;
+using ToggleMesh.API.Infrastructure.Security.Authorization.Models;
 
-namespace ToggleMesh.API.Features.Organizations;
+namespace ToggleMesh.API.Features.Organizations.Domain;
 
 public class OrganizationMember : AuditableEntity
 {

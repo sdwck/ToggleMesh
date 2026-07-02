@@ -1,4 +1,4 @@
-namespace ToggleMesh.API.Features.Auth.Endpoints.Register;
+namespace ToggleMesh.API.Features.Auth.Register;
 
 public class RegisterResponse
 {

@@ -1,5 +1,5 @@
 ﻿using FastEndpoints;
-using ToggleMesh.API.Features.Projects;
+using ToggleMesh.API.Features.Projects.Domain;
 using ToggleMesh.API.Infrastructure;
 
 namespace ToggleMesh.API.Features.Flags.SdkGetAll;

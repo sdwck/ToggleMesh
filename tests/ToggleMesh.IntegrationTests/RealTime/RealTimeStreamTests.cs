@@ -2,15 +2,18 @@ using System.Net;
 using System.Net.Http.Json;
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
-using ToggleMesh.API.Features.Projects.CreateProject;
 using ToggleMesh.API.Features.Flags.Create;
+using ToggleMesh.API.Features.Projects.CreateProject;
 using ToggleMesh.API.Infrastructure.Sse;
 using ToggleMesh.IntegrationTests.Infrastructure;
 
 namespace ToggleMesh.IntegrationTests.RealTime;
 
-public class RealTimeStreamTests : IClassFixture<TestWebApplicationFactory>
+[Collection("SharedEnv1")]
+public class RealTimeStreamTests : IAsyncLifetime
 {
+    public async Task InitializeAsync() => await _factory.ResetDatabaseAsync();
+    public Task DisposeAsync() => Task.CompletedTask;
     private readonly HttpClient _client;
     private readonly TestWebApplicationFactory _factory;
     private static readonly Guid TestOrgId = Guid.Parse("11111111-1111-1111-1111-111111111111");
@@ -30,24 +33,24 @@ public class RealTimeStreamTests : IClassFixture<TestWebApplicationFactory>
         var receivedEvents = new List<(string EventName, string Data)>();
         using var cts = new CancellationTokenSource();
 
-        sseService.Subscribe(testUserId, (eventName, data) =>
+        sseService.CreateConnection(testUserId, (eventName, data) =>
         {
             lock (receivedEvents)
             {
                 receivedEvents.Add((eventName, data));
             }
             return Task.CompletedTask;
-        }, cts.Token);
+        }, () => { }, cts.Token);
 
         // Act
         var request = new CreateProjectRequest { Name = "SSE Test Project", OrganizationId = TestOrgId };
-        var response = await _client.PostAsJsonAsync("/api/v1/projects", request);
+        var response = await _client.PostAsJsonAsync("/api/v1/projects", request, cancellationToken: cts.Token);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Created);
 
-        await Task.Delay(200);
-        cts.Cancel();
+        await Task.Delay(200, cts.Token);
+        await cts.CancelAsync();
 
         lock (receivedEvents)
         {
@@ -67,29 +70,29 @@ public class RealTimeStreamTests : IClassFixture<TestWebApplicationFactory>
         var receivedEvents = new List<(string EventName, string Data)>();
         using var cts = new CancellationTokenSource();
 
-        sseService.Subscribe(testUserId, (eventName, data) =>
+        sseService.CreateConnection(testUserId, (eventName, data) =>
         {
             lock (receivedEvents)
             {
                 receivedEvents.Add((eventName, data));
             }
             return Task.CompletedTask;
-        }, cts.Token);
+        }, () => { }, cts.Token);
 
         var projectRequest = new CreateProjectRequest { Name = "SSE Flag Project", OrganizationId = TestOrgId };
-        var projectResponse = await _client.PostAsJsonAsync("/api/v1/projects", projectRequest);
+        var projectResponse = await _client.PostAsJsonAsync("/api/v1/projects", projectRequest, cancellationToken: cts.Token);
         projectResponse.StatusCode.Should().Be(HttpStatusCode.Created);
-        var project = await projectResponse.Content.ReadFromJsonAsync<CreateProjectResponse>();
+        var project = await projectResponse.Content.ReadFromJsonAsync<CreateProjectResponse>(cancellationToken: cts.Token);
         project.Should().NotBeNull();
 
         // Act
         var flagRequest = new CreateFlagRequest { Key = "sse_flag" };
-        var flagResponse = await _client.PostAsJsonAsync($"/api/v1/projects/{project!.Id}/flags", flagRequest);
+        var flagResponse = await _client.PostAsJsonAsync($"/api/v1/projects/{project.Id}/flags", flagRequest, cancellationToken: cts.Token);
         flagResponse.StatusCode.Should().Be(HttpStatusCode.Created);
 
         // Assert
-        await Task.Delay(200);
-        cts.Cancel();
+        await Task.Delay(200, cts.Token);
+        await cts.CancelAsync();
 
         lock (receivedEvents)
         {

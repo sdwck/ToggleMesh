@@ -1,4 +1,6 @@
-﻿namespace ToggleMesh.API.Features.Projects.CreateKey;
+using ToggleMesh.API.Features.Projects.Domain;
+
+namespace ToggleMesh.API.Features.Projects.CreateKey;
 
 public class CreateKeyResponse
 {

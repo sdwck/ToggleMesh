@@ -1,4 +1,4 @@
-namespace ToggleMesh.API.Features.Auth.Endpoints.SsoTicketExchange;
+namespace ToggleMesh.API.Features.Auth.SsoTicketExchange;
 
 public class SsoTicketExchangeRequest
 {

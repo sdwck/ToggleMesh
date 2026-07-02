@@ -7,7 +7,8 @@ public static class ClaimsPrincipalExtensions
 {
     public static Guid GetUserId(this ClaimsPrincipal principal)
     {
-        var value = principal.FindFirstValue(JwtRegisteredClaimNames.Sub) ?? principal.FindFirstValue(ClaimTypes.NameIdentifier);
+        var value = principal.FindFirstValue(JwtRegisteredClaimNames.Sub) 
+                    ?? principal.FindFirstValue(ClaimTypes.NameIdentifier);
         return Guid.TryParse(value, out var id)
             ? id
             : throw new InvalidOperationException("User ID claim is missing or invalid.");

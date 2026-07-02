@@ -3,16 +3,19 @@ using System.Net.Http.Json;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using ToggleMesh.API.Features.Auth.Models;
-using ToggleMesh.API.Features.Projects;
+using ToggleMesh.API.Features.Projects.Domain;
 using ToggleMesh.API.Features.Projects.UpdateMember;
+using ToggleMesh.API.Infrastructure.Data;
+using ToggleMesh.API.Infrastructure.Security.Authorization.Models;
 using ToggleMesh.IntegrationTests.Infrastructure;
 
 namespace ToggleMesh.IntegrationTests.Projects;
 
-[Collection("Sequential")]
-public class ProjectMembersApiTests : IClassFixture<TestWebApplicationFactory>
+[Collection("SharedEnv1")]
+public class ProjectMembersApiTests : IAsyncLifetime
 {
+    public async Task InitializeAsync() => await _factory.ResetDatabaseAsync();
+    public Task DisposeAsync() => Task.CompletedTask;
     private readonly TestWebApplicationFactory _factory;
     private readonly HttpClient _client;
 
@@ -25,12 +28,12 @@ public class ProjectMembersApiTests : IClassFixture<TestWebApplicationFactory>
     private async Task<(Guid ProjectId, Guid TargetUserId)> SeedProjectAndMembersAsync()
     {
         using var scope = _factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<ToggleMesh.API.Persistence.AppDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
         var project = new Project { Name = "Members Test Project" };
-        
+
         var ownerUser = await db.Users.SingleAsync(u => u.Email == TestAuthHandler.TestUserEmail);
-        
+
         var targetUser = new ApplicationUser
         {
             Id = Guid.CreateVersion7(),
@@ -38,14 +41,14 @@ public class ProjectMembersApiTests : IClassFixture<TestWebApplicationFactory>
             UserName = "targetuser@example.com"
         };
         db.Users.Add(targetUser);
-        
+
         db.ProjectMembers.Add(new ProjectMember
         {
             Project = project,
             UserId = ownerUser.Id,
             Role = ProjectRole.Owner
         });
-        
+
         db.ProjectMembers.Add(new ProjectMember
         {
             Project = project,
@@ -73,7 +76,7 @@ public class ProjectMembersApiTests : IClassFixture<TestWebApplicationFactory>
         response.StatusCode.Should().Be(HttpStatusCode.NoContent);
 
         using var scope = _factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<ToggleMesh.API.Persistence.AppDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var updatedMember = await db.ProjectMembers.SingleAsync(m => m.ProjectId == projectId && m.UserId == targetUserId);
         updatedMember.Role.Should().Be(ProjectRole.Editor);
     }
@@ -83,8 +86,8 @@ public class ProjectMembersApiTests : IClassFixture<TestWebApplicationFactory>
     {
         // Arrange
         using var scope = _factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<ToggleMesh.API.Persistence.AppDbContext>();
-        
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
         var ownerUser = await db.Users.SingleAsync(u => u.Email == TestAuthHandler.TestUserEmail);
         var project = new Project { Name = "Self Update Test" };
         db.ProjectMembers.Add(new ProjectMember { Project = project, UserId = ownerUser.Id, Role = ProjectRole.Owner });
@@ -113,7 +116,7 @@ public class ProjectMembersApiTests : IClassFixture<TestWebApplicationFactory>
         response.StatusCode.Should().Be(HttpStatusCode.NoContent);
 
         using var scope = _factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<ToggleMesh.API.Persistence.AppDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var memberExists = await db.ProjectMembers.AnyAsync(m => m.ProjectId == projectId && m.UserId == targetUserId);
         memberExists.Should().BeFalse();
     }
@@ -123,8 +126,8 @@ public class ProjectMembersApiTests : IClassFixture<TestWebApplicationFactory>
     {
         // Arrange
         using var scope = _factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<ToggleMesh.API.Persistence.AppDbContext>();
-        
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
         var ownerUser = await db.Users.SingleAsync(u => u.Email == TestAuthHandler.TestUserEmail);
         var project = new Project { Name = "Self Delete Test" };
         db.ProjectMembers.Add(new ProjectMember { Project = project, UserId = ownerUser.Id, Role = ProjectRole.Owner });

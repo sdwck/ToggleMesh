@@ -1,9 +1,9 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using ToggleMesh.API.Extensions;
-using ToggleMesh.API.Persistence;
-using ToggleMesh.API.Infrastructure;
 using ToggleMesh.API.Infrastructure.Caching;
+using ToggleMesh.API.Infrastructure.Data;
 using ToggleMesh.API.Infrastructure.Endpoints;
+using AuthModels = ToggleMesh.API.Infrastructure.Security.Authorization.Models;
 
 namespace ToggleMesh.API.Features.Flags.UpdateMetadata;
 
@@ -22,7 +22,7 @@ public class UpdateFlagMetadataEndpoint : ToggleEndpoint<UpdateFlagMetadataReque
     {
         Put("/projects/{projectId:guid}/flags/{key}/metadata");
         Version(1);
-        this.RequirePermission(Auth.Models.Permissions.FlagsEdit);
+        this.RequirePermission(AuthModels.Permissions.FlagsEdit);
     }
 
     public override async Task HandleAsync(UpdateFlagMetadataRequest req, CancellationToken ct)

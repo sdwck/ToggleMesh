@@ -1,32 +1,31 @@
-using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using StackExchange.Redis;
 using ToggleMesh.API.Extensions;
-using ToggleMesh.API.Hubs;
-using ToggleMesh.API.Infrastructure;
 using ToggleMesh.API.Infrastructure.Caching;
+using ToggleMesh.API.Infrastructure.Data;
 using ToggleMesh.API.Infrastructure.Endpoints;
-using ToggleMesh.API.Persistence;
+using ToggleMesh.API.Infrastructure.Streaming;
+using AuthModels = ToggleMesh.API.Infrastructure.Security.Authorization.Models;
 
 namespace ToggleMesh.API.Features.Flags.Delete;
 
 public class DeleteFlagEndpoint : ToggleEndpointWithoutRequest
 {
     private readonly AppDbContext _db;
-    private readonly IHubContext<ToggleHub> _hubContext;
+    private readonly IToggleEventPublisher _publisher;
     private readonly ILogger<DeleteFlagEndpoint> _logger;
     private readonly IDatabase _redis;
     private readonly ICacheInvalidator _cacheInvalidator;
 
     public DeleteFlagEndpoint(
         AppDbContext db,
-        IHubContext<ToggleHub> hubContext,
+        IToggleEventPublisher publisher,
         ILogger<DeleteFlagEndpoint> logger,
         IConnectionMultiplexer redis,
         ICacheInvalidator cacheInvalidator)
     {
         _db = db;
-        _hubContext = hubContext;
+        _publisher = publisher;
         _logger = logger;
         _cacheInvalidator = cacheInvalidator;
         _redis = redis.GetDatabase();
@@ -36,13 +35,13 @@ public class DeleteFlagEndpoint : ToggleEndpointWithoutRequest
     {
         Delete("/projects/{projectId:guid}/flags/{key}");
         Version(1);
-        this.RequirePermission(Auth.Models.Permissions.FlagsDelete);
+        this.RequirePermission(AuthModels.Permissions.FlagsDelete);
     }
 
     public override async Task HandleAsync(CancellationToken ct)
     {
         var projectId = Route<Guid>("projectId");
-        var key = Route<string>("key");
+        var key = Route<string>("key")!;
 
         var flag = await _db.FeatureFlags
             .Include(f => f.States)
@@ -63,7 +62,7 @@ public class DeleteFlagEndpoint : ToggleEndpointWithoutRequest
         {
             try
             {
-                var cacheKey = $"flags:{envId}:{key}";
+                var cacheKey = CacheKeys.FlagState(envId, key);
                 await _redis.KeyDeleteAsync(cacheKey);
                 await _cacheInvalidator.InvalidateEnvironmentCacheAsync(envId);
             }
@@ -74,13 +73,9 @@ public class DeleteFlagEndpoint : ToggleEndpointWithoutRequest
 
             try
             {
-                await _hubContext.Clients
-                    .Group(envId.ToString())
-                    .SendAsync("FlagUpdated", new { Key = key, IsDeleted = true }, ct);
+                await _publisher.PublishEventAsync(envId.ToString(), "FlagUpdated", new { Key = key, IsDeleted = true });
                 
-                await _hubContext.Clients
-                    .Group(envId.ToString())
-                    .SendAsync("StateReloadRequired", ct);
+                await _publisher.PublishEventAsync<object?>(envId.ToString(), "StateReloadRequired", null);
             }
             catch (Exception e)
             {

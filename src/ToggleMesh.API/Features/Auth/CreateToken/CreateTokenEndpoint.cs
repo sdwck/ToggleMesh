@@ -1,10 +1,10 @@
 using System.Security.Cryptography;
-using ToggleMesh.API.Features.Auth.Models;
 using ToggleMesh.API.Infrastructure.Data;
 using ToggleMesh.API.Infrastructure.Endpoints;
 using ToggleMesh.API.Infrastructure.Security;
+using ToggleMesh.API.Infrastructure.Security.Authorization.Models;
 
-namespace ToggleMesh.API.Features.Auth.Endpoints.CreateToken;
+namespace ToggleMesh.API.Features.Auth.CreateToken;
 
 public class CreateTokenEndpoint : ToggleEndpoint<CreateTokenRequest, CreateTokenResponse>
 {

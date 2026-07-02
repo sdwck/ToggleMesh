@@ -1,9 +1,10 @@
 using Microsoft.AspNetCore.Identity;
-using ToggleMesh.API.Features.Auth.Models;
 using ToggleMesh.API.Infrastructure.Data;
 using ToggleMesh.API.Infrastructure.Endpoints;
+using ToggleMesh.API.Infrastructure.Security.Authorization;
+using ToggleMesh.API.Infrastructure.Security.Authorization.Models;
 
-namespace ToggleMesh.API.Features.Auth.Endpoints.Login;
+namespace ToggleMesh.API.Features.Auth.Login;
 
 public class LoginEndpoint : ToggleEndpoint<LoginRequest, LoginResponse>
 {
@@ -32,10 +33,10 @@ public class LoginEndpoint : ToggleEndpoint<LoginRequest, LoginResponse>
         var user = await _userManager.FindByEmailAsync(req.Email);
         
         if (user == null || !await _userManager.CheckPasswordAsync(user, req.Password))
-            ThrowError("Invalid email or password");
+            ThrowError("Invalid email or password", 401);
 
         if (!user.EmailConfirmed)
-            ThrowError("Please confirm your email address before logging in.");
+            ThrowError("Please confirm your email address before logging in.", 401);
 
         var (accessToken, refreshToken) = await TokenGenerator.GenerateTokensAsync(user, _userManager, _configuration, _timeProvider);
 

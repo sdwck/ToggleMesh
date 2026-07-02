@@ -1,4 +1,6 @@
-﻿namespace ToggleMesh.API.Features.Projects.GetKeys;
+using ToggleMesh.API.Features.Projects.Domain;
+
+namespace ToggleMesh.API.Features.Projects.GetKeys;
 
 public class GetKeysResponse
 {

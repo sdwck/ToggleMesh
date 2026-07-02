@@ -9,7 +9,7 @@ using ToggleMesh.API.Infrastructure.Data;
 using ToggleMesh.Common.Contexts;
 using ToggleMesh.Common.Rules;
 
-namespace ToggleMesh.API.Features.Client;
+namespace ToggleMesh.API.Features.Client.Domain;
 
 public class SdkEvaluatorService : ISdkEvaluatorService
 {
@@ -17,17 +17,20 @@ public class SdkEvaluatorService : ISdkEvaluatorService
     private readonly IRuleEngine _ruleEngine;
     private readonly IDatabase _redis;
     private readonly IMemoryCache _memoryCache;
+    private readonly IConfiguration _config;
 
     public SdkEvaluatorService(
         AppDbContext db, 
         IRuleEngine ruleEngine, 
         IConnectionMultiplexer redis, 
-        IMemoryCache memoryCache)
+        IMemoryCache memoryCache,
+        IConfiguration config)
     {
         _db = db;
         _ruleEngine = ruleEngine;
         _redis = redis.GetDatabase();
         _memoryCache = memoryCache;
+        _config = config;
     }
 
     private static readonly List<string> DefaultIdentityKeys 
@@ -40,7 +43,7 @@ public class SdkEvaluatorService : ISdkEvaluatorService
         var cacheResult = await _memoryCache.GetOrCreateAsync(memoryCacheKey, async entry =>
         {
             entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5);
-            var redisCacheKey = CacheKeys.SdkFlagsStates(envId);
+            var redisCacheKey = CacheKeys.SdkCompiledRules(envId);
             
             var redisValue = await _redis.StringGetAsync(redisCacheKey);
             List<FlagStateDto> dtoList;
@@ -53,7 +56,9 @@ public class SdkEvaluatorService : ISdkEvaluatorService
                     .AsNoTracking()
                     .Include(x => x.FeatureFlag)
                     .Include(x => x.Rules)
+                    .Include(x => x.ContextualRollouts)
                     .Where(x => x.EnvironmentId == envId)
+                    .AsSplitQuery()
                     .ToListAsync(ct);
 
                 dtoList = states.Select(x => new FlagStateDto(
@@ -69,11 +74,13 @@ public class SdkEvaluatorService : ISdkEvaluatorService
                             xx.Value)
                     ).ToList(),
                     x.ContextPartitionKeys,
-                    x.ContextualRollouts
+                    x.ContextualRollouts?.ToDictionary(c => c.ContextSlice, c => c.RolloutPercentage),
+                    x.IsExperimentActive
                 )).ToList();
 
                 var json = JsonSerializer.Serialize(dtoList);
-                await _redis.StringSetAsync(redisCacheKey, json, TimeSpan.FromMinutes(10));
+                var ttl = TimeSpan.FromMinutes(_config.GetValue("Caching:DefaultTtlMinutes", 10));
+                await _redis.StringSetAsync(redisCacheKey, json, ttl);
             }
 
             var result = new List<CompiledFlagState>(dtoList.Count);
@@ -85,7 +92,8 @@ public class SdkEvaluatorService : ISdkEvaluatorService
                     dto.IsClientSideExposed,
                     _ruleEngine.CompileRules(dto.Rules),
                     dto.ContextPartitionKeys,
-                    dto.ContextualRollouts));
+                    dto.ContextualRollouts,
+                    dto.IsExperimentActive));
 
             return result;
         });

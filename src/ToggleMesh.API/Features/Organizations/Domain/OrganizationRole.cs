@@ -1,4 +1,4 @@
-namespace ToggleMesh.API.Features.Organizations;
+namespace ToggleMesh.API.Features.Organizations.Domain;
 
 public enum OrganizationRole
 {

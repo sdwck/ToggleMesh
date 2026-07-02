@@ -1,10 +1,11 @@
-﻿using Microsoft.EntityFrameworkCore;
-using FastEndpoints;
+using Microsoft.EntityFrameworkCore;
 using ToggleMesh.API.Extensions;
-using ToggleMesh.API.Persistence;
 using ToggleMesh.API.Infrastructure;
 using ToggleMesh.API.Infrastructure.Caching;
+using ToggleMesh.API.Infrastructure.Data;
 using ToggleMesh.API.Infrastructure.Endpoints;
+using AuthModels = ToggleMesh.API.Infrastructure.Security.Authorization.Models;
+
 
 namespace ToggleMesh.API.Features.Projects.DeleteEnvironment;
 
@@ -28,7 +29,7 @@ public class DeleteEnvironmentEndpoint : ToggleEndpointWithoutRequest
     {
         Delete("/projects/{projectId:guid}/environments/{environmentId:guid}");
         Version(1);
-        this.RequirePermission(Auth.Models.Permissions.EnvironmentsDelete);
+        this.RequirePermission(AuthModels.Permissions.EnvironmentsDelete);
     }
 
     public override async Task HandleAsync(CancellationToken ct)
@@ -40,11 +41,7 @@ public class DeleteEnvironmentEndpoint : ToggleEndpointWithoutRequest
             .CountAsync(e => e.ProjectId == projectId, ct);
 
         if (envCount <= 1)
-        {
-            AddError("A project must have at least one environment. You cannot delete the last one.");
-            await Send.ErrorsAsync(cancellation: ct);
-            return;
-        }
+            ThrowError("A project must have at least one environment. You cannot delete the last one.", 400);
 
         var env = await _db.Environments
             .Include(e => e.Keys)
@@ -59,8 +56,23 @@ public class DeleteEnvironmentEndpoint : ToggleEndpointWithoutRequest
         foreach (var key in env.Keys)
             await _apiKeyCache.RemoveEnvironmentIdAsync(key.KeyHash, ct);
 
-        _db.Environments.Remove(env);
-        await _db.SaveChangesAsync(ct);
+        await using var transaction = await _db.Database.BeginTransactionAsync(ct);
+        try
+        {
+            var keysToDelete = await _db.EnvironmentKeys
+                .Where(k => k.EnvironmentId == environmentId)
+                .ToListAsync(ct);
+            _db.EnvironmentKeys.RemoveRange(keysToDelete);
+
+            _db.Environments.Remove(env);
+            await _db.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+        }
+        catch
+        {
+            await transaction.RollbackAsync(ct);
+            throw;
+        }
 
         await _cacheInvalidator.InvalidateEnvironmentCacheAsync(environmentId);
 

@@ -1,11 +1,13 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using ToggleMesh.API.Features.Auth.Models;
-using ToggleMesh.API.Infrastructure.Endpoints;
-using ToggleMesh.API.Infrastructure.Sse;
-using ToggleMesh.API.Persistence;
-using StackExchange.Redis;
 using Microsoft.Extensions.Caching.Memory;
+using StackExchange.Redis;
+using ToggleMesh.API.Features.Organizations.Domain;
+using ToggleMesh.API.Infrastructure.Caching;
+using ToggleMesh.API.Infrastructure.Data;
+using ToggleMesh.API.Infrastructure.Endpoints;
+using ToggleMesh.API.Infrastructure.Security.Authorization.Models;
+using ToggleMesh.API.Infrastructure.Sse;
 
 namespace ToggleMesh.API.Features.Organizations.AcceptInvitation;
 
@@ -53,14 +55,12 @@ public class AcceptInvitationEndpoint : ToggleEndpoint<AcceptInvitationRequest, 
             .AnyAsync(m => m.OrganizationId == invite.OrganizationId && m.UserId == user.Id, ct);
 
         if (!exists)
-        {
             _db.OrganizationMembers.Add(new OrganizationMember
             {
                 OrganizationId = invite.OrganizationId,
                 UserId = user.Id,
                 Role = invite.Role
             });
-        }
 
         _db.OrganizationInvitations.Remove(invite);
         await _db.SaveChangesAsync(ct);
@@ -72,12 +72,17 @@ public class AcceptInvitationEndpoint : ToggleEndpoint<AcceptInvitationRequest, 
             .Select(p => p.Id)
             .ToListAsync(ct);
 
+        var redisKeys = projectIds
+            .Select(pId => (RedisKey)CacheKeys.ProjectMemberState(pId, user.Id))
+            .ToArray();
+
+        if (redisKeys.Length > 0)
+            await _redis.KeyDeleteAsync(redisKeys);
+
         foreach (var pId in projectIds)
         {
             await _sseService.BroadcastAsync("invalidate", new { queryKey = new object[] { "projects", pId, "members" } });
-            var cacheKey = $"project-member-state:{pId}:{user.Id}";
-            await _redis.KeyDeleteAsync(cacheKey);
-            _memoryCache.Remove(cacheKey);
+            _memoryCache.Remove(CacheKeys.ProjectMemberState(pId, user.Id));
         }
 
         await Send.OkAsync(new AcceptInvitationResponse { OrganizationId = invite.OrganizationId }, cancellation: ct);

@@ -1,45 +1,49 @@
 using System.IdentityModel.Tokens.Jwt;
-using System.Threading.RateLimiting;
-using Microsoft.AspNetCore.RateLimiting;
 using System.Threading.Channels;
+using System.Threading.RateLimiting;
 using FastEndpoints;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Caching.Hybrid;
 using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
 using StackExchange.Redis;
-using ToggleMesh.API.BackgroundServices;
-using ToggleMesh.API.BackgroundServices.Auth;
-using ToggleMesh.API.BackgroundServices.Caching;
-using ToggleMesh.API.BackgroundServices.Metrics;
-using ToggleMesh.API.BackgroundServices.Webhooks;
 using ToggleMesh.API.Exceptions;
-using ToggleMesh.API.Features.Auth.Authorization;
-using ToggleMesh.API.Features.Auth.Models;
-using ToggleMesh.API.Features.Client;
-using ToggleMesh.API.Features.Metrics;
-using ToggleMesh.API.Features.Webhooks;
-using ToggleMesh.API.Hubs;
+using ToggleMesh.API.Features.Analytics.Ingest;
+using ToggleMesh.API.Features.Analytics.Services;
+using ToggleMesh.API.Features.Client.Domain;
+using ToggleMesh.API.Features.Metrics.Domain;
+using ToggleMesh.API.Features.Metrics.Workers;
+using ToggleMesh.API.Features.Webhooks.Domain;
+using ToggleMesh.API.Features.Webhooks.Workers;
 using ToggleMesh.API.Infrastructure;
+using ToggleMesh.API.Infrastructure.BackgroundServices.Caching;
+using ToggleMesh.API.Infrastructure.BackgroundServices.Database;
+using ToggleMesh.API.Infrastructure.BackgroundServices.Email;
 using ToggleMesh.API.Infrastructure.Caching;
+using ToggleMesh.API.Infrastructure.Data;
+using ToggleMesh.API.Infrastructure.Data.Interceptors;
+using ToggleMesh.API.Infrastructure.Data.Interceptors.Audit;
 using ToggleMesh.API.Infrastructure.Email;
 using ToggleMesh.API.Infrastructure.Security;
+using ToggleMesh.API.Infrastructure.Security.Authorization;
+using ToggleMesh.API.Infrastructure.Security.Authorization.Models;
+using ToggleMesh.API.Infrastructure.Security.Authorization.Workers;
 using ToggleMesh.API.Infrastructure.Sse;
-using ToggleMesh.API.Persistence;
-using ToggleMesh.API.Persistence.Interceptors;
-using ToggleMesh.API.Persistence.Interceptors.Audit;
+using ToggleMesh.API.Infrastructure.Streaming;
 using ToggleMesh.Common.Rules;
 using ToggleMesh.Common.Rules.Operators;
+using ToggleMesh.API.Features.Flags.Experiments.Stop;
 
 JwtSecurityTokenHandler.DefaultInboundClaimTypeMap.Clear();
 var builder = WebApplication.CreateBuilder(args);
+ApiKeyHasher.Pepper = builder.Configuration["Security:ApiKeyPepper"] ?? "DefaultToggleMeshPepperSecret123!";
 builder.Services.AddOpenApi();
-builder.Services.AddSignalR()
-    .AddStackExchangeRedis(builder.Configuration.GetConnectionString("Redis")!);
+builder.Services.AddSingleton<ISseConnectionManager, SseConnectionManager>();
+builder.Services.AddSingleton<IAesEncryptionService, AesEncryptionService>();
+builder.Services.AddSingleton<IToggleEventPublisher, RedisToggleEventPublisher>();
 
 builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
     ConnectionMultiplexer.Connect(builder.Configuration.GetConnectionString("Redis")!));
@@ -64,9 +68,9 @@ builder.Services.AddSingleton<IRuleOperator, SemVerLessThanOrEqualOperator>();
 builder.Services.AddSingleton<IRuleOperator, StartsWithOperator>();
 builder.Services.AddSingleton<IRuleEngine, RuleEngine>();
 builder.Services.AddScoped<ISdkEvaluatorService, SdkEvaluatorService>();
-builder.Services.AddScoped<SmtpEmailSender>();
+builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
 builder.Services.AddScoped<IEmailSender, DatabaseOutboxEmailSender>();
-builder.Services.AddHostedService<ToggleMesh.API.BackgroundServices.Email.EmailOutboxWorker>();
+builder.Services.AddSingleton<IEmailTemplateService, ScribanEmailTemplateService>();
 
 builder.Services.AddScoped<IApiKeyCacheService, ApiKeyCacheService>();
 builder.Services.AddSingleton(TimeProvider.System);
@@ -76,9 +80,14 @@ builder.Services.AddSingleton<SoftDeletableInterceptor>();
 builder.Services.AddSingleton<UpdateAuditableInterceptor>();
 builder.Services.AddSingleton<AuditInterceptor>();
 builder.Services.AddSingleton<RealTimeInvalidationInterceptor>();
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")!;
+var npgsqlDataSourceBuilder = new Npgsql.NpgsqlDataSourceBuilder(connectionString);
+npgsqlDataSourceBuilder.EnableDynamicJson();
+var npgsqlDataSource = npgsqlDataSourceBuilder.Build();
+
 builder.Services.AddDbContext<AppDbContext>((serviceProvider, options) =>
 {
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"));
+    options.UseNpgsql(npgsqlDataSource);
     options.AddInterceptors(
         serviceProvider.GetRequiredService<SoftDeletableInterceptor>(),
         serviceProvider.GetRequiredService<UpdateAuditableInterceptor>(),
@@ -87,7 +96,6 @@ builder.Services.AddDbContext<AppDbContext>((serviceProvider, options) =>
 });
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
-builder.Services.AddHostedService<MetricsWorker>();
 builder.Services.AddSingleton(Channel.CreateBounded<MetricQueueItem>(new BoundedChannelOptions(100000)
 {
     FullMode = BoundedChannelFullMode.DropOldest
@@ -95,11 +103,11 @@ builder.Services.AddSingleton(Channel.CreateBounded<MetricQueueItem>(new Bounded
 
 builder.Services.AddIdentityCore<ApplicationUser>(options =>
     {
-        options.Password.RequireDigit = false;
-        options.Password.RequireLowercase = false;
-        options.Password.RequireNonAlphanumeric = false;
-        options.Password.RequireUppercase = false;
-        options.Password.RequiredLength = 6;
+        options.Password.RequireDigit = builder.Configuration.GetValue("Auth:PasswordPolicy:RequireDigit", true);
+        options.Password.RequireLowercase = builder.Configuration.GetValue("Auth:PasswordPolicy:RequireLowercase", true);
+        options.Password.RequireNonAlphanumeric = builder.Configuration.GetValue("Auth:PasswordPolicy:RequireNonAlphanumeric", true);
+        options.Password.RequireUppercase = builder.Configuration.GetValue("Auth:PasswordPolicy:RequireUppercase", true);
+        options.Password.RequiredLength = builder.Configuration.GetValue("Auth:PasswordPolicy:MinimumLength", 8);
         options.User.RequireUniqueEmail = true;
     })
     .AddRoles<IdentityRole<Guid>>()
@@ -167,7 +175,8 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AdminUI", policy =>
     {
-        policy.WithOrigins("http://localhost:5173")
+        var frontendUrl = builder.Configuration["Auth:FrontendUrl"] ?? "http://localhost:5173";
+        policy.WithOrigins(frontendUrl)
             .AllowAnyHeader()
             .AllowAnyMethod()
             .AllowCredentials();
@@ -187,19 +196,29 @@ builder.Services.AddRateLimiter(options =>
     var authLimit = builder.Configuration.GetValue("RateLimits:Auth", 10);
     var sdkLimit = builder.Configuration.GetValue("RateLimits:Sdk", 1000);
     
-    options.AddFixedWindowLimiter("auth", o =>
+    options.AddPolicy("auth", context =>
     {
-        o.Window = TimeSpan.FromMinutes(1);
-        o.PermitLimit = authLimit;
-        o.QueueLimit = 0;
+        var ip = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        return RateLimitPartition.GetFixedWindowLimiter(ip, _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = authLimit,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0
+        });
     });
 
-    options.AddSlidingWindowLimiter("sdk", o =>
+    options.AddPolicy("sdk", context =>
     {
-        o.Window = TimeSpan.FromMinutes(1);
-        o.SegmentsPerWindow = 4;
-        o.PermitLimit = sdkLimit;
-        o.QueueLimit = 0;
+        var apiKey = context.Request.Headers["x-api-key"].ToString();
+        var partitionKey = string.IsNullOrEmpty(apiKey) ? context.Connection.RemoteIpAddress?.ToString() : apiKey;
+
+        return RateLimitPartition.GetSlidingWindowLimiter(partitionKey ?? "unknown", _ => new SlidingWindowRateLimiterOptions
+        {
+            PermitLimit = sdkLimit,
+            Window = TimeSpan.FromMinutes(1),
+            SegmentsPerWindow = 4,
+            QueueLimit = 0
+        });
     });
 });
 
@@ -209,7 +228,6 @@ builder.Services.AddSingleton<IAuthorizationPolicyProvider, PermissionPolicyProv
 builder.Services.AddScoped<IAuthorizationHandler, PermissionAuthorizationHandler>();
 builder.Services.AddSingleton<ICacheInvalidator, RedisCacheInvalidator>();
 builder.Services.AddSingleton<ISseService, SseService>();
-builder.Services.AddHostedService<CacheInvalidationWorker>();
 builder.Services.Scan(x =>
     x.FromAssemblies(typeof(IAuditAnalyzer).Assembly)
         .AddClasses(xx => xx.AssignableTo<IAuditAnalyzer>())
@@ -223,6 +241,39 @@ builder.Services.Scan(x =>
 builder.Services.AddHttpClient("WebhookClient", client =>
 {
     client.Timeout = TimeSpan.FromSeconds(10);
+})
+.ConfigurePrimaryHttpMessageHandler(() =>
+{
+    return new SocketsHttpHandler
+    {
+        ConnectCallback = async (context, ct) =>
+        {
+            var host = context.DnsEndPoint.Host;
+            var addresses = await System.Net.Dns.GetHostAddressesAsync(host, ct);
+
+            foreach (var ip in addresses)
+            {
+                if (SsrfValidator.IsPrivateOrLocal(ip))
+                {
+                    throw new System.Security.SecurityException($"DNS Rebinding Protection: IP {ip} is private or local.");
+                }
+            }
+
+            var targetIp = addresses[0];
+            var socket = new System.Net.Sockets.Socket(targetIp.AddressFamily, System.Net.Sockets.SocketType.Stream, System.Net.Sockets.ProtocolType.Tcp);
+            try
+            {
+                socket.NoDelay = true;
+                await socket.ConnectAsync(new System.Net.IPEndPoint(targetIp, context.DnsEndPoint.Port), ct);
+                return new System.Net.Sockets.NetworkStream(socket, ownsSocket: true);
+            }
+            catch
+            {
+                socket.Dispose();
+                throw;
+            }
+        }
+    };
 });
 
 builder.Services.AddSingleton(Channel.CreateBounded<WebhookEvent>(
@@ -231,12 +282,51 @@ builder.Services.AddSingleton(Channel.CreateBounded<WebhookEvent>(
         FullMode = BoundedChannelFullMode.DropOldest
     }));
 
+builder.Services.AddHostedService<CacheInvalidationWorker>();
+builder.Services.AddHostedService<WebhookCleanupWorker>();
+builder.Services.AddHostedService<PartitioningWorker>();
+builder.Services.AddHostedService<SseRedisSubscriber>();
+builder.Services.AddHostedService<RefreshTokenCleanupService>();
+builder.Services.AddHostedService<EmailOutboxWorker>();
+builder.Services.AddHostedService<MetricsWorker>();
+builder.Services.AddHostedService<AnomalyWorker>();
 builder.Services.AddHostedService<WebhookDispatcherService>();
 builder.Services.AddHostedService<WebhookDeliveryWorker>();
-builder.Services.AddHostedService<WebhookCleanupWorker>();
-builder.Services.AddHostedService<RefreshTokenCleanupService>();
+builder.Services.AddHostedService<RollupWorker>();
+
+var publisherType = builder.Configuration["Analytics:Publisher"] ?? "InMemory";
+var storageType = builder.Configuration["Analytics:Storage"] ?? "PostgreSQL";
+
+if (publisherType.Equals("Kafka", StringComparison.OrdinalIgnoreCase))
+{
+    builder.Services.AddSingleton<IAnalyticsEventPublisher, KafkaAnalyticsPublisher>();
+    builder.Services.AddHostedService<KafkaAnalyticsConsumerWorker>();
+}
+else
+{
+    builder.Services.AddSingleton<InMemoryAnalyticsQueue>();
+    builder.Services.AddSingleton<IAnalyticsEventPublisher>(sp => sp.GetRequiredService<InMemoryAnalyticsQueue>());
+    builder.Services.AddHostedService<AnalyticsWorker>();
+}
+
+if (storageType.Equals("ClickHouse", StringComparison.OrdinalIgnoreCase))
+{
+    builder.Services.AddSingleton<IAnalyticsStorageSink, ClickHouseAnalyticsSink>();
+    builder.Services.AddScoped<IAnalyticsQueryEngine, ClickHouseQueryEngine>();
+}
+else
+{
+    builder.Services.AddSingleton<IAnalyticsStorageSink, PostgresAnalyticsSink>();
+    builder.Services.AddScoped<IAnalyticsQueryEngine, PostgresQueryEngine>();
+}
+
+builder.Services.AddSingleton<BayesianMathService>();
+builder.Services.AddScoped<ExperimentSnapshotBuilder>();
+builder.Services.AddScoped<IMabTrafficShifterService, MabTrafficShifterService>();
 
 var app = builder.Build();
+
+await app.ApplyMigrationsAndSeedAsync();
 
 app.UseExceptionHandler();
 
@@ -260,7 +350,6 @@ if (app.Environment.IsStaging() || app.Environment.IsProduction())
     app.UseHsts();
 }
 
-app.UseHttpsRedirection();
 app.UseCors("AdminUI");
 
 app.UseRateLimiter();
@@ -268,11 +357,8 @@ app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 
-if (app.Environment.IsDevelopment())
-{
-    app.MapOpenApi();
-    app.MapScalarApiReference();
-}
+app.MapOpenApi();
+app.MapScalarApiReference("/docs");
 
 app.UseFastEndpoints(c =>
 {
@@ -281,6 +367,4 @@ app.UseFastEndpoints(c =>
     c.Versioning.DefaultVersion = 1;
     c.Versioning.PrependToRoute = true;
 });
-app.MapHub<ToggleHub>("/api/v1/hubs/toggle");
-
 app.Run();

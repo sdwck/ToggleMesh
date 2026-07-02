@@ -29,14 +29,15 @@ export function ProjectSwitcher() {
 
     const handleSelect = (newProjectId: string) => {
         const currentPath = location.pathname;
-        let targetSection = 'flags';
-        if (currentPath.includes('/environments')) targetSection = 'environments';
-        else if (currentPath.includes('/members')) targetSection = 'members';
-        else if (currentPath.includes('/audit')) targetSection = 'audit';
-        else if (currentPath.includes('/settings')) targetSection = 'settings';
-        else if (currentPath.includes('/playground')) targetSection = 'playground';
+        let targetSection = '';
+        if (currentPath.includes('/environments')) targetSection = '/environments';
+        else if (currentPath.includes('/members')) targetSection = '/members';
+        else if (currentPath.includes('/audit')) targetSection = '/audit';
+        else if (currentPath.includes('/settings')) targetSection = '/settings';
+        else if (currentPath.includes('/playground')) targetSection = '/playground';
+        else if (currentPath.includes('/flags')) targetSection = '/flags';
 
-        navigate(`/projects/${newProjectId}/${targetSection}`);
+        navigate(`/projects/${newProjectId}${targetSection}`);
         setDropdownOpen(false);
     };
 

@@ -2,11 +2,16 @@ export interface ToggleMeshOptions {
     baseUrl: string;
     clientKey: string;
     refreshInterval?: number;
+    isMetricsEnabled?: boolean;
+    analyticsChannelCapacity?: number;
+    metricsBufferCapacity?: number;
+    maxBatchSize?: number;
 }
 
 export interface FlagState {
     key: string;
     isEnabled: boolean;
+    isExperimentActive?: boolean;
 }
 
 export type ToggleMeshListener = (flags: Record<string, boolean>) => void;
@@ -16,16 +21,58 @@ export class ToggleMeshClient {
     private clientKey: string;
     private refreshInterval: number;
     private flags: Record<string, boolean> = {};
+    private activeExperiments = new Set<string>();
     private listeners = new Set<ToggleMeshListener>();
 
     private currentIdentity: string = '';
     private currentContext: Record<string, string> = {};
     private intervalId: any = null;
+    private eventBuffer: any[] = [];
+    private metricsBuffer = new Map<string, { trueCount: number, falseCount: number }>();
+    private flushIntervalId: any = null;
+    private readonly EVENT_FLUSH_INTERVAL = 10000;
+    private readonly supportsKeepalive: boolean = false;
+
+    private isMetricsEnabled: boolean;
+    private analyticsChannelCapacity: number;
+    private metricsBufferCapacity: number;
+    private maxBatchSize: number;
 
     constructor(options: ToggleMeshOptions) {
         this.baseUrl = options.baseUrl.replace(/\/$/, '');
         this.clientKey = options.clientKey;
         this.refreshInterval = options.refreshInterval !== undefined ? options.refreshInterval : 60;
+        this.isMetricsEnabled = options.isMetricsEnabled !== false;
+        this.analyticsChannelCapacity = options.analyticsChannelCapacity || 10000;
+        this.metricsBufferCapacity = options.metricsBufferCapacity || 10000;
+        this.maxBatchSize = options.maxBatchSize || 20;
+
+        this.startEventFlushTimer();
+
+        if (typeof window !== 'undefined') {
+            this.supportsKeepalive = 'keepalive' in Request.prototype;
+            window.addEventListener('beforeunload', () => {
+                if (this.eventBuffer.length > 0) {
+                    const payload = JSON.stringify({ Events: [...this.eventBuffer] });
+                    this.eventBuffer = [];
+                    if (navigator.sendBeacon) {
+                        const blob = new Blob([payload], { type: 'application/json' });
+                        navigator.sendBeacon(`${this.baseUrl}/api/v1/sdk/events?x-api-key=${this.clientKey}`, blob);
+                    }
+                }
+                
+                const metricPayload: any[] = [];
+                for (const [key, m] of this.metricsBuffer.entries()) {
+                    if (m.trueCount > 0 || m.falseCount > 0) {
+                        metricPayload.push({ Key: key, TrueCount: m.trueCount, FalseCount: m.falseCount });
+                    }
+                }
+                if (metricPayload.length > 0 && navigator.sendBeacon) {
+                    const blob = new Blob([JSON.stringify(metricPayload)], { type: 'application/json' });
+                    navigator.sendBeacon(`${this.baseUrl}/api/v1/sdk/metrics?x-api-key=${this.clientKey}`, blob);
+                }
+            });
+        }
     }
 
     async identify(identity: string, context: Record<string, string> = {}): Promise<void> {
@@ -40,12 +87,62 @@ export class ToggleMeshClient {
         }
     }
 
-    
     isEnabled(flagKey: string, defaultValue = false): boolean {
-        return this.flags.hasOwnProperty(flagKey) ? this.flags[flagKey] : defaultValue;
+        const isEnabled = this.flags.hasOwnProperty(flagKey) ? this.flags[flagKey] : defaultValue;
+
+        if (this.isMetricsEnabled) {
+            if (!this.metricsBuffer.has(flagKey)) {
+                if (this.metricsBuffer.size < this.metricsBufferCapacity) {
+                    this.metricsBuffer.set(flagKey, { trueCount: 0, falseCount: 0 });
+                }
+            }
+            const m = this.metricsBuffer.get(flagKey);
+            if (m) {
+                if (isEnabled) m.trueCount++;
+                else m.falseCount++;
+            }
+        }
+
+        if (this.isMetricsEnabled && this.currentIdentity && this.activeExperiments.has(flagKey)) {
+            if (this.eventBuffer.length < this.analyticsChannelCapacity) {
+                this.eventBuffer.push({
+                    Type: 0,
+                    Timestamp: Date.now(),
+                    Identity: this.currentIdentity,
+                    EventName: flagKey,
+                    Properties: this.currentContext,
+                    Value: isEnabled ? 1 : 0
+                });
+
+                if (this.eventBuffer.length >= this.maxBatchSize) {
+                    this.flushEvents();
+                }
+            }
+        }
+
+        return isEnabled;
+    }
+
+    track(eventName: string, properties?: Record<string, any>, value?: number): void {
+        if (!this.isMetricsEnabled || !this.currentIdentity || !eventName) return;
+        if (this.eventBuffer.length >= this.analyticsChannelCapacity) return;
+
+        this.eventBuffer.push({
+            Type: 1,
+            Timestamp: Date.now(),
+            Identity: this.currentIdentity,
+            EventName: eventName,
+            Properties: properties,
+            Value: value
+        });
+
+        if (this.eventBuffer.length >= this.maxBatchSize) {
+            this.flushEvents();
+        }
     }
 
     clearIdentity(): void {
+        this.flushEvents();
         this.flags = {};
         this.currentIdentity = '';
         this.currentContext = {};
@@ -71,6 +168,80 @@ export class ToggleMeshClient {
         }
     }
 
+    private startEventFlushTimer(): void {
+        this.flushIntervalId = setInterval(() => {
+            this.flushEvents();
+            this.flushMetrics();
+        }, this.EVENT_FLUSH_INTERVAL);
+    }
+
+    private async flushMetrics(): Promise<void> {
+        if (this.metricsBuffer.size === 0) return;
+
+        const payload: any[] = [];
+        for (const [key, m] of this.metricsBuffer.entries()) {
+            if (m.trueCount > 0 || m.falseCount > 0) {
+                payload.push({ Key: key, TrueCount: m.trueCount, FalseCount: m.falseCount });
+                m.trueCount = 0;
+                m.falseCount = 0;
+            }
+        }
+
+        if (payload.length === 0) return;
+
+        try {
+            const fetchOptions: RequestInit = {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-api-key': this.clientKey
+                },
+                body: JSON.stringify(payload)
+            };
+
+            if (this.supportsKeepalive) {
+                fetchOptions.keepalive = true;
+            }
+
+            const response = await fetch(`${this.baseUrl}/api/v1/sdk/metrics`, fetchOptions);
+
+            if (!response.ok) {
+                console.warn(`[ToggleMesh] Failed to flush metrics: ${response.status}`);
+            }
+        } catch (error) {
+            console.error('[ToggleMesh] Network error during metrics flush.', error);
+        }
+    }
+
+    private async flushEvents(): Promise<void> {
+        if (this.eventBuffer.length === 0) return;
+
+        const eventsToSend = this.eventBuffer.splice(0, this.maxBatchSize);
+
+        try {
+            const fetchOptions: RequestInit = {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-api-key': this.clientKey
+                },
+                body: JSON.stringify({ Events: eventsToSend })
+            };
+
+            if (this.supportsKeepalive) {
+                fetchOptions.keepalive = true;
+            }
+
+            const response = await fetch(`${this.baseUrl}/api/v1/sdk/events`, fetchOptions);
+
+            if (!response.ok) {
+                console.warn(`[ToggleMesh] Failed to flush events: ${response.status}`);
+            }
+        } catch (error) {
+            console.error('[ToggleMesh] Network error during event flush.', error);
+        }
+    }
+
     private async fetchFlagsAsync(): Promise<void> {
         try {
             const response = await fetch(`${this.baseUrl}/api/v1/sdk/evaluate`, {
@@ -91,8 +262,14 @@ export class ToggleMeshClient {
             }
 
             const data: FlagState[] = await response.json();
+
+            this.activeExperiments.clear();
+
             this.flags = data.reduce((acc, flag) => {
                 acc[flag.key] = flag.isEnabled;
+                if (flag.isExperimentActive) {
+                    this.activeExperiments.add(flag.key);
+                }
                 return acc;
             }, {} as Record<string, boolean>);
 

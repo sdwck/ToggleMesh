@@ -1,4 +1,4 @@
-﻿using ToggleMesh.API.Features.Flags.Get;
+using ToggleMesh.API.Features.Flags.Domain;
 
 namespace ToggleMesh.API.Features.Flags.Create;
 

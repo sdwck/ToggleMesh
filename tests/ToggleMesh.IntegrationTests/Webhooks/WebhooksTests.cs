@@ -5,18 +5,21 @@ using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using ToggleMesh.API.Features.Flags.Create;
-using ToggleMesh.API.Features.Projects;
-using ToggleMesh.API.Features.Webhooks;
+using ToggleMesh.API.Features.Projects.Domain;
 using ToggleMesh.API.Features.Webhooks.CreateWebhook;
+using ToggleMesh.API.Features.Webhooks.Domain;
 using ToggleMesh.API.Features.Webhooks.UpdateWebhook;
 using ToggleMesh.API.Features.Webhooks.UpdateWebhookStatus;
-using ToggleMesh.API.Persistence;
+using ToggleMesh.API.Infrastructure.Data;
 using ToggleMesh.IntegrationTests.Infrastructure;
 
 namespace ToggleMesh.IntegrationTests.Webhooks;
 
-public class WebhooksTests : IClassFixture<TestWebApplicationFactory>
+[Collection("SharedEnv1")]
+public class WebhooksTests : IAsyncLifetime
 {
+    public async Task InitializeAsync() => await _factory.ResetDatabaseAsync();
+    public Task DisposeAsync() => Task.CompletedTask;
     private readonly HttpClient _client;
     private readonly TestWebApplicationFactory _factory;
 
@@ -96,7 +99,7 @@ public class WebhooksTests : IClassFixture<TestWebApplicationFactory>
         var env = new ProjectEnvironment { Name = "Prod_WH", Project = project };
         db.Environments.Add(env);
         await db.SaveChangesAsync();
-        
+
         var channel = _factory.Services.GetRequiredService<Channel<WebhookEvent>>();
         while (channel.Reader.TryRead(out _)) { }
 
@@ -184,7 +187,7 @@ public class WebhooksTests : IClassFixture<TestWebApplicationFactory>
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var result = await response.Content.ReadFromJsonAsync<Webhook>();
         result.Should().NotBeNull();
-        result!.Name.Should().Be("New Hook Name");
+        result.Name.Should().Be("New Hook Name");
         result.Url.Should().Be("https://example.com/new");
         result.Events.Should().ContainSingle(e => e == "flag.updated");
     }
@@ -262,7 +265,7 @@ public class WebhooksTests : IClassFixture<TestWebApplicationFactory>
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var result = await response.Content.ReadFromJsonAsync<Common.Pagination.PagedResponse<WebhookDelivery>>();
         result.Should().NotBeNull();
-        result!.Items.Should().ContainSingle(d => d.Id == delivery.Id);
+        result.Items.Should().ContainSingle(d => d.Id == delivery.Id);
     }
 
     [Fact]
@@ -306,7 +309,7 @@ public class WebhooksTests : IClassFixture<TestWebApplicationFactory>
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var deliveryInDb = await db.WebhookDeliveries.AsNoTracking().FirstOrDefaultAsync(d => d.Id == delivery.Id);
         deliveryInDb.Should().NotBeNull();
-        deliveryInDb!.Status.Should().Be(WebhookDeliveryStatus.Canceled);
+        deliveryInDb.Status.Should().Be(WebhookDeliveryStatus.Canceled);
     }
 
     [Fact]
@@ -351,7 +354,7 @@ public class WebhooksTests : IClassFixture<TestWebApplicationFactory>
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var deliveryInDb = await db.WebhookDeliveries.AsNoTracking().FirstOrDefaultAsync(d => d.Id == delivery.Id);
         deliveryInDb.Should().NotBeNull();
-        deliveryInDb!.Status.Should().Be(WebhookDeliveryStatus.Pending);
+        deliveryInDb.Status.Should().Be(WebhookDeliveryStatus.Pending);
         deliveryInDb.AttemptCount.Should().Be(0);
     }
 
@@ -391,6 +394,6 @@ public class WebhooksTests : IClassFixture<TestWebApplicationFactory>
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var hookInDb = await db.Webhooks.AsNoTracking().FirstOrDefaultAsync(h => h.Id == hook.Id);
         hookInDb.Should().NotBeNull();
-        hookInDb!.Status.Should().Be(WebhookStatus.Paused);
+        hookInDb.Status.Should().Be(WebhookStatus.Paused);
     }
 }

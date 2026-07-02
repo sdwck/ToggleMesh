@@ -2,7 +2,7 @@ using Microsoft.Extensions.Caching.Memory;
 using StackExchange.Redis;
 using ToggleMesh.API.Infrastructure.Caching;
 
-namespace ToggleMesh.API.BackgroundServices.Caching.Handlers;
+namespace ToggleMesh.API.Infrastructure.BackgroundServices.Caching.Handlers;
 
 public class EnvironmentFlagsInvalidationHandler : ICacheInvalidationHandler
 {
@@ -26,6 +26,7 @@ public class EnvironmentFlagsInvalidationHandler : ICacheInvalidationHandler
             var l2CacheKey = CacheKeys.SdkFlagsStates(envId);
 
             _memoryCache.Remove(l1CacheKey);
+            await _redis.KeyDeleteAsync(l1CacheKey);
             await _redis.KeyDeleteAsync(l2CacheKey);
         }
     }

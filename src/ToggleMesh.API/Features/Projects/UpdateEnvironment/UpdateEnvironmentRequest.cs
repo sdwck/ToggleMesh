@@ -1,4 +1,4 @@
-﻿namespace ToggleMesh.API.Features.Projects.UpdateEnvironment;
+namespace ToggleMesh.API.Features.Projects.UpdateEnvironment;
 
 public class UpdateEnvironmentRequest
 {

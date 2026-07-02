@@ -1,4 +1,4 @@
-namespace ToggleMesh.API.Features.Auth.Endpoints.SsoStatus;
+namespace ToggleMesh.API.Features.Auth.SsoStatus;
 
 public class SsoStatusResponse
 {

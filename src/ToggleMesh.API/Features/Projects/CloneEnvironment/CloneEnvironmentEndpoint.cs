@@ -1,26 +1,27 @@
-﻿using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using ToggleMesh.API.Extensions;
-using ToggleMesh.API.Hubs;
-using ToggleMesh.API.Infrastructure;
+using ToggleMesh.API.Features.Flags.Domain;
+using ToggleMesh.API.Infrastructure.Data;
 using ToggleMesh.API.Infrastructure.Endpoints;
-using ToggleMesh.API.Persistence;
+using ToggleMesh.API.Infrastructure.Streaming;
+using AuthModels = ToggleMesh.API.Infrastructure.Security.Authorization.Models;
+
 
 namespace ToggleMesh.API.Features.Projects.CloneEnvironment;
 
 public class CloneEnvironmentEndpoint : ToggleEndpointWithoutRequest
 {
     private readonly AppDbContext _db;
-    private readonly IHubContext<ToggleHub> _hubContext;
+    private readonly IToggleEventPublisher _publisher;
     private readonly ILogger<CloneEnvironmentEndpoint> _logger;
 
     public CloneEnvironmentEndpoint(
         AppDbContext db,
-        IHubContext<ToggleHub> hubContext,
+        IToggleEventPublisher publisher,
         ILogger<CloneEnvironmentEndpoint> logger)
     {
         _db = db;
-        _hubContext = hubContext;
+        _publisher = publisher;
         _logger = logger;
     }
 
@@ -28,7 +29,7 @@ public class CloneEnvironmentEndpoint : ToggleEndpointWithoutRequest
     {
         Post("/projects/{projectId:guid}/environments/{sourceEnvId:guid}/clone-to/{targetEnvId:guid}");
         Version(1);
-        this.RequirePermission(Auth.Models.Permissions.EnvironmentsSync);
+        this.RequirePermission(AuthModels.Permissions.EnvironmentsSync);
     }
 
     public override async Task HandleAsync(CancellationToken ct)
@@ -40,6 +41,16 @@ public class CloneEnvironmentEndpoint : ToggleEndpointWithoutRequest
         if (!await _db.Environments
                 .AnyAsync(x =>
                         x.Id == targetEnvId &&
+                        x.ProjectId == projectId,
+                    ct))
+        {
+            await Send.NotFoundAsync(ct);
+            return;
+        }
+
+        if (!await _db.Environments
+                .AnyAsync(x =>
+                        x.Id == sourceEnvId &&
                         x.ProjectId == projectId,
                     ct))
         {
@@ -63,7 +74,7 @@ public class CloneEnvironmentEndpoint : ToggleEndpointWithoutRequest
             var targetState = targetStates.FirstOrDefault(x => x.FeatureFlagId == sourceState.FeatureFlagId);
             if (targetState == null)
             {
-                targetState = new Flags.FlagEnvironmentState
+                targetState = new FlagEnvironmentState
                 {
                     EnvironmentId = targetEnvId,
                     FeatureFlagId = sourceState.FeatureFlagId
@@ -81,12 +92,12 @@ public class CloneEnvironmentEndpoint : ToggleEndpointWithoutRequest
             }
             else
             {
-                targetState.Rules = new List<Flags.FlagRule>();
+                targetState.Rules = new List<FlagRule>();
             }
             
             foreach (var rule in sourceState.Rules)
             {
-                targetState.Rules.Add(new Flags.FlagRule
+                targetState.Rules.Add(new FlagRule
                 {
                     GroupId = rule.GroupId,
                     Attribute = rule.Attribute,
@@ -100,7 +111,7 @@ public class CloneEnvironmentEndpoint : ToggleEndpointWithoutRequest
 
         try
         {
-            await _hubContext.Clients.Group(targetEnvId.ToString()).SendAsync("StateReloadRequired", ct);
+            await _publisher.PublishEventAsync<object?>(targetEnvId.ToString(), "StateReloadRequired", null);
         }
         catch (Exception ex)
         {

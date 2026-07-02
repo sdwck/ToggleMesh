@@ -1,4 +1,6 @@
-﻿namespace ToggleMesh.API.Features.Organizations.InviteMember;
+using ToggleMesh.API.Features.Organizations.Domain;
+
+namespace ToggleMesh.API.Features.Organizations.InviteMember;
 
 public class InviteMemberRequest
 {

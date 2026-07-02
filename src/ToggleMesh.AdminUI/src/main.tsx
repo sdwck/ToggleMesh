@@ -16,14 +16,15 @@ const queryClient = new QueryClient({
   },
 });
 
-hydrateCache(queryClient);
-persistCache(queryClient);
+hydrateCache(queryClient).then(() => {
+  persistCache(queryClient);
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} />
-      <Toaster theme="dark" position="bottom-right" />
-    </QueryClientProvider>
-  </StrictMode>
-);
+  createRoot(document.getElementById('root')!).render(
+    <StrictMode>
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+        <Toaster theme="dark" position="bottom-right" />
+      </QueryClientProvider>
+    </StrictMode>
+  );
+});

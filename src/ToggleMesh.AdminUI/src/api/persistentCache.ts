@@ -1,17 +1,18 @@
 import { dehydrate, hydrate, QueryClient } from '@tanstack/react-query';
+import { get, set, del } from 'idb-keyval';
 
 const CACHE_KEY = 'REACT_QUERY_OFFLINE_CACHE';
-const MAX_CACHE_SIZE_BYTES = 2.5 * 1024 * 1024;
+const MAX_QUERIES = 150;
 
-export function hydrateCache(queryClient: QueryClient) {
+export async function hydrateCache(queryClient: QueryClient) {
     try {
-        const savedState = localStorage.getItem(CACHE_KEY);
+        const savedState = await get(CACHE_KEY);
         if (savedState) {
-            hydrate(queryClient, JSON.parse(savedState));
-            console.log('[Cache] Successfully hydrated from localStorage.');
+            hydrate(queryClient, savedState);
+            console.log('[Cache] Successfully hydrated from IndexedDB.');
         }
     } catch (e) {
-        console.error('Failed to hydrate React Query cache:', e);
+        console.error('Failed to hydrate React Query cache from IndexedDB:', e);
     }
 }
 
@@ -22,7 +23,7 @@ export function persistCache(queryClient: QueryClient) {
         if (event.type === 'updated' && event.action.type === 'success') {
             clearTimeout(saveCacheTimeout);
 
-            saveCacheTimeout = setTimeout(() => {
+            saveCacheTimeout = setTimeout(async () => {
                 try {
                     let state = dehydrate(queryClient, {
                         shouldDehydrateQuery(query) {
@@ -35,7 +36,6 @@ export function persistCache(queryClient: QueryClient) {
                             return true;
                         }
                     });
-
 
                     state.queries = state.queries.map((q) => {
                         const data = q.state.data as any;
@@ -55,36 +55,19 @@ export function persistCache(queryClient: QueryClient) {
                         return q;
                     });
 
-                    let serializedState = JSON.stringify(state);
-
-                    if (serializedState.length > MAX_CACHE_SIZE_BYTES) {
-                        console.warn(
-                            `[Cache] Cache size (${(serializedState.length / 1024 / 1024).toFixed(2)}MB) exceeds limit of 2.5MB. Pruning oldest queries...`
+                    if (state.queries.length > MAX_QUERIES) {
+                        console.warn(`[Cache] Cache has ${state.queries.length} queries, pruning to ${MAX_QUERIES}...`);
+                        const sortedQueries = [...state.queries].sort((a, b) =>
+                            (b.state.dataUpdatedAt || 0) - (a.state.dataUpdatedAt || 0)
                         );
-
-                        if (serializedState.length > MAX_CACHE_SIZE_BYTES) {
-                            const sortedQueries = [...state.queries].sort((a, b) =>
-                                (b.state.dataUpdatedAt || 0) - (a.state.dataUpdatedAt || 0)
-                            );
-
-                            const percentToKeep = 0.7;
-                            const itemsToKeep = Math.floor(sortedQueries.length * percentToKeep);
-                            state.queries = sortedQueries.slice(0, itemsToKeep);
-
-                            serializedState = JSON.stringify(state);
-                        }
-
-                        console.log(
-                            `[Cache] Pruned state successfully. New size: ${(serializedState.length / 1024 / 1024).toFixed(2)}MB`
-                        );
+                        state.queries = sortedQueries.slice(0, MAX_QUERIES);
                     }
 
-                    localStorage.setItem(CACHE_KEY, serializedState);
+                    await set(CACHE_KEY, state);
                 } catch (e) {
-                    console.error('Failed to persist React Query cache:', e);
-
+                    console.error('Failed to persist React Query cache to IndexedDB:', e);
                     if (e instanceof Error && e.name === 'QuotaExceededError') {
-                        localStorage.removeItem(CACHE_KEY);
+                        await del(CACHE_KEY).catch(() => {});
                     }
                 }
             }, 1000);

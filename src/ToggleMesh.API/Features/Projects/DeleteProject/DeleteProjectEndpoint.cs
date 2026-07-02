@@ -1,9 +1,10 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using ToggleMesh.API.Extensions;
-using ToggleMesh.API.Persistence;
-using ToggleMesh.API.Infrastructure;
 using ToggleMesh.API.Infrastructure.Caching;
+using ToggleMesh.API.Infrastructure.Data;
 using ToggleMesh.API.Infrastructure.Endpoints;
+using AuthModels = ToggleMesh.API.Infrastructure.Security.Authorization.Models;
+
 
 namespace ToggleMesh.API.Features.Projects.DeleteProject;
 
@@ -22,7 +23,7 @@ public class DeleteProjectEndpoint : ToggleEndpointWithoutRequest
     {
         Delete("/projects/{projectId:guid}");
         Version(1);
-        this.RequirePermission(Auth.Models.Permissions.ProjectsDelete);
+        this.RequirePermission(AuthModels.Permissions.ProjectsDelete);
     }
 
     public override async Task HandleAsync(CancellationToken ct)
@@ -41,8 +42,27 @@ public class DeleteProjectEndpoint : ToggleEndpointWithoutRequest
         
         var environmentIds = project.Environments.Select(e => e.Id).ToList();
 
-        _db.Projects.Remove(project);
-        await _db.SaveChangesAsync(ct);
+        await using var transaction = await _db.Database.BeginTransactionAsync(ct);
+        try 
+        {
+            var keysToDelete = await _db.EnvironmentKeys
+                .Where(k => environmentIds.Contains(k.EnvironmentId))
+                .ToListAsync(ct);
+            _db.EnvironmentKeys.RemoveRange(keysToDelete);
+
+            await _db.Webhooks
+                .Where(w => w.ProjectId == projectId)
+                .ExecuteDeleteAsync(ct);
+
+            _db.Projects.Remove(project);
+            await _db.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+        } 
+        catch 
+        {
+            await transaction.RollbackAsync(ct);
+            throw;
+        }
 
         foreach (var envId in environmentIds)
             await _cacheInvalidator.InvalidateEnvironmentCacheAsync(envId);

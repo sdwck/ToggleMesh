@@ -1,5 +1,7 @@
 import { Outlet, NavLink, useLocation, useParams, Link, useNavigate, Navigate } from 'react-router-dom';
-import { LogOut, Flag, Network, Users, FileText, ArrowLeft, Settings, ToggleRight, Building2 } from 'lucide-react';
+import { del } from 'idb-keyval';
+import { LogOut, Flag, Network, Users, FileText, ArrowLeft, Settings, ToggleRight, Building2, Beaker, LayoutDashboard, Terminal, LifeBuoy } from 'lucide-react';
+import { ToggleMeshIcon } from '@/components/icons/ToggleMeshIcon';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import {
     DropdownMenu,
@@ -9,6 +11,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
+import { Button } from '@/components/ui/button';
 import { useMemo } from 'react';
 import { jwtDecode } from "jwt-decode";
 import { useQueryClient } from '@tanstack/react-query';
@@ -33,8 +36,11 @@ export function AppLayout() {
     const { projectId } = useParams();
     const navigate = useNavigate();
 
-    const { data: project, isError: isProjectError } = useProjectDetails(projectId || '');
+    const { data: project, isError: isProjectError, error: projectError } = useProjectDetails(projectId || '');
     const canManageProject = project?.userRole === 0 || project?.userRole === 1;
+
+    const isProjectNotFound = projectId && isProjectError && (projectError as any)?.response?.status === 404;
+    const isProjectNetworkError = projectId && isProjectError && !isProjectNotFound;
 
     const { activeOrganizationId } = useOrganizationStore();
     const { data: organizations } = useOrganizations();
@@ -43,11 +49,11 @@ export function AppLayout() {
     const queryClient = useQueryClient();
 
     useEffect(() => {
-        if (projectId && isProjectError) {
+        if (isProjectNotFound) {
             queryClient.invalidateQueries({ queryKey: ['projects'] });
             navigate('/projects', { replace: true });
         }
-    }, [projectId, isProjectError, navigate, queryClient]);
+    }, [isProjectNotFound, navigate, queryClient]);
 
     const userEmail = useMemo(() => {
         try {
@@ -73,10 +79,16 @@ export function AppLayout() {
         }
     }, []);
 
-    const handleLogout = () => {
+    const handleLogout = async () => {
         localStorage.removeItem('accessToken');
         localStorage.removeItem('refreshToken');
         localStorage.removeItem('REACT_QUERY_OFFLINE_CACHE');
+        localStorage.removeItem('togglemesh-org-storage');
+        try {
+            await del('REACT_QUERY_OFFLINE_CACHE');
+        } catch (e) {
+            console.error('Failed to clear IndexedDB cache', e);
+        }
         window.location.href = '/login';
     };
 
@@ -85,7 +97,8 @@ export function AppLayout() {
             <header
                 className="h-14 border-b border-border/40 bg-zinc-950/80 backdrop-blur flex items-center justify-between px-6 z-10 shrink-0">
                 <div className="flex items-center gap-2">
-                    <Link to="/projects" className="flex items-center text-zinc-400 hover:text-white transition-colors mr-2">
+                    <Link to="/projects" className="flex items-center text-zinc-300 hover:text-white transition-colors mr-2 group">
+                        <ToggleMeshIcon className="h-5 w-5 mr-2 transition-colors duration-300 group-hover:text-white" />
                         <span className="font-semibold tracking-tight">ToggleMesh</span>
                     </Link>
                     <span className="text-zinc-700 text-sm font-light select-none">/</span>
@@ -157,6 +170,11 @@ export function AppLayout() {
                                 </DropdownMenuItem>
                             )}
                             <DropdownMenuSeparator className="bg-white/10 my-1" />
+                            <DropdownMenuItem onClick={() => navigate('/support')} className="cursor-pointer px-2.5 py-2 text-xs flex items-center gap-2 rounded-lg text-zinc-300 hover:text-white focus:bg-white/10 focus:text-white transition-all">
+                                <LifeBuoy className="h-4 w-4 text-zinc-400" />
+                                <span>Support & Help</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator className="bg-white/10 my-1" />
                             <DropdownMenuItem onClick={handleLogout} className="text-red-400 focus:text-red-300 focus:bg-red-500/15 cursor-pointer px-2.5 py-2 text-xs flex items-center gap-2 rounded-lg transition-all">
                                 <LogOut className="h-4 w-4" />
                                 <span>Log out</span>
@@ -182,6 +200,19 @@ export function AppLayout() {
                                 Project Menu
                             </div>
                             <NavLink
+                                to={`/projects/${projectId}`}
+                                end
+                                className={({ isActive }) =>
+                                    `flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors ${isActive
+                                        ? 'bg-primary/10 text-primary'
+                                        : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
+                                    }`
+                                }
+                            >
+                                <LayoutDashboard className="h-4 w-4" />
+                                Dashboard
+                            </NavLink>
+                            <NavLink
                                 to={`/projects/${projectId}/flags`}
                                 className={({ isActive }) =>
                                     `flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors ${isActive
@@ -204,6 +235,18 @@ export function AppLayout() {
                             >
                                 <Network className="h-4 w-4" />
                                 Environments
+                            </NavLink>
+                            <NavLink
+                                to={`/projects/${projectId}/experiments`}
+                                className={({ isActive }) =>
+                                    `flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors ${isActive
+                                        ? 'bg-primary/10 text-primary'
+                                        : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
+                                    }`
+                                }
+                            >
+                                <Beaker className="h-4 w-4" />
+                                Experiments
                             </NavLink>
                             {canManageProject && (
                                 <NavLink
@@ -230,9 +273,21 @@ export function AppLayout() {
                                     }
                                 >
                                     <FileText className="h-4 w-4" />
-                                    Audit Logs
+                                    Audit Log
                                 </NavLink>
                             )}
+                            <NavLink
+                                to={`/projects/${projectId}/terminal`}
+                                className={({ isActive }) =>
+                                    `flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors ${isActive
+                                        ? 'bg-primary/10 text-primary'
+                                        : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
+                                    }`
+                                }
+                            >
+                                <Terminal className="h-4 w-4" />
+                                Terminal
+                            </NavLink>
                             <NavLink
                                 to={`/projects/${projectId}/settings`}
                                 className={({ isActive }) =>
@@ -264,7 +319,20 @@ export function AppLayout() {
                 <main className="flex-1 flex flex-col overflow-hidden">
                     <div className="flex-1 overflow-auto p-8">
                         <div className="max-w-6xl mx-auto h-full flex flex-col">
-                            <Outlet />
+                            {isProjectNetworkError ? (
+                                <div className="flex-1 flex flex-col items-center justify-center text-center p-8">
+                                    <Network className="h-12 w-12 text-destructive mb-4" />
+                                    <h2 className="text-xl font-bold text-zinc-100 mb-2">Failed to connect to server</h2>
+                                    <p className="text-zinc-400 max-w-md">
+                                        We couldn't connect to the server to load the project details. The backend might be offline or unreachable.
+                                    </p>
+                                    <Button className="mt-6" variant="outline" onClick={() => window.location.reload()}>
+                                        Retry Connection
+                                    </Button>
+                                </div>
+                            ) : (
+                                <Outlet />
+                            )}
                         </div>
                     </div>
                 </main>

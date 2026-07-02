@@ -2,20 +2,23 @@ using System.Net;
 using System.Net.Http.Json;
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
-using ToggleMesh.API.Features.Flags;
 using ToggleMesh.API.Features.Flags.Create;
+using ToggleMesh.API.Features.Flags.Domain;
 using ToggleMesh.API.Features.Flags.Get;
 using ToggleMesh.API.Features.Flags.Update;
 using ToggleMesh.API.Features.Flags.UpdateMetadata;
-using ToggleMesh.API.Features.Projects;
+using ToggleMesh.API.Features.Projects.Domain;
+using ToggleMesh.API.Infrastructure.Data;
 using ToggleMesh.API.Infrastructure.Security;
-using ToggleMesh.API.Persistence;
 using ToggleMesh.IntegrationTests.Infrastructure;
 
 namespace ToggleMesh.IntegrationTests.Flags;
 
-public class FlagRulesApiTests : IClassFixture<TestWebApplicationFactory>
+[Collection("SharedEnv3")]
+public class FlagRulesApiTests : IAsyncLifetime
 {
+    public async Task InitializeAsync() => await _factory.ResetDatabaseAsync();
+    public Task DisposeAsync() => Task.CompletedTask;
     private readonly HttpClient _client;
     private readonly TestWebApplicationFactory _factory;
 
@@ -31,7 +34,7 @@ public class FlagRulesApiTests : IClassFixture<TestWebApplicationFactory>
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
         var project = new Project { Name = "Test Project - Rules" };
-        db.Projects.Add(project); db.ProjectMembers.Add(new ToggleMesh.API.Features.Projects.ProjectMember { Project = project, UserId = Guid.Parse(ToggleMesh.IntegrationTests.Infrastructure.TestAuthHandler.TestUserId), Role = ToggleMesh.API.Features.Projects.ProjectRole.Owner });
+        db.Projects.Add(project); db.ProjectMembers.Add(new ProjectMember { Project = project, UserId = Guid.Parse(TestAuthHandler.TestUserId), Role = ProjectRole.Owner });
 
         var environment = new ProjectEnvironment { Name = "Staging", Project = project };
         db.Environments.Add(environment);
@@ -115,7 +118,7 @@ public class FlagRulesApiTests : IClassFixture<TestWebApplicationFactory>
         result.Rules.Should().NotContain(r => r.Attribute == "Age");
         result.Rules.Should().Contain(r => r.Attribute == "Country" && r.Value == "CA");
     }
-    
+
     [Fact]
     public async Task CreateFlag_WithTags_ShouldReturnTagsInResponse()
     {
@@ -138,7 +141,7 @@ public class FlagRulesApiTests : IClassFixture<TestWebApplicationFactory>
         result.Tags.Should().HaveCount(3);
         result.Tags.Should().Contain(["billing", "api", "v2"]);
     }
-    
+
     [Fact]
     public async Task UpdateFlag_WithNewTags_ShouldReplaceExistingTags()
     {
@@ -161,7 +164,7 @@ public class FlagRulesApiTests : IClassFixture<TestWebApplicationFactory>
 
         // Act
         var updateResponse = await _client.PutAsJsonAsync(
-            $"/api/v1/projects/{projectId}/flags/tag_update_flag/metadata", 
+            $"/api/v1/projects/{projectId}/flags/tag_update_flag/metadata",
             updateRequest);
 
         // Assert

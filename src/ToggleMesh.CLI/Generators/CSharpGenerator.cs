@@ -1,5 +1,4 @@
 ﻿using System.Text;
-using ToggleMesh.CLI.Models;
 
 namespace ToggleMesh.CLI.Generators;
 

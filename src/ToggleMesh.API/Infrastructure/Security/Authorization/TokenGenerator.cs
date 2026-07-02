@@ -3,10 +3,9 @@ using System.Security.Claims;
 using System.Security.Cryptography;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.IdentityModel.Tokens;
-using ToggleMesh.API.Features.Auth.Models;
-using ToggleMesh.API.Infrastructure.Security;
+using ToggleMesh.API.Infrastructure.Security.Authorization.Models;
 
-namespace ToggleMesh.API.Features.Auth;
+namespace ToggleMesh.API.Infrastructure.Security.Authorization;
 
 public static class TokenGenerator
 {

@@ -1,9 +1,11 @@
+using FastEndpoints;
 using Microsoft.EntityFrameworkCore;
 using ToggleMesh.API.Extensions;
+using ToggleMesh.API.Features.Projects.Domain;
+using ToggleMesh.API.Infrastructure.Data;
 using ToggleMesh.API.Infrastructure.Endpoints;
-using ToggleMesh.API.Persistence;
-
 using ToggleMesh.Common.Pagination;
+using AuthModels = ToggleMesh.API.Infrastructure.Security.Authorization.Models;
 
 namespace ToggleMesh.API.Features.Flags.GetAll;
 
@@ -20,14 +22,18 @@ public class GetFlagsEndpoint : ToggleEndpoint<GetFlagsRequest, PagedResponse<Pr
     {
         Get("/projects/{projectId}/flags");
         Version(1);
-        this.RequirePermission(Auth.Models.Permissions.FlagsView);
+        this.RequirePermission(AuthModels.Permissions.FlagsView);
     }
 
     public override async Task HandleAsync(GetFlagsRequest req, CancellationToken ct)
     {
         var projectId = Route<Guid>("projectId");
 
-        var (role, envRoles) = await _db.GetProjectRoleAndEnvOverridesAsync(projectId, UserId, ct);
+        var (role, envRoles) = await new GetProjectRoleCommand 
+        { 
+            ProjectId = projectId, 
+            UserId = UserId 
+        }.ExecuteAsync(ct);
 
         if (role == null)
         {
@@ -75,18 +81,21 @@ public class GetFlagsEndpoint : ToggleEndpoint<GetFlagsRequest, PagedResponse<Pr
                     var effectiveRole = role.Value;
                     if (envRoles.TryGetValue(s.EnvironmentId, out var overrideRole))
                         effectiveRole = overrideRole;
-                    return effectiveRole != Projects.ProjectRole.None;
+                    return effectiveRole != ProjectRole.None;
                 }).Select(s => new FlagEnvironmentStateDto(
                     s.EnvironmentId,
                     s.IsEnabled,
                     s.RolloutPercentage,
-                    s.TrueCount,
-                    s.FalseCount,
-                    s.Rules.Count
+                    0L,
+                    0L,
+                    s.Rules.Count,
+                    s.IsMabEnabled,
+                    s.MabGoalEvent
                 )),
                 x.Tags))
             .ToList();
 
-        await Send.OkAsync(new PagedResponse<ProjectFlagDto>(flags, totalCount, req.Page, req.PageSize), ct);
+        await Send.OkAsync(new PagedResponse<ProjectFlagDto>(
+            flags, totalCount, req.Page, req.PageSize), ct);
     }
 }

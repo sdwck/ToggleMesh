@@ -1,35 +1,56 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, FolderGit2, Layers } from 'lucide-react';
+import { Plus, FolderGit2, AlertTriangle, ArrowRight, TerminalSquare, FlaskConical, Sparkles } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import api from '@/api/axios';
-import { useProjects, useCreateProject, useOrganizations, useCreateOrganization } from '@/api/queries';
+import { useProjects, useCreateProject, useOrganizations, useCreateOrganization, useSystemConfig } from '@/api/queries';
 import { useOrganizationStore } from '@/stores/useOrganizationStore';
 import { Button } from '@/components/ui/button';
-import { Card, CardHeader, CardContent } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem, SelectSeparator } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useForm } from 'react-hook-form';
+import * as z from 'zod';
+import {
+    Form,
+    FormControl,
+    FormField,
+    FormItem,
+    FormLabel,
+    FormMessage,
+} from '@/components/ui/form';
+import { handleApiError } from '@/api/errorUtils';
 
-const getEnvBadgeStyle = (name: string) => {
-    const lower = name.toLowerCase();
-    if (lower.includes('prod') || lower.includes('prd')) {
-        return "bg-rose-500/10 text-rose-400 border-rose-500/20";
-    }
-    if (lower.includes('dev') || lower.includes('local')) {
-        return "bg-emerald-500/10 text-emerald-400 border-emerald-500/20";
-    }
-    if (lower.includes('stg') || lower.includes('stage') || lower.includes('test') || lower.includes('qa')) {
-        return "bg-amber-500/10 text-amber-400 border-amber-500/20";
-    }
-    return "bg-blue-500/10 text-blue-400 border-blue-500/20";
+const formatEvals = (n: number): string => {
+    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+    if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
+    return String(n);
 };
 
+const roleLabel = (role: number): string => {
+    switch (role) {
+        case 0: return 'Owner';
+        case 1: return 'Admin';
+        case 2: return 'Editor';
+        case 3: return 'Viewer';
+        default: return 'Member';
+    }
+};
 
+const createProjectSchema = z.object({
+    name: z.string().min(1, 'Project name is required'),
+    organizationId: z.string().min(1, 'Organization is required'),
+});
+type CreateProjectValues = z.infer<typeof createProjectSchema>;
+
+const createOrgSchema = z.object({
+    name: z.string().min(1, 'Organization name is required'),
+});
+type CreateOrgValues = z.infer<typeof createOrgSchema>;
 
 export function ProjectsPage() {
     const navigate = useNavigate();
@@ -39,12 +60,25 @@ export function ProjectsPage() {
     const { data: organizations, isLoading: isLoadingOrgs } = useOrganizations();
     const createOrganization = useCreateOrganization();
     const createProject = useCreateProject();
+    const { data: systemConfig } = useSystemConfig();
 
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [isCreateOrgOpen, setIsCreateOrgOpen] = useState(false);
-    const [newProjectName, setNewProjectName] = useState('');
-    const [selectedOrgId, setSelectedOrgId] = useState<string>('');
-    const [newOrgName, setNewOrgName] = useState('');
+
+    const projectForm = useForm<CreateProjectValues>({
+        resolver: zodResolver(createProjectSchema),
+        defaultValues: {
+            name: '',
+            organizationId: '',
+        },
+    });
+
+    const orgForm = useForm<CreateOrgValues>({
+        resolver: zodResolver(createOrgSchema),
+        defaultValues: {
+            name: '',
+        },
+    });
 
     const handlePrefetchProject = (projId: string) => {
         queryClient.prefetchQuery({
@@ -67,77 +101,62 @@ export function ProjectsPage() {
 
     useEffect(() => {
         if (isDialogOpen) {
+            let defaultOrgId = '';
             if (organizations && organizations.length > 0) {
                 if (activeOrganizationId && organizations.some(o => o.id === activeOrganizationId)) {
-                    setSelectedOrgId(activeOrganizationId);
+                    defaultOrgId = activeOrganizationId;
                 } else {
-                    setSelectedOrgId(organizations[0].id);
+                    defaultOrgId = organizations[0].id;
                 }
-            } else {
-                setSelectedOrgId('');
             }
-            setNewProjectName('');
+            projectForm.reset({
+                name: '',
+                organizationId: defaultOrgId,
+            });
         }
-    }, [isDialogOpen, activeOrganizationId, organizations]);
+    }, [isDialogOpen, activeOrganizationId, organizations, projectForm]);
 
-    const handleOrgChange = (val: string) => {
-        if (val === '__new__') {
-            setIsCreateOrgOpen(true);
-        } else {
-            setSelectedOrgId(val);
+    useEffect(() => {
+        if (isCreateOrgOpen) {
+            orgForm.reset({ name: '' });
         }
-    };
+    }, [isCreateOrgOpen, orgForm]);
 
-    const handleCreateOrg = async () => {
-        if (!newOrgName.trim()) return;
+    const handleCreateProject = async (values: CreateProjectValues) => {
         try {
-            const newOrg = await createOrganization.mutateAsync({ name: newOrgName });
-            setSelectedOrgId(newOrg.id);
-            setActiveOrganizationId(newOrg.id);
-            toast.success('Organization created successfully');
-            setNewOrgName('');
-            setIsCreateOrgOpen(false);
-        } catch {
-            toast.error('Failed to create organization');
-        }
-    };
-
-    const handleCreate = async () => {
-        if (!newProjectName.trim()) {
-            toast.error('Project name is required');
-            return;
-        }
-
-        if (!selectedOrgId) {
-            toast.error('Please select an organization');
-            return;
-        }
-
-        try {
-            await createProject.mutateAsync({ name: newProjectName, organizationId: selectedOrgId });
-
-            setActiveOrganizationId(selectedOrgId);
-
-            toast.success('Project created successfully');
-            setNewProjectName('');
+            const newProject = await createProject.mutateAsync(values);
             setIsDialogOpen(false);
-        } catch {
-            toast.error('Failed to create project');
+            toast.success('Project created');
+            if (newProject?.id) {
+                navigate(`/projects/${newProject.id}`);
+            }
+        } catch (error: any) {
+            handleApiError(error, projectForm.setError, 'Failed to create project');
         }
     };
 
-    const isSubmitDisabled =
-        createProject.isPending ||
-        !newProjectName.trim() ||
-        !selectedOrgId;
+    const handleCreateOrg = async (values: CreateOrgValues) => {
+        try {
+            const newOrg = await createOrganization.mutateAsync(values);
+            setIsCreateOrgOpen(false);
+            toast.success('Organization created');
+            if (newOrg?.id) {
+                setActiveOrganizationId(newOrg.id);
+                projectForm.setValue('organizationId', newOrg.id);
+            }
+        } catch (error: any) {
+            handleApiError(error, orgForm.setError, 'Failed to create organization');
+        }
+    };
 
     return (
-        <div className="space-y-6">
-            <div className="flex items-center justify-between">
+        <div className="p-8 max-w-[1400px] mx-auto w-full">
+            <div className="flex items-center justify-between mb-8">
                 <div>
-                    <h2 className="text-2xl font-bold tracking-tight">Projects</h2>
-                    <p className="text-muted-foreground">Manage your workspace projects and environments.</p>
+                    <h1 className="text-2xl font-bold tracking-tight">Projects</h1>
+                    <p className="text-muted-foreground text-sm mt-1">Manage your workspace projects and environments.</p>
                 </div>
+
                 <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                     <DialogTrigger asChild>
                         <Button className="cursor-pointer">
@@ -152,49 +171,79 @@ export function ProjectsPage() {
                                 A project represents a single application or microservice.
                             </DialogDescription>
                         </DialogHeader>
-                        <div className="space-y-4 py-4 text-left">
-                            <div className="space-y-2">
-                                <Label htmlFor="project-name">Project Name</Label>
-                                <Input
-                                    id="project-name"
-                                    placeholder="e.g., e-commerce-api"
-                                    value={newProjectName}
-                                    onChange={(e) => setNewProjectName(e.target.value)}
-                                    onKeyDown={(e) => {
-                                        if (e.key === 'Enter' && !isSubmitDisabled) {
-                                            handleCreate();
-                                        }
-                                    }}
-                                    autoFocus
+                        <Form {...projectForm}>
+                            <form onSubmit={projectForm.handleSubmit(handleCreateProject)} className="space-y-4 py-4 text-left">
+                                <FormField
+                                    control={projectForm.control}
+                                    name="name"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Project Name</FormLabel>
+                                            <FormControl>
+                                                <Input
+                                                    placeholder="e.g., e-commerce-api"
+                                                    {...field}
+                                                    autoFocus
+                                                />
+                                            </FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
                                 />
-                            </div>
 
-                            <div className="space-y-2">
-                                <Label htmlFor="project-org">Organization</Label>
-                                <Select value={selectedOrgId} onValueChange={handleOrgChange}>
-                                    <SelectTrigger id="project-org" className="border-border/40 bg-zinc-950/50">
-                                        <SelectValue placeholder={isLoadingOrgs ? "Loading organizations..." : "Select organization"} />
-                                    </SelectTrigger>
-                                    <SelectContent className="border-border/40 bg-zinc-950/95 backdrop-blur-xl">
-                                        {organizations?.map((org) => (
-                                            <SelectItem key={org.id} value={org.id}>
-                                                {org.name}
-                                            </SelectItem>
-                                        ))}
-                                        {organizations && organizations.length > 0 && <SelectSeparator className="bg-border/40" />}
-                                        <SelectItem value="__new__" className="text-primary focus:text-primary font-medium">
-                                            + Create new organization...
-                                        </SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                        </div>
-                        <DialogFooter>
-                            <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
-                            <Button onClick={handleCreate} disabled={isSubmitDisabled}>
-                                {createProject.isPending ? 'Creating...' : 'Create'}
-                            </Button>
-                        </DialogFooter>
+                                <FormField
+                                    control={projectForm.control}
+                                    name="organizationId"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Organization</FormLabel>
+                                            <Select value={field.value} onValueChange={(val) => {
+                                                if (val === "__new__") {
+                                                    setIsCreateOrgOpen(true);
+                                                } else {
+                                                    field.onChange(val);
+                                                }
+                                            }}>
+                                                <FormControl>
+                                                    <SelectTrigger className="border-border/40 bg-zinc-950/50">
+                                                        <SelectValue placeholder={isLoadingOrgs ? "Loading organizations..." : "Select organization"} />
+                                                    </SelectTrigger>
+                                                </FormControl>
+                                                <SelectContent className="border-border/40 bg-zinc-950/95 backdrop-blur-xl">
+                                                    {organizations?.map((org) => (
+                                                        <SelectItem key={org.id} value={org.id}>
+                                                            {org.name}
+                                                        </SelectItem>
+                                                    ))}
+                                                    {systemConfig?.allowUserOrganizationCreation === true && (
+                                                        <>
+                                                            {organizations && organizations.length > 0 && <SelectSeparator className="bg-border/40" />}
+                                                            <SelectItem value="__new__" className="text-primary focus:text-primary font-medium">
+                                                                + Create new organization...
+                                                            </SelectItem>
+                                                        </>
+                                                    )}
+                                                </SelectContent>
+                                            </Select>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+
+                                {projectForm.formState.errors.root && (
+                                    <div className="text-sm text-destructive font-medium">
+                                        {projectForm.formState.errors.root.message}
+                                    </div>
+                                )}
+
+                                <DialogFooter className="mt-4">
+                                    <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
+                                    <Button type="submit" disabled={createProject.isPending}>
+                                        {createProject.isPending ? 'Creating...' : 'Create'}
+                                    </Button>
+                                </DialogFooter>
+                            </form>
+                        </Form>
                     </DialogContent>
                 </Dialog>
             </div>
@@ -207,43 +256,57 @@ export function ProjectsPage() {
                             An organization contains your projects and team members.
                         </DialogDescription>
                     </DialogHeader>
-                    <div className="py-4">
-                        <Input
-                            placeholder="e.g., Acme Corp"
-                            value={newOrgName}
-                            onChange={(e) => setNewOrgName(e.target.value)}
-                            onKeyDown={(e) => {
-                                if (e.key === 'Enter' && !createOrganization.isPending && newOrgName.trim()) {
-                                    handleCreateOrg();
-                                }
-                            }}
-                            autoFocus
-                        />
-                    </div>
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setIsCreateOrgOpen(false)}>Cancel</Button>
-                        <Button onClick={handleCreateOrg} disabled={createOrganization.isPending || !newOrgName.trim()}>
-                            {createOrganization.isPending ? 'Creating...' : 'Create'}
-                        </Button>
-                    </DialogFooter>
+                    <Form {...orgForm}>
+                        <form onSubmit={orgForm.handleSubmit(handleCreateOrg)} className="space-y-4 py-4">
+                            <FormField
+                                control={orgForm.control}
+                                name="name"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Organization Name</FormLabel>
+                                        <FormControl>
+                                            <Input
+                                                placeholder="e.g., Acme Corp"
+                                                {...field}
+                                                autoFocus
+                                            />
+                                        </FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+
+                            {orgForm.formState.errors.root && (
+                                <div className="text-sm text-destructive font-medium">
+                                    {orgForm.formState.errors.root.message}
+                                </div>
+                            )}
+
+                            <DialogFooter>
+                                <Button type="button" variant="outline" onClick={() => setIsCreateOrgOpen(false)}>Cancel</Button>
+                                <Button type="submit" disabled={createOrganization.isPending}>
+                                    {createOrganization.isPending ? 'Creating...' : 'Create'}
+                                </Button>
+                            </DialogFooter>
+                        </form>
+                    </Form>
                 </DialogContent>
             </Dialog>
-
             {isLoading ? (
-                <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                    {Array.from({ length: 3 }).map((_, i) => (
-                        <Card key={i} className="border-border/40 h-44 bg-zinc-950/20">
-                            <CardHeader className="pb-2">
-                                <Skeleton className="h-6 w-2/3" />
-                            </CardHeader>
-                            <CardContent className="space-y-6 mt-2">
-                                <Skeleton className="h-4 w-1/3" />
-                                <div className="flex justify-between items-center border-t border-border/10 pt-4 mt-auto">
-                                    <div className="flex gap-1.5">
-                                        <Skeleton className="h-5 w-8 rounded" />
-                                        <Skeleton className="h-5 w-8 rounded" />
+                <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                    {[...Array(6)].map((_, i) => (
+                        <Card key={i} className="border-border/40 h-full">
+                            <CardContent className="p-5 h-full flex flex-col space-y-4">
+                                <div className="flex items-center gap-3">
+                                    <Skeleton className="h-10 w-10 rounded-xl" />
+                                    <div className="space-y-1.5 flex-1">
+                                        <Skeleton className="h-4 w-32 rounded" />
+                                        <Skeleton className="h-3 w-16 rounded" />
                                     </div>
-                                    <Skeleton className="h-8 w-14 rounded-md" />
+                                </div>
+                                <div className="grid grid-cols-2 gap-3 mt-4">
+                                    <Skeleton className="h-14 w-full rounded-xl" />
+                                    <Skeleton className="h-14 w-full rounded-xl" />
                                 </div>
                             </CardContent>
                         </Card>
@@ -257,57 +320,95 @@ export function ProjectsPage() {
                     <Button onClick={() => setIsDialogOpen(true)}>Create Project</Button>
                 </Card>
             ) : (
-                <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
                     {projects?.map((project) => (
                         <Card
                             key={project.id}
-                            className="border-border/40 hover:border-primary/40 bg-zinc-950/20 hover:bg-zinc-950/50 transition-all cursor-pointer p-5 flex flex-col justify-between h-44 shadow-md hover:shadow-primary/5 group"
-                            onClick={() => navigate(`/projects/${project.id}/flags`)}
+                            className="flex flex-col border-border/40 hover:border-primary/40 bg-gradient-to-b from-zinc-950/40 to-zinc-950/10 hover:bg-zinc-900/40 transition-all duration-300 cursor-pointer group overflow-hidden relative shadow-sm hover:shadow-md"
+                            onClick={() => navigate(`/projects/${project.id}`)}
                             onMouseEnter={() => handlePrefetchProject(project.id)}
                         >
-                            <div className="space-y-4">
-                                <div className="flex items-start justify-between">
-                                    <div className="flex items-center gap-3">
-                                        <div className="h-10 w-10 rounded-md bg-primary/10 border border-primary/20 flex items-center justify-center text-primary group-hover:scale-105 transition-transform">
+                            <div className="p-5 flex-1 flex flex-col">
+                                <div className="flex items-start justify-between mb-5">
+                                    <div className="flex items-center gap-3 min-w-0">
+                                        <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 border border-primary/20 flex items-center justify-center text-primary shrink-0 shadow-sm group-hover:scale-105 transition-transform duration-300">
                                             <FolderGit2 className="h-5 w-5" />
                                         </div>
-                                        <div>
-                                            <h3 className="font-semibold text-base tracking-tight group-hover:text-primary transition-colors">
+                                        <div className="min-w-0">
+                                            <h3 className="font-semibold text-[15px] tracking-tight truncate group-hover:text-primary transition-colors">
                                                 {project.name}
                                             </h3>
-                                            <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1 font-medium">
-                                                <span className="flex items-center gap-1">
-                                                    <Layers className="h-3 w-3" />
-                                                    {project.environmentCount} env{project.environmentCount !== 1 ? 's' : ''}
-                                                </span>
-                                                <span className="text-border/40">•</span>
-                                                <span className="capitalize">{
-                                                    project.userRole === 0 ? 'Owner' :
-                                                        project.userRole === 1 ? 'Admin' :
-                                                            project.userRole === 2 ? 'Editor' :
-                                                                project.userRole === 3 ? 'Viewer' : 'No Access'
-                                                }</span>
+                                            <span className="text-[12px] text-muted-foreground/70 font-medium block mt-0.5">
+                                                {roleLabel(project.userRole)}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <ArrowRight className="h-4 w-4 text-primary opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300 shrink-0 mt-2" />
+                                </div>
+
+                                {project.totalFlags === 0 && !project.evaluations24H ? (
+                                    <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground/40 py-6 border border-dashed border-border/20 rounded-xl bg-zinc-950/30">
+                                        <TerminalSquare className="h-6 w-6 mb-2 opacity-30" />
+                                        <span className="text-[13px] font-medium text-center px-4">
+                                            {project.userRole <= 2 ? 'Ready for setup. Create your first flag.' : 'No flags yet'}
+                                        </span>
+                                    </div>
+                                ) : (
+                                    <div className="flex flex-col flex-1 justify-between gap-5">
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <div className="flex flex-col gap-1.5 p-3 rounded-xl bg-zinc-900/30 border border-border/20">
+                                                <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Flags</span>
+                                                <div className="flex items-baseline gap-1.5">
+                                                    <span className="text-xl font-bold text-zinc-200">{project.activeFlags}</span>
+                                                    <span className="text-[12px] text-zinc-500 font-medium">/ {project.totalFlags}</span>
+                                                </div>
+                                            </div>
+                                            <div className="flex flex-col gap-1.5 p-3 rounded-xl bg-zinc-900/30 border border-border/20">
+                                                <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Requests (24h)</span>
+                                                {project.evaluations24H > 0 ? (
+                                                    <span className="text-xl font-bold text-sky-400">{formatEvals(project.evaluations24H)}</span>
+                                                ) : (
+                                                    <span className="text-xl font-bold text-zinc-600">0</span>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        <div className="flex flex-col gap-2.5 mt-auto">
+                                            {(project.runningExperiments > 0 || project.mabActiveFlagsCount > 0) && (
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                    {project.runningExperiments > 0 && (
+                                                        <div className="flex items-center gap-1.5 bg-emerald-500/10 text-emerald-400 px-2.5 py-1 rounded-md text-[11px] font-medium border border-emerald-500/15">
+                                                            <FlaskConical className="h-3 w-3" />
+                                                            <span>{project.runningExperiments} Active Test{project.runningExperiments > 1 ? 's' : ''}</span>
+                                                        </div>
+                                                    )}
+                                                    {project.mabActiveFlagsCount > 0 && (
+                                                        <div className="flex items-center gap-1.5 bg-amber-500/10 text-amber-400 px-2.5 py-1 rounded-md text-[11px] font-medium border border-amber-500/20">
+                                                            <Sparkles className="h-3 w-3" />
+                                                            <span>{project.mabActiveFlagsCount} Auto-Tuning</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+
+                                            <div className="flex flex-col gap-1.5 pt-1">
+                                                {project.topExperimentFlagKey && (
+                                                    <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
+                                                        <FlaskConical className="h-3.5 w-3.5 text-emerald-500/70 shrink-0" />
+                                                        <span className="truncate">Top test: <span className="text-zinc-300 font-medium">{project.topExperimentFlagKey}</span></span>
+                                                    </div>
+                                                )}
+
+                                                {project.failingWebhooksCount > 0 && (
+                                                    <div className="flex items-center gap-2 text-[12px] text-rose-400 bg-rose-500/5 px-2 py-1 -ml-2 rounded-md">
+                                                        <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                                                        <span className="font-medium">{project.failingWebhooksCount} webhook{project.failingWebhooksCount > 1 ? 's' : ''} failing</span>
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
                                     </div>
-                                </div>
-                            </div>
-
-                            <div className="flex items-center justify-between border-t border-border/10 pt-4 mt-auto">
-                                <div className="flex gap-1.5 flex-wrap max-w-[180px]">
-                                    {project.environments?.map((env) => (
-                                        <Badge
-                                            key={env.id}
-                                            variant="outline"
-                                            className={`text-[9px] font-semibold px-1.5 py-0.5 tracking-wide uppercase ${getEnvBadgeStyle(env.name)}`}
-                                        >
-                                            {env.name.length > 5 ? `${env.name.slice(0, 4)}..` : env.name}
-                                        </Badge>
-                                    ))}
-                                </div>
-                                <Button size="sm" variant="secondary" className="h-8 px-3 text-xs opacity-0 group-hover:opacity-100 transition-opacity">
-                                    Open Project
-                                </Button>
+                                )}
                             </div>
                         </Card>
                     ))}

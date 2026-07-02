@@ -8,15 +8,18 @@ using StackExchange.Redis;
 using ToggleMesh.API.Features.Client.SdkEvaluateFlag;
 using ToggleMesh.API.Features.Flags.Create;
 using ToggleMesh.API.Features.Flags.Toggle;
-using ToggleMesh.API.Features.Projects;
+using ToggleMesh.API.Features.Projects.Domain;
+using ToggleMesh.API.Infrastructure.Data;
 using ToggleMesh.API.Infrastructure.Security;
-using ToggleMesh.API.Persistence;
 using ToggleMesh.IntegrationTests.Infrastructure;
 
 namespace ToggleMesh.IntegrationTests.Caching;
 
-public class CacheInvalidationTests : IClassFixture<TestWebApplicationFactory>
+[Collection("SharedEnv3")]
+public class CacheInvalidationTests : IAsyncLifetime
 {
+    public async Task InitializeAsync() => await _factory.ResetDatabaseAsync();
+    public Task DisposeAsync() => Task.CompletedTask;
     private readonly HttpClient _client;
     private readonly TestWebApplicationFactory _factory;
 
@@ -32,12 +35,12 @@ public class CacheInvalidationTests : IClassFixture<TestWebApplicationFactory>
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
         var project = new Project { Name = "Test Project Caching" };
-        db.Projects.Add(project); 
-        db.ProjectMembers.Add(new ProjectMember 
-        { 
-            Project = project, 
-            UserId = Guid.Parse(TestAuthHandler.TestUserId), 
-            Role = ProjectRole.Owner 
+        db.Projects.Add(project);
+        db.ProjectMembers.Add(new ProjectMember
+        {
+            Project = project,
+            UserId = Guid.Parse(TestAuthHandler.TestUserId),
+            Role = ProjectRole.Owner
         });
 
         var environment = new ProjectEnvironment { Name = "Development", Project = project };
@@ -64,7 +67,7 @@ public class CacheInvalidationTests : IClassFixture<TestWebApplicationFactory>
         // Arrange
         var (projectId, envId) = await SeedEnvironmentAsync();
         var flagKey = "cache_test_flag";
-        
+
         var createResponse = await _client.PostAsJsonAsync($"/api/v1/projects/{projectId}/flags", new CreateFlagRequest { Key = flagKey });
         createResponse.StatusCode.Should().Be(HttpStatusCode.Created);
 
@@ -73,21 +76,21 @@ public class CacheInvalidationTests : IClassFixture<TestWebApplicationFactory>
 
         var l1CacheKey = $"sdk:compiled_rules:{envId}";
         var l2CacheKey = $"sdk:flags:states:{envId}";
-        
-        var dummyL2Data = new List<FlagStateDto> { new(flagKey, false, null, false, []) };
-        
+
+        var dummyL2Data = new List<FlagStateDto> { new(flagKey, false, null, false, [], null, null) };
+
         await redis.StringSetAsync(l2CacheKey, JsonSerializer.Serialize(dummyL2Data));
         memoryCache.Set(l1CacheKey, "dummy_l1_data");
-        
+
         (await redis.StringGetAsync(l2CacheKey)).HasValue.Should().BeTrue();
 
         // Act
-        var toggleRequest = new ToggleFlagRequest { IsEnabled = true };   
+        var toggleRequest = new ToggleFlagRequest { IsEnabled = true };
         var response = await _client.PostAsJsonAsync($"/api/v1/projects/{projectId}/environments/{envId}/flags/{flagKey}/toggle", toggleRequest);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
-        
+
         var cachedL2 = await redis.StringGetAsync(l2CacheKey);
         cachedL2.HasValue.Should().BeFalse("L2 Cache (Redis) should have been cleared.");
 

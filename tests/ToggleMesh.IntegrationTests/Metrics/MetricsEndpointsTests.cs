@@ -3,18 +3,20 @@ using System.Net.Http.Json;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using ToggleMesh.API.Features.Flags;
-using ToggleMesh.API.Features.Metrics;
-using ToggleMesh.API.Features.Metrics.SdkIngest;
-using ToggleMesh.API.Features.Projects;
+using ToggleMesh.API.Features.Flags.Domain;
+using ToggleMesh.API.Features.Metrics.Domain;
+using ToggleMesh.API.Features.Projects.Domain;
+using ToggleMesh.API.Infrastructure.Data;
 using ToggleMesh.API.Infrastructure.Security;
-using ToggleMesh.API.Persistence;
 using ToggleMesh.IntegrationTests.Infrastructure;
 
 namespace ToggleMesh.IntegrationTests.Metrics;
 
-public class MetricsEndpointsTests : IClassFixture<TestWebApplicationFactory>
+[Collection("SharedEnv2")]
+public class MetricsEndpointsTests : IAsyncLifetime
 {
+    public async Task InitializeAsync() => await _factory.ResetDatabaseAsync();
+    public Task DisposeAsync() => Task.CompletedTask;
     private readonly HttpClient _client;
     private readonly TestWebApplicationFactory _factory;
 
@@ -30,7 +32,7 @@ public class MetricsEndpointsTests : IClassFixture<TestWebApplicationFactory>
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
         var project = new Project { Name = "Metrics Test Project" };
-        db.Projects.Add(project); db.ProjectMembers.Add(new ToggleMesh.API.Features.Projects.ProjectMember { Project = project, UserId = Guid.Parse(ToggleMesh.IntegrationTests.Infrastructure.TestAuthHandler.TestUserId), Role = ToggleMesh.API.Features.Projects.ProjectRole.Owner });
+        db.Projects.Add(project); db.ProjectMembers.Add(new ProjectMember { Project = project, UserId = Guid.Parse(TestAuthHandler.TestUserId), Role = ProjectRole.Owner });
 
         var environment = new ProjectEnvironment { Name = "Production", Project = project };
         db.Environments.Add(environment);
@@ -57,9 +59,7 @@ public class MetricsEndpointsTests : IClassFixture<TestWebApplicationFactory>
         {
             Environment = environment,
             FeatureFlag = flag,
-            IsEnabled = true,
-            TrueCount = 0,
-            FalseCount = 0
+            IsEnabled = true
         };
         db.FlagEnvironmentStates.Add(state);
 
@@ -72,7 +72,7 @@ public class MetricsEndpointsTests : IClassFixture<TestWebApplicationFactory>
     {
         const string flagKey = "test_metrics_flag";
         var (_, apiKey) = await SeedEnvironmentAndFlagAsync(flagKey);
-        
+
         var payload = new List<MetricPayloadDto>
         {
             new(flagKey, 15, 5),
@@ -81,35 +81,33 @@ public class MetricsEndpointsTests : IClassFixture<TestWebApplicationFactory>
 
         var httpRequest = new HttpRequestMessage(HttpMethod.Post, "/api/v1/sdk/metrics")
         {
-            Content = JsonContent.Create(payload) 
+            Content = JsonContent.Create(payload)
         };
         httpRequest.Headers.Add("x-api-key", apiKey);
 
         var response = await _client.SendAsync(httpRequest);
 
         response.StatusCode.Should().Be(HttpStatusCode.Accepted);
-        
+
         _factory.TimeProvider.Advance(TimeSpan.FromSeconds(6));
 
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        
+
         for (var i = 0; i < 10; i++)
         {
-            var stateToCheck = await db.FlagEnvironmentStates
-                .Include(s => s.FeatureFlag)
-                .AsNoTracking()
-                .SingleAsync(f => f.FeatureFlag.Key == flagKey);
-            if (stateToCheck.TrueCount == 25) 
+            var totalTrue = await db.FlagMetricBuckets.Where(b => b.FlagKey == flagKey).SumAsync(b => b.TrueCount);
+            if (totalTrue == 25)
                 break;
             await Task.Delay(200);
         }
 
-        var state = db.FlagEnvironmentStates.Include(s => s.FeatureFlag).Single(f => f.FeatureFlag.Key == flagKey);
-        state.TrueCount.Should().Be(25);
-        state.FalseCount.Should().Be(7);
+        var trueCount = db.FlagMetricBuckets.Where(b => b.FlagKey == flagKey).Sum(b => b.TrueCount);
+        var falseCount = db.FlagMetricBuckets.Where(b => b.FlagKey == flagKey).Sum(b => b.FalseCount);
+        trueCount.Should().Be(25);
+        falseCount.Should().Be(7);
     }
-    
+
     [Fact]
     public async Task IngestMetrics_WithInvalidApiKey_ShouldReturn401()
     {

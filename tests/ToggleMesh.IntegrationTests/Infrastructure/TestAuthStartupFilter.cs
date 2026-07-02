@@ -1,17 +1,7 @@
-﻿using System.Security.Claims;
 using System.IdentityModel.Tokens.Jwt;
-using Microsoft.AspNetCore.Authentication;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.AspNetCore.TestHost;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Time.Testing;
-using StackExchange.Redis;
-using Testcontainers.PostgreSql;
-using Testcontainers.Redis;
-using ToggleMesh.API.Persistence;
 
 namespace ToggleMesh.IntegrationTests.Infrastructure;
 
@@ -23,13 +13,22 @@ public class TestAuthStartupFilter : IStartupFilter
         {
             builder.Use(async (context, nextMiddleware) =>
             {
-                if (!context.Request.Headers.ContainsKey("x-pat-token") && 
+                if (!context.Request.Headers.ContainsKey("x-pat-token") &&
                     !context.Request.Headers.ContainsKey("x-api-key"))
                 {
+                    var userId = TestAuthHandler.TestUserId;
+                    var email = TestAuthHandler.TestUserEmail;
+
+                    if (context.Request.Headers.TryGetValue("x-test-user-id", out var customUserId))
+                    {
+                        userId = customUserId.ToString();
+                        email = $"user-{userId}@example.com";
+                    }
+
                     var claims = new[]
                     {
-                        new Claim(JwtRegisteredClaimNames.Sub, TestAuthHandler.TestUserId),
-                        new Claim(ClaimTypes.Email, TestAuthHandler.TestUserEmail),
+                        new Claim(JwtRegisteredClaimNames.Sub, userId),
+                        new Claim(ClaimTypes.Email, email),
                         new Claim("role", "Owner")
                     };
                     var identity = new ClaimsIdentity(claims, TestAuthHandler.AuthenticationScheme);

@@ -1,14 +1,18 @@
-﻿using System.Security.Cryptography;
+using System.Security.Cryptography;
 using System.Text;
 
 namespace ToggleMesh.API.Infrastructure.Security;
 
 public static class ApiKeyHasher
 {
+    public static string Pepper { get; set; } = "DefaultToggleMeshPepperSecret123!";
+
     public static string Hash(string plainKey)
     {
         var bytes = Encoding.UTF8.GetBytes(plainKey);
-        var hash = SHA256.HashData(bytes);
+        var pepperBytes = Encoding.UTF8.GetBytes(Pepper);
+        using var hmac = new HMACSHA256(pepperBytes);
+        var hash = hmac.ComputeHash(bytes);
         return Convert.ToHexString(hash).ToLowerInvariant();
     }
 

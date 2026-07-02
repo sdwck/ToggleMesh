@@ -1,4 +1,4 @@
-namespace ToggleMesh.API.Features.Auth.Endpoints.Login;
+namespace ToggleMesh.API.Features.Auth.Login;
 
 public class LoginResponse
 {

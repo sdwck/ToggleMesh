@@ -1,7 +1,7 @@
 using System.ComponentModel.DataAnnotations.Schema;
 using ToggleMesh.API.Infrastructure.Data.Abstractions;
 
-namespace ToggleMesh.API.Features.Auth.Models;
+namespace ToggleMesh.API.Infrastructure.Security.Authorization.Models;
 
 public class RefreshToken : Entity
 {

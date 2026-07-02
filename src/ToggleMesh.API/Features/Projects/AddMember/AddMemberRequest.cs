@@ -1,4 +1,6 @@
-﻿namespace ToggleMesh.API.Features.Projects.AddMember;
+using ToggleMesh.API.Features.Projects.Domain;
+
+namespace ToggleMesh.API.Features.Projects.AddMember;
 
 public class AddMemberRequest
 {

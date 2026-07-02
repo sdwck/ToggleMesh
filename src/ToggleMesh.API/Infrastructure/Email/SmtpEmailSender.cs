@@ -7,7 +7,7 @@ public class SmtpEmailSender : IEmailSender, IDisposable
 {
     private readonly IConfiguration _configuration;
     private readonly ILogger<SmtpEmailSender> _logger;
-    private readonly SmtpClient _smtpClient;
+    private readonly SmtpClient? _smtpClient;
     private readonly string _fromEmail;
 
     public SmtpEmailSender(IConfiguration configuration, ILogger<SmtpEmailSender> logger)
@@ -16,18 +16,21 @@ public class SmtpEmailSender : IEmailSender, IDisposable
         _logger = logger;
 
         var host = _configuration["Email:Smtp:Host"];
-        var port = int.TryParse(_configuration["Email:Smtp:Port"], out var p) ? p : 587;
+        var port = int.TryParse(_configuration["Email:Smtp:Port"], out var p) 
+            ? p 
+            : 587;
         var username = _configuration["Email:Smtp:Username"];
         var password = _configuration["Email:Smtp:Password"];
         var enableSsl = !bool.TryParse(_configuration["Email:Smtp:EnableSsl"], out var s) || s;
         _fromEmail = _configuration["Email:Smtp:FromEmail"] ?? "noreply@togglemesh.com";
 
-        _smtpClient = new SmtpClient(host, port)
-        {
-            EnableSsl = enableSsl,
-            UseDefaultCredentials = false,
-            Credentials = new NetworkCredential(username, password)
-        };
+        if (!string.IsNullOrEmpty(host))
+            _smtpClient = new SmtpClient(host, port)
+            {
+                EnableSsl = enableSsl,
+                UseDefaultCredentials = false,
+                Credentials = new NetworkCredential(username, password)
+            };
     }
 
     public async Task SendEmailAsync(string to, string subject, string htmlBody, CancellationToken ct = default)
@@ -50,8 +53,15 @@ public class SmtpEmailSender : IEmailSender, IDisposable
             };
             message.To.Add(to);
 
-            await _smtpClient.SendMailAsync(message, ct);
-            _logger.LogInformation("Successfully sent email to {To}", to);
+            if (_smtpClient != null)
+            {
+                await _smtpClient.SendMailAsync(message, ct);
+                _logger.LogInformation("Successfully sent email to {To}", to);
+            }
+            else
+            {
+                _logger.LogWarning("SMTP Client is null. Cannot send email to {To}.", to);
+            }
         }
         catch (Exception ex)
         {
@@ -61,6 +71,6 @@ public class SmtpEmailSender : IEmailSender, IDisposable
 
     public void Dispose()
     {
-        _smtpClient.Dispose();
+        _smtpClient?.Dispose();
     }
 }

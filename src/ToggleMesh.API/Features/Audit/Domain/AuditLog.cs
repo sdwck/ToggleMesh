@@ -1,6 +1,6 @@
 using ToggleMesh.API.Infrastructure.Data.Abstractions;
 
-namespace ToggleMesh.API.Features.Audit;
+namespace ToggleMesh.API.Features.Audit.Domain;
 
 public class AuditLog : Entity
 {

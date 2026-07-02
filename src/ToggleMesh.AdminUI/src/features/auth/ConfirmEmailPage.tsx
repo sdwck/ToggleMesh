@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
-import { Shield, CheckCircle, XCircle } from 'lucide-react';
+import { CheckCircle, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { ToggleMeshIcon } from '@/components/icons/ToggleMeshIcon';
 import api from '@/api/axios';
 
 export function ConfirmEmailPage() {
@@ -27,10 +28,10 @@ export function ConfirmEmailPage() {
             <Card className="w-full max-w-md border-border/40 shadow-2xl text-center">
                 <CardHeader className="space-y-2 pb-8">
                     <div className="flex justify-center mb-4">
-                        <div className={`h-12 w-12 rounded-xl flex items-center justify-center ${status === 'success' ? 'bg-green-500/10' : status === 'error' ? 'bg-red-500/10' : 'bg-primary/10'}`}>
-                            {status === 'loading' && <Shield className="h-6 w-6 text-primary animate-pulse" />}
-                            {status === 'success' && <CheckCircle className="h-6 w-6 text-green-500" />}
-                            {status === 'error' && <XCircle className="h-6 w-6 text-red-500" />}
+                        <div className={`h-14 w-14 rounded-xl flex items-center justify-center border border-border/40 shadow-sm ${status === 'success' ? 'bg-green-500/10' : status === 'error' ? 'bg-red-500/10' : 'bg-zinc-950'}`}>
+                            {status === 'loading' && <ToggleMeshIcon className="h-8 w-8 text-zinc-300 animate-pulse" />}
+                            {status === 'success' && <CheckCircle className="h-8 w-8 text-green-500" />}
+                            {status === 'error' && <XCircle className="h-8 w-8 text-red-500" />}
                         </div>
                     </div>
                     <CardTitle className="text-2xl font-bold tracking-tight">

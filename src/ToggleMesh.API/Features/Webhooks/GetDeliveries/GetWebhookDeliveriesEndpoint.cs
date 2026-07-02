@@ -1,15 +1,13 @@
 using Microsoft.EntityFrameworkCore;
 using ToggleMesh.API.Extensions;
-using ToggleMesh.API.Infrastructure;
+using ToggleMesh.API.Features.Webhooks.Domain;
+using ToggleMesh.API.Infrastructure.Data;
 using ToggleMesh.API.Infrastructure.Endpoints;
-using ToggleMesh.API.Persistence;
 using ToggleMesh.Common.Pagination;
+using AuthModels = ToggleMesh.API.Infrastructure.Security.Authorization.Models;
+
 
 namespace ToggleMesh.API.Features.Webhooks.GetDeliveries;
-
-public class GetWebhookDeliveriesRequest : PagedRequest
-{
-}
 
 public class GetWebhookDeliveriesEndpoint : ToggleEndpoint<GetWebhookDeliveriesRequest, PagedResponse<WebhookDelivery>>
 {
@@ -24,7 +22,7 @@ public class GetWebhookDeliveriesEndpoint : ToggleEndpoint<GetWebhookDeliveriesR
     {
         Get("/projects/{projectId:guid}/webhooks/{webhookId:guid}/deliveries");
         Version(1);
-        this.RequirePermission(Auth.Models.Permissions.ProjectsView);
+        this.RequirePermission(AuthModels.Permissions.ProjectsView);
     }
 
     public override async Task HandleAsync(GetWebhookDeliveriesRequest req, CancellationToken ct)

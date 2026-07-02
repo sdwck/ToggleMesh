@@ -1,4 +1,4 @@
-﻿namespace ToggleMesh.API.Infrastructure.Caching;
+namespace ToggleMesh.API.Infrastructure.Caching;
 
 public interface ICacheInvalidator
 {

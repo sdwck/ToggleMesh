@@ -1,15 +1,33 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useMutation } from '@tanstack/react-query';
-import { Shield } from 'lucide-react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from 'sonner';
-import { useQueryClient } from '@tanstack/react-query';
+import { ToggleMeshIcon } from '@/components/icons/ToggleMeshIcon';
 import { useOrganizationStore } from '@/stores/useOrganizationStore';
 import api from '@/api/axios';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useForm } from 'react-hook-form';
+import * as z from 'zod';
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form';
+import { handleApiError } from '@/api/errorUtils';
+import { useSystemConfig } from '@/api/queries';
+
+const loginSchema = z.object({
+  email: z.string().min(1, 'Email is required').email('Invalid email format'),
+  password: z.string().min(1, 'Password is required'),
+});
+
+type LoginValues = z.infer<typeof loginSchema>;
 
 interface LoginResponse {
   token: string;
@@ -19,11 +37,18 @@ interface LoginResponse {
 export function Login() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const { data: systemConfig } = useSystemConfig();
   const [ssoEnabled, setSsoEnabled] = useState(false);
   const [isSsoExchanging, setIsSsoExchanging] = useState(false);
   const [ssoError, setSsoError] = useState<string | null>(null);
+
+  const form = useForm<LoginValues>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: {
+      email: '',
+      password: '',
+    },
+  });
 
   useEffect(() => {
     api.get<{ enabled: boolean }>('/auth/sso/status')
@@ -67,11 +92,11 @@ export function Login() {
           setIsSsoExchanging(false);
         });
     }
-  }, [navigate]);
+  }, [navigate, queryClient]);
 
   const loginMutation = useMutation({
-    mutationFn: async () => {
-      const response = await api.post<LoginResponse>('/auth/login', { email, password });
+    mutationFn: async (values: LoginValues) => {
+      const response = await api.post<LoginResponse>('/auth/login', values);
       return response.data;
     },
     onSuccess: async (data) => {
@@ -97,11 +122,17 @@ export function Login() {
 
       navigate(inviteToken ? '/projects' : '/');
     },
+    onError: (error: any) => {
+      if (error.response?.status === 401) {
+        form.setError('root', { type: 'server', message: 'Invalid email or password.' });
+      } else {
+        handleApiError(error, form.setError, 'Failed to login');
+      }
+    }
   });
 
-  const handleLoginSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    loginMutation.mutate();
+  const onSubmit = (values: LoginValues) => {
+    loginMutation.mutate(values);
   };
 
   const handleSsoClick = () => {
@@ -133,8 +164,8 @@ export function Login() {
       <Card className="w-full max-w-md border-border/40 shadow-2xl">
         <CardHeader className="space-y-2 text-center pb-8">
           <div className="flex justify-center mb-4">
-            <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
-              <Shield className="h-6 w-6 text-primary" />
+            <div className="h-14 w-14 rounded-xl flex items-center justify-center bg-zinc-950 border border-border/40 shadow-sm transition-shadow">
+              <ToggleMeshIcon className="h-8 w-8 text-zinc-300 transition-colors duration-300" />
             </div>
           </div>
           <CardTitle className="text-2xl font-bold tracking-tight">Welcome back</CardTitle>
@@ -143,52 +174,73 @@ export function Login() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleLoginSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="email">Work Email</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="name@company.com"
-                value={email}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
-                required
-                className="bg-muted/50 border-border/50 focus-visible:ring-1"
-                disabled={loginMutation.isPending}
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <FormField
+                control={form.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Work Email</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="name@company.com"
+                        type="email"
+                        {...field}
+                        className="bg-muted/50 border-border/50 focus-visible:ring-1"
+                        disabled={loginMutation.isPending}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
               />
-            </div>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="password">Password</Label>
-              </div>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
-                required
-                className="bg-muted/50 border-border/50 focus-visible:ring-1"
-                disabled={loginMutation.isPending}
+
+              <FormField
+                control={form.control}
+                name="password"
+                render={({ field }) => (
+                  <FormItem>
+                    <div className="flex items-center justify-between">
+                      <FormLabel>Password</FormLabel>
+                      <a href="/forgot-password" className="text-xs text-primary hover:underline font-medium">
+                        Forgot password?
+                      </a>
+                    </div>
+                    <FormControl>
+                      <Input
+                        type="password"
+                        placeholder="••••••••"
+                        {...field}
+                        className="bg-muted/50 border-border/50 focus-visible:ring-1"
+                        disabled={loginMutation.isPending}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
               />
-            </div>
-            {loginMutation.isError && (
-              <div className="text-sm text-destructive font-medium">
-                Invalid email or password. Please try again.
-              </div>
-            )}
-            {ssoError && (
-              <div className="text-sm text-destructive font-medium">
-                {ssoError}
-              </div>
-            )}
-            <Button
-              type="submit"
-              className="w-full h-11 text-primary-foreground font-medium mt-4"
-              disabled={loginMutation.isPending}
-            >
-              {loginMutation.isPending ? 'Signing in...' : 'Sign in'}
-            </Button>
-          </form>
+
+              {form.formState.errors.root && (
+                <div className="text-sm text-destructive font-medium">
+                  {form.formState.errors.root.message}
+                </div>
+              )}
+              {ssoError && (
+                <div className="text-sm text-destructive font-medium">
+                  {ssoError}
+                </div>
+              )}
+
+              <Button
+                type="submit"
+                className="w-full h-11 text-primary-foreground font-medium mt-4"
+                disabled={loginMutation.isPending}
+              >
+                {loginMutation.isPending ? 'Signing in...' : 'Sign in'}
+              </Button>
+            </form>
+          </Form>
 
           {ssoEnabled && (
             <div className="space-y-4 mt-6">
@@ -211,14 +263,17 @@ export function Login() {
             </div>
           )}
         </CardContent>
-        <CardFooter className="flex justify-center border-t border-border/40 pt-6">
-          <p className="text-sm text-muted-foreground">
-            Don't have an account?{' '}
-            <a href="/register" className="text-primary hover:underline font-medium">
-              Create an account
-            </a>
-          </p>
-        </CardFooter>
+        
+        {systemConfig?.allowOpenRegistration !== false && (
+          <CardFooter className="flex justify-center border-t border-border/40 pt-6">
+            <p className="text-sm text-muted-foreground">
+              Don't have an account?{' '}
+              <a href="/register" className="text-primary hover:underline font-medium">
+                Create an account
+              </a>
+            </p>
+          </CardFooter>
+        )}
       </Card>
     </div>
   );

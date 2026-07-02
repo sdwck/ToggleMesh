@@ -1,23 +1,27 @@
 using System.Net.Http.Json;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
-using ToggleMesh.API.Features.Auth.Models;
-using ToggleMesh.API.Features.Flags;
+using Microsoft.Extensions.DependencyInjection;
 using ToggleMesh.API.Features.Flags.Create;
+using ToggleMesh.API.Features.Flags.Domain;
 using ToggleMesh.API.Features.Flags.Toggle;
 using ToggleMesh.API.Features.Flags.Update;
-using ToggleMesh.API.Features.Projects;
+using ToggleMesh.API.Features.Organizations.Domain;
 using ToggleMesh.API.Features.Projects.AddMember;
 using ToggleMesh.API.Features.Projects.CreateEnvironment;
-using ToggleMesh.API.Persistence;
+using ToggleMesh.API.Features.Projects.Domain;
+using ToggleMesh.API.Infrastructure.Data;
+using ToggleMesh.API.Infrastructure.Security.Authorization.Models;
 using ToggleMesh.IntegrationTests.Infrastructure;
 
 namespace ToggleMesh.IntegrationTests.Audit;
 
-public class AuditTests : IClassFixture<TestWebApplicationFactory>
+[Collection("SharedEnv4")]
+public class AuditTests : IAsyncLifetime
 {
+    public async Task InitializeAsync() => await _factory.ResetDatabaseAsync();
+    public Task DisposeAsync() => Task.CompletedTask;
     private readonly HttpClient _client;
     private readonly TestWebApplicationFactory _factory;
 
@@ -37,7 +41,7 @@ public class AuditTests : IClassFixture<TestWebApplicationFactory>
         var project = new Project { Name = "Audit Project" };
         db.Projects.Add(project);
         db.ProjectMembers.Add(new ProjectMember
-            { Project = project, UserId = Guid.Parse(TestAuthHandler.TestUserId), Role = ProjectRole.Owner });
+        { Project = project, UserId = Guid.Parse(TestAuthHandler.TestUserId), Role = ProjectRole.Owner });
         var env = new ProjectEnvironment { Name = "Audit Env", Project = project };
         db.Environments.Add(env);
         await db.SaveChangesAsync();
@@ -73,7 +77,7 @@ public class AuditTests : IClassFixture<TestWebApplicationFactory>
         var project = new Project { Name = "Audit Project 2" };
         db.Projects.Add(project);
         db.ProjectMembers.Add(new ProjectMember
-            { Project = project, UserId = Guid.Parse(TestAuthHandler.TestUserId), Role = ProjectRole.Owner });
+        { Project = project, UserId = Guid.Parse(TestAuthHandler.TestUserId), Role = ProjectRole.Owner });
         var env = new ProjectEnvironment { Name = "Audit Env 2", Project = project };
         db.Environments.Add(env);
         await db.SaveChangesAsync();
@@ -113,7 +117,7 @@ public class AuditTests : IClassFixture<TestWebApplicationFactory>
         var project = new Project { Name = "Audit Rules Project" };
         db.Projects.Add(project);
         db.ProjectMembers.Add(new ProjectMember
-            { Project = project, UserId = Guid.Parse(TestAuthHandler.TestUserId), Role = ProjectRole.Owner });
+        { Project = project, UserId = Guid.Parse(TestAuthHandler.TestUserId), Role = ProjectRole.Owner });
         var env = new ProjectEnvironment { Name = "Audit Rules Env", Project = project };
         db.Environments.Add(env);
         await db.SaveChangesAsync();
@@ -158,18 +162,18 @@ public class AuditTests : IClassFixture<TestWebApplicationFactory>
         var project = new Project { Name = "Audit Member Project" };
         db.Projects.Add(project);
         db.ProjectMembers.Add(new ProjectMember
-            { Project = project, UserId = Guid.Parse(TestAuthHandler.TestUserId), Role = ProjectRole.Owner });
+        { Project = project, UserId = Guid.Parse(TestAuthHandler.TestUserId), Role = ProjectRole.Owner });
 
         var targetUser = new ApplicationUser
-            { Id = Guid.CreateVersion7(), Email = "new_member@test.com", UserName = "new_member@test.com" };
+        { Id = Guid.CreateVersion7(), Email = "new_member@test.com", UserName = "new_member@test.com" };
         db.Users.Add(targetUser);
 
-        db.OrganizationMembers.Add(new ToggleMesh.API.Features.Organizations.OrganizationMember
+        db.OrganizationMembers.Add(new OrganizationMember
         {
             Id = Guid.CreateVersion7(),
             OrganizationId = Guid.Parse("11111111-1111-1111-1111-111111111111"),
             UserId = targetUser.Id,
-            Role = ToggleMesh.API.Features.Organizations.OrganizationRole.Member
+            Role = OrganizationRole.Member
         });
 
         await db.SaveChangesAsync();
@@ -205,10 +209,10 @@ public class AuditTests : IClassFixture<TestWebApplicationFactory>
         var project = new Project { Name = "Audit Remove Member" };
         db.Projects.Add(project);
         db.ProjectMembers.Add(new ProjectMember
-            { Project = project, UserId = Guid.Parse(TestAuthHandler.TestUserId), Role = ProjectRole.Owner });
+        { Project = project, UserId = Guid.Parse(TestAuthHandler.TestUserId), Role = ProjectRole.Owner });
 
         var targetUser = new ApplicationUser
-            { Id = Guid.CreateVersion7(), Email = "target@test.com", UserName = "target@test.com" };
+        { Id = Guid.CreateVersion7(), Email = "target@test.com", UserName = "target@test.com" };
         db.Users.Add(targetUser);
         db.ProjectMembers.Add(
             new ProjectMember { Project = project, UserId = targetUser.Id, Role = ProjectRole.Viewer });
@@ -242,7 +246,7 @@ public class AuditTests : IClassFixture<TestWebApplicationFactory>
         var project = new Project { Name = "Audit Env Create" };
         db.Projects.Add(project);
         db.ProjectMembers.Add(new ProjectMember
-            { Project = project, UserId = Guid.Parse(TestAuthHandler.TestUserId), Role = ProjectRole.Owner });
+        { Project = project, UserId = Guid.Parse(TestAuthHandler.TestUserId), Role = ProjectRole.Owner });
 
         await db.SaveChangesAsync();
         db.AuditLogs.RemoveRange(db.AuditLogs);
@@ -275,7 +279,7 @@ public class AuditTests : IClassFixture<TestWebApplicationFactory>
         var project = new Project { Name = "Old Project Name" };
         db.Projects.Add(project);
         db.ProjectMembers.Add(new ProjectMember
-            { Project = project, UserId = Guid.Parse(TestAuthHandler.TestUserId), Role = ProjectRole.Owner });
+        { Project = project, UserId = Guid.Parse(TestAuthHandler.TestUserId), Role = ProjectRole.Owner });
         await db.SaveChangesAsync();
 
         db.AuditLogs.RemoveRange(db.AuditLogs);
@@ -309,7 +313,7 @@ public class AuditTests : IClassFixture<TestWebApplicationFactory>
         var project = new Project { Name = "Soft Delete Project" };
         db.Projects.Add(project);
         db.ProjectMembers.Add(new ProjectMember
-            { Project = project, UserId = Guid.Parse(TestAuthHandler.TestUserId), Role = ProjectRole.Owner });
+        { Project = project, UserId = Guid.Parse(TestAuthHandler.TestUserId), Role = ProjectRole.Owner });
         await db.SaveChangesAsync();
 
         db.AuditLogs.RemoveRange(db.AuditLogs);
@@ -358,7 +362,7 @@ public class AuditTests : IClassFixture<TestWebApplicationFactory>
 
         var configuration = scope.ServiceProvider.GetRequiredService<IConfiguration>();
         if (!int.TryParse(
-                configuration["Auth:RefreshTokenLifetimeDays"], 
+                configuration["Auth:RefreshTokenLifetimeDays"],
                 out var tokenLifetime))
             tokenLifetime = 7;
 

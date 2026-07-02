@@ -1,4 +1,4 @@
-namespace ToggleMesh.API.Features.Projects;
+namespace ToggleMesh.API.Features.Projects.Domain;
 
 public enum KeyType
 {

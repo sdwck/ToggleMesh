@@ -1,6 +1,6 @@
 {
   "name": "togglemesh-js",
-  "version": "0.2.1",
+  "version": "0.2.3",
   "description": "Official lightweight JavaScript/TypeScript SDK for ToggleMesh - real-time feature flag engine.",
   "keywords": [
     "feature-flags",

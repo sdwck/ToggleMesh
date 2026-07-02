@@ -1,10 +1,12 @@
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using StackExchange.Redis;
 using ToggleMesh.API.Extensions;
-using ToggleMesh.API.Infrastructure;
+using ToggleMesh.API.Features.Flags.Domain;
+using ToggleMesh.API.Infrastructure.Caching;
+using ToggleMesh.API.Infrastructure.Data;
 using ToggleMesh.API.Infrastructure.Endpoints;
-using ToggleMesh.API.Persistence;
-using ToggleMesh.API.Features.Flags;
+using AuthModels = ToggleMesh.API.Infrastructure.Security.Authorization.Models;
 
 namespace ToggleMesh.API.Features.Flags.Get;
 
@@ -23,7 +25,7 @@ public class GetFlagEndpoint : ToggleEndpointWithoutRequest<GetFlagResponse>
     {
         Get("/projects/{projectId}/environments/{environmentId}/flags/{flagKey}");
         Version(1);
-        this.RequirePermission(Auth.Models.Permissions.FlagsView);
+        this.RequirePermission(AuthModels.Permissions.FlagsView);
     }
 
     public override async Task HandleAsync(CancellationToken ct)
@@ -37,12 +39,12 @@ public class GetFlagEndpoint : ToggleEndpointWithoutRequest<GetFlagResponse>
             return;
         }
 
-        var cacheKey = $"flags:{environmentId}:{flagKey}";
+        var cacheKey = CacheKeys.FlagState(environmentId, flagKey);
         var cachedValue = await _redis.StringGetAsync(cacheKey);
 
         if (cachedValue.HasValue)
         {
-            var cachedResponse = System.Text.Json.JsonSerializer.Deserialize<GetFlagResponse>((string)cachedValue!);
+            var cachedResponse = JsonSerializer.Deserialize<GetFlagResponse>((string)cachedValue!);
             if (cachedResponse is not null)
             {
                 await Send.OkAsync(cachedResponse, ct);
@@ -62,22 +64,10 @@ public class GetFlagEndpoint : ToggleEndpointWithoutRequest<GetFlagResponse>
             return;
         }
 
-        var response = new GetFlagResponse(
-            state.FeatureFlag.Key, 
-            state.IsEnabled, 
-            state.Rules.Select(r => new RuleDto(r.GroupId, r.Attribute, r.Operator, r.Value)),
-            state.FeatureFlag.Tags,
-            state.RolloutPercentage,
-            0L,
-            0L,
-            state.IsMabEnabled,
-            state.MabGoalEvent,
-            state.IsExperimentActive,
-            null,
-            state.MabOptimizationType,
-            state.ContextPartitionKeys, state.ContextualRollouts);
+        var response = state.ToDto();
 
-        await _redis.StringSetAsync(cacheKey, System.Text.Json.JsonSerializer.Serialize(response), TimeSpan.FromMinutes(10));
+        var ttl = TimeSpan.FromMinutes(Config.GetValue("Caching:DefaultTtlMinutes", 10));
+        await _redis.StringSetAsync(cacheKey, JsonSerializer.Serialize(response), ttl);
         await Send.OkAsync(response, ct);
     }
 }

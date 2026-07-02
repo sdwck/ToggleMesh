@@ -6,4 +6,5 @@ public class UpdateWebhookRequest
     public string Url { get; set; } = string.Empty;
     public Guid[] EnvironmentIds { get; set; } = [];
     public string[] Events { get; set; } = [];
+    public string[] FlagTags { get; set; } = [];
 }

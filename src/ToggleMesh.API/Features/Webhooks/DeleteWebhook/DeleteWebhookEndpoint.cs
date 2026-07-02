@@ -1,8 +1,9 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using ToggleMesh.API.Extensions;
-using ToggleMesh.API.Infrastructure;
+using ToggleMesh.API.Infrastructure.Data;
 using ToggleMesh.API.Infrastructure.Endpoints;
-using ToggleMesh.API.Persistence;
+using AuthModels = ToggleMesh.API.Infrastructure.Security.Authorization.Models;
+
 
 namespace ToggleMesh.API.Features.Webhooks.DeleteWebhook;
 
@@ -19,7 +20,7 @@ public class DeleteWebhookEndpoint : ToggleEndpointWithoutRequest
     {
         Delete("/projects/{projectId:guid}/webhooks/{id:guid}");
         Version(1);
-        this.RequirePermission(Auth.Models.Permissions.ProjectsEdit);
+        this.RequirePermission(AuthModels.Permissions.ProjectsEdit);
     }
 
     public override async Task HandleAsync(CancellationToken ct)

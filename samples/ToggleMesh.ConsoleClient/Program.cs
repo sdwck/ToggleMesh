@@ -1,17 +1,20 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using ToggleMesh.ConsoleClient;
 using ToggleMesh.SDK.Extensions;
 
 var builder = Host.CreateDefaultBuilder(args);
+
 builder.ConfigureServices((context, services) =>
 {
     services.AddToggleMeshClient(options =>
     {
-        options.BaseUrl = context.Configuration["ToggleMesh:BaseUrl"] ?? throw new Exception("ToggleMesh__Address is missing");
-        options.ApiKey = context.Configuration["ToggleMesh:ApiKey"] ?? throw new Exception("ToggleMesh__ApiKey is missing");
+        options.BaseUrl = context.Configuration["ToggleMesh:BaseUrl"]!;
+        options.ApiKey = context.Configuration["ToggleMesh:ApiKey"]!;
+        options.MaxBatchSize = 5000;
     });
     services.AddHostedService<Worker>();
+    services.AddHostedService<EnterpriseSimulationWorker>();
 });
 
 var app = builder.Build();

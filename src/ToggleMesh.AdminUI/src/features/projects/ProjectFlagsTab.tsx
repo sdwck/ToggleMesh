@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ToggleRight, Trash2, MoreHorizontal, Settings2, Copy, ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react';
+import { ToggleRight, Trash2, MoreHorizontal, Settings2, Copy, ArrowDown, ArrowUp, ArrowUpDown, Sparkles } from 'lucide-react';
 import { useProjectFlagsInfinite, useToggleFeatureFlag, useUpdateFlagPrivacy, useDeleteFeatureFlag } from '@/api/queries';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -189,7 +189,7 @@ export function ProjectFlagsTab({ project, search, tags, sortBy, isLoadingProjec
         ) {
             const scrollElement = scrollContainerRef.current;
             if (scrollElement && scrollElement.scrollTop > 50) {
-                fetchNextPage();
+                setTimeout(() => fetchNextPage(), 0);
             }
         }
     }, [virtualItems, orderedFlags.length, hasNextPage, isFetchingNextPage, fetchNextPage]);
@@ -320,12 +320,17 @@ export function ProjectFlagsTab({ project, search, tags, sortBy, isLoadingProjec
 
                                                     return (
                                                         <TableCell key={env.id} className="text-center py-2" onClick={(e) => e.stopPropagation()}>
-                                                            <div className="inline-flex items-center justify-center">
+                                                            <div className="relative inline-flex items-center justify-center">
                                                                 <Switch
                                                                     checked={isEnabled}
                                                                     onCheckedChange={(checked) => handleToggle(env.id, flag.key, checked)}
                                                                     disabled={toggleFlag.isPending || !canEditEnv}
                                                                 />
+                                                                {state?.isMabEnabled && (
+                                                                    <div title="AI Managed (MAB) Active" className="absolute left-full ml-2 bg-purple-500/10 p-1 rounded-md border border-purple-500/20">
+                                                                        <Sparkles className="h-3 w-3 text-purple-400" />
+                                                                    </div>
+                                                                )}
                                                             </div>
                                                         </TableCell>
                                                     );

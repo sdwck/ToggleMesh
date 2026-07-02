@@ -1,0 +1,31 @@
+{
+  "name": "togglemesh-node",
+  "version": "0.2.3",
+  "description": "ToggleMesh Server SDK for Node.js",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest",
+    "clean": "rm -rf dist"
+  },
+  "keywords": [
+    "feature-flags",
+    "togglemesh"
+  ],
+  "author": "sdwck",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0",
+    "vitest": "^4.1.9"
+  }
+}

@@ -1,3 +1,5 @@
+using ToggleMesh.API.Features.Projects.Domain;
+
 namespace ToggleMesh.API.Features.Projects.GetMembers;
 
 public class MemberDto

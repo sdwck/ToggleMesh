@@ -37,14 +37,32 @@ export interface PendingInvitationDto {
 export interface ProjectEnvironmentDto {
     id: string;
     name: string;
+    activeFlagsCount: number;
+    totalFlagsCount: number;
+}
+
+export interface ProjectHistoricalExperimentDto {
+    id: string;
+    environmentId: string;
+    environmentName: string;
+    flagKey: string;
+    startedAt: string;
+    endedAt: string;
+    finalMetricsSnapshot: string;
+    flagConfigSnapshot: string;
 }
 
 export interface Project {
     id: string;
     name: string;
-    environmentCount: number;
-    environments: ProjectEnvironmentDto[];
     userRole: ProjectRole;
+    totalFlags: number;
+    activeFlags: number;
+    runningExperiments: number;
+    mabActiveFlagsCount: number;
+    topExperimentFlagKey: string | null;
+    failingWebhooksCount: number;
+    evaluations24H: number;
 }
 
 export const KeyType = {
@@ -83,6 +101,27 @@ export interface RuleDto {
     value: string;
 }
 
+export interface SegmentDto {
+    id: string;
+    environmentId: string;
+    name: string;
+    description: string;
+    rules: RuleDto[];
+    createdAt: string;
+}
+
+export interface CreateSegmentRequest {
+    name: string;
+    description: string;
+    rules: RuleDto[];
+}
+
+export interface UpdateSegmentRequest {
+    name: string;
+    description: string;
+    rules: RuleDto[];
+}
+
 export interface FeatureFlag {
     id: string;
     key: string;
@@ -92,6 +131,12 @@ export interface FeatureFlag {
     trueCount: number;
     falseCount: number;
     tags: string[];
+    isMabEnabled: boolean;
+    mabGoalEvent: string | null;
+    isExperimentActive: boolean;
+    mabOptimizationType: 0 | 1;
+    contextPartitionKeys: string[];
+    contextualRollouts: Record<string, number> | null;
 }
 
 export interface FlagEnvironmentStateDto {
@@ -101,6 +146,9 @@ export interface FlagEnvironmentStateDto {
     trueCount: number;
     falseCount: number;
     rulesCount: number;
+    isMabEnabled: boolean;
+    mabGoalEvent: string | null;
+    isExperimentActive: boolean;
 }
 
 export interface ProjectFlagDto {
@@ -222,6 +270,7 @@ export interface CreateWebhookRequest {
     url: string;
     environmentIds: string[];
     events: string[];
+    flagTags: string[];
 }
 
 export interface TokenDto {
@@ -244,6 +293,17 @@ export interface CreateTokenResponse {
     plainToken: string;
     createdAt: string;
     expiresAt: string | null;
+}
+
+export interface ResetPasswordRequest {
+    email: string;
+    token: string;
+    newPassword: string;
+}
+
+export interface ChangePasswordRequest {
+    currentPassword: string;
+    newPassword: string;
 }
 
 export interface UserProfile {
@@ -280,6 +340,7 @@ export interface Webhook {
     consecutiveFailures: number;
     environmentIds: string[];
     events: string[];
+    flagTags: string[];
     lastTriggeredAt: string | null;
     createdAt: string;
 }
@@ -296,4 +357,84 @@ export interface WebhookDelivery {
     nextAttemptAt: string | null;
     completedAt: string | null;
     createdAt: string;
+}
+
+export interface ExperimentResultDto {
+    eventName: string;
+    controlExposures: number;
+    controlConversions: number;
+    controlConversionRate: number;
+    treatmentExposures: number;
+    treatmentConversions: number;
+    treatmentConversionRate: number;
+    expectedUplift: number;
+    probabilityToBeatBaseline: number;
+
+    controlTotalValue: number;
+    treatmentTotalValue: number;
+    controlArpu: number;
+    treatmentArpu: number;
+    expectedValueUplift: number;
+    isRevenueBased: boolean;
+
+    lastCalculatedAt: string;
+}
+
+export interface ProjectExperimentSummaryDto {
+    environmentId: string;
+    environmentName: string;
+    flagKey: string;
+    eventName: string;
+    totalParticipants: number;
+    lastCalculatedAt: string;
+    probabilityToBeatBaseline: number;
+    expectedUplift: number;
+    expectedValueUplift: number;
+    isRevenueBased: boolean;
+    isPrimaryGoal: boolean;
+    isExperimentActive: boolean;
+    isMabEnabled: boolean;
+    rolloutPercentage: number | null;
+}
+
+export interface EvaluationTimeseriesPoint {
+    time: string;
+    count: number;
+}
+
+export interface DashboardExperimentSummaryDto {
+    flagKey: string;
+    environmentId: string;
+    environmentName: string;
+    eventName: string;
+    probabilityToBeatBaseline: number;
+    expectedUplift: number;
+    lastCalculatedAt: string;
+}
+
+export interface ProjectDashboardDto {
+    activeFlagsCount: number;
+    environmentsCount: number;
+    failingWebhooksCount: number;
+    mabActiveFlagsCount: number;
+    recentExperiments: DashboardExperimentSummaryDto[];
+    evaluationsLast24Hours: EvaluationTimeseriesPoint[];
+}
+
+export interface TimeSeriesResponsePoint {
+    time: string;
+    variant: boolean;
+    exposures: number;
+    conversions: number;
+    conversionRate: number;
+}
+
+export interface ExperimentIterationDto {
+    id: string;
+    environmentId: string;
+    flagKey: string;
+    startedAt: string;
+    endedAt: string;
+    finalMetricsSnapshot: string;
+    flagConfigSnapshot: string;
 }

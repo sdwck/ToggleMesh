@@ -1,6 +1,6 @@
 using ToggleMesh.API.Infrastructure.Data.Abstractions;
 
-namespace ToggleMesh.API.Features.Flags;
+namespace ToggleMesh.API.Features.Flags.Domain;
 
 public class FlagRule : AuditableEntity
 {

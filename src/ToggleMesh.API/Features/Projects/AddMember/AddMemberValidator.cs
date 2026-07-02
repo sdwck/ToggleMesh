@@ -1,5 +1,5 @@
-﻿using FluentValidation;
-using FastEndpoints;
+﻿using FastEndpoints;
+using FluentValidation;
 
 namespace ToggleMesh.API.Features.Projects.AddMember;
 

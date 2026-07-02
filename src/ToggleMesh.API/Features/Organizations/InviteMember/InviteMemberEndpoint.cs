@@ -1,10 +1,10 @@
-using ToggleMesh.API.Infrastructure;
-using ToggleMesh.API.Persistence;
-using ToggleMesh.API.Features.Auth.Models;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using ToggleMesh.API.Infrastructure.Endpoints;
+using ToggleMesh.API.Features.Organizations.Domain;
+using ToggleMesh.API.Infrastructure.Data;
 using ToggleMesh.API.Infrastructure.Email;
+using ToggleMesh.API.Infrastructure.Endpoints;
+using ToggleMesh.API.Infrastructure.Security.Authorization.Models;
 
 namespace ToggleMesh.API.Features.Organizations.InviteMember;
 
@@ -14,32 +14,26 @@ public class InviteMemberEndpoint : ToggleEndpoint<InviteMemberRequest>
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly IEmailSender _emailSender;
     private readonly IConfiguration _configuration;
+    private readonly IEmailTemplateService _templateService;
 
-    public InviteMemberEndpoint(AppDbContext db, UserManager<ApplicationUser> userManager, IEmailSender emailSender, IConfiguration configuration)
+    public InviteMemberEndpoint(AppDbContext db, UserManager<ApplicationUser> userManager, IEmailSender emailSender, IConfiguration configuration, IEmailTemplateService templateService)
     {
         _db = db;
         _userManager = userManager;
         _emailSender = emailSender;
         _configuration = configuration;
+        _templateService = templateService;
     }
 
     public override void Configure()
     {
         Post("/organizations/{OrganizationId}/members/invite");
         Version(1);
+        PreProcessor<RequireOrgAdminPreProcessor<InviteMemberRequest>>();
     }
 
     public override async Task HandleAsync(InviteMemberRequest req, CancellationToken ct)
     {
-        var currentUserMember = await _db.OrganizationMembers
-            .FirstOrDefaultAsync(m => m.OrganizationId == req.OrganizationId && m.UserId == UserId, ct);
-
-        if (currentUserMember is not { Role: OrganizationRole.Admin })
-        {
-            await Send.ForbiddenAsync(ct);
-            return;
-        }
-
         var organization = await _db.Organizations.FindAsync([req.OrganizationId], ct);
         if (organization == null)
             ThrowError("Organization not found.");
@@ -51,11 +45,7 @@ public class InviteMemberEndpoint : ToggleEndpoint<InviteMemberRequest>
                 .AnyAsync(m => m.OrganizationId == req.OrganizationId && m.UserId == targetUser.Id, ct);
                 
             if (exists)
-            {
-                AddError("User is already a member of this organization.");
-                await Send.ErrorsAsync(cancellation: ct);
-                return;
-            }
+                ThrowError("User is already a member of this organization.", 400);
         }
 
         var existingInvite = await _db.OrganizationInvitations
@@ -82,11 +72,18 @@ public class InviteMemberEndpoint : ToggleEndpoint<InviteMemberRequest>
         var frontendUrl = _configuration["Auth:FrontendUrl"] ?? "http://localhost:5173";
         var inviteUrl = $"{frontendUrl}/invites/{token}";
 
-        var emailBody = $@"
-            <h2>You've been invited!</h2>
-            <p>You have been invited to join <strong>{organization.Name}</strong> on ToggleMesh.</p>
-            <p><a href='{inviteUrl}'>Click here to accept the invitation</a></p>
-        ";
+        var startYear = 2026;
+        var currentYear = DateTimeOffset.UtcNow.Year;
+        var copyrightYear = currentYear > startYear ? $"{startYear}-{currentYear}" : startYear.ToString();
+
+        var emailBody = await _templateService.RenderAsync("InviteTemplate", new 
+        { 
+            OrganizationName = organization.Name, 
+            InviteUrl = inviteUrl,
+            ToggleMeshLogoUrl = "https://raw.githubusercontent.com/sdwck/ToggleMesh/main/src/ToggleMesh.AdminUI/src/assets/icon.png",
+            CopyrightYear = copyrightYear,
+            DashboardUrl = frontendUrl
+        }, ct);
 
         await _emailSender.SendEmailAsync(req.Email, $"Invitation to join {organization.Name}", emailBody, ct);
 

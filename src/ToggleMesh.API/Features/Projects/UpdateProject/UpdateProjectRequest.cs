@@ -1,4 +1,4 @@
-﻿namespace ToggleMesh.API.Features.Projects.UpdateProject;
+namespace ToggleMesh.API.Features.Projects.UpdateProject;
 
 public class UpdateProjectRequest
 {

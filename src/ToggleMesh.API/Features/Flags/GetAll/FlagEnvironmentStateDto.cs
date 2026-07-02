@@ -1,4 +1,4 @@
-﻿namespace ToggleMesh.API.Features.Flags.GetAll;
+namespace ToggleMesh.API.Features.Flags.GetAll;
 
 public record FlagEnvironmentStateDto(
     Guid EnvironmentId,
@@ -6,5 +6,7 @@ public record FlagEnvironmentStateDto(
     int? RolloutPercentage,
     long TrueCount,
     long FalseCount,
-    int RulesCount
+    int RulesCount,
+    bool IsMabEnabled,
+    string? MabGoalEvent
 );

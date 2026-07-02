@@ -1,14 +1,14 @@
-import {useState, useMemo} from 'react';
-import {Plus, Users, Trash2, Pencil} from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { Plus, Users, Trash2, Pencil } from 'lucide-react';
 import {
     useProjectMembers,
     useAddProjectMember,
     useUpdateProjectMember,
     useRemoveProjectMember
 } from '@/api/queries';
-import {Button} from '@/components/ui/button';
-import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card';
-import {Input} from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import {
     Dialog,
     DialogContent,
@@ -18,14 +18,40 @@ import {
     DialogTitle,
     DialogTrigger
 } from '@/components/ui/dialog';
-import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from '@/components/ui/table';
-import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/components/ui/select';
-import {ProjectRole} from '@/api/types';
-import type {ProjectDetails, ProjectMember} from '@/api/types';
-import {toast} from 'sonner';
-import {jwtDecode} from "jwt-decode";
-import {EmptyState} from "@/components/EmptyState.tsx";
-import {Skeleton} from "@/components/ui/skeleton.tsx";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ProjectRole } from '@/api/types';
+import type { ProjectDetails, ProjectMember } from '@/api/types';
+import { toast } from 'sonner';
+import { jwtDecode } from "jwt-decode";
+import { EmptyState } from "@/components/EmptyState.tsx";
+import { Skeleton } from "@/components/ui/skeleton.tsx";
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useForm } from 'react-hook-form';
+import * as z from 'zod';
+import {
+    Form,
+    FormControl,
+    FormField,
+    FormItem,
+    FormMessage,
+} from '@/components/ui/form';
+import { handleApiError } from '@/api/errorUtils';
+
+const addMemberSchema = z.object({
+    email: z.string().email('Invalid email address'),
+    role: z.string()
+});
+type AddMemberValues = z.infer<typeof addMemberSchema>;
+
+const editMemberSchema = z.object({
+    role: z.string(),
+    environmentRoles: z.array(z.object({
+        environmentId: z.string(),
+        role: z.number()
+    }))
+});
+type EditMemberValues = z.infer<typeof editMemberSchema>;
 
 const getRoleName = (role: ProjectRole) => {
     switch (role) {
@@ -46,19 +72,24 @@ const getRoleName = (role: ProjectRole) => {
 
 export function ProjectMembersTab({ project, isLoading }: { project?: ProjectDetails; isLoading: boolean }) {
     const projectId = project?.id ?? '';
-    const {data: members, isLoading: isLoadingMembers} = useProjectMembers(projectId);
+    const { data: members, isLoading: isLoadingMembers } = useProjectMembers(projectId);
     const addMember = useAddProjectMember(projectId);
     const updateMember = useUpdateProjectMember(projectId);
     const removeMember = useRemoveProjectMember(projectId);
 
     const [isAddMemberOpen, setIsAddMemberOpen] = useState(false);
-    const [newMemberEmail, setNewMemberEmail] = useState('');
-    const [newMemberRole, setNewMemberRole] = useState<string>('3');
-
     const [memberToEdit, setMemberToEdit] = useState<ProjectMember | null>(null);
-    const [editRoleValue, setEditRoleValue] = useState<string>('3');
-    const [editEnvRoles, setEditEnvRoles] = useState<{ environmentId: string; role: number }[]>([]);
     const [memberToRemove, setMemberToRemove] = useState<ProjectMember | null>(null);
+
+    const addForm = useForm<AddMemberValues>({
+        resolver: zodResolver(addMemberSchema),
+        defaultValues: { email: '', role: '3' }
+    });
+
+    const editForm = useForm<EditMemberValues>({
+        resolver: zodResolver(editMemberSchema),
+        defaultValues: { role: '3', environmentRoles: [] }
+    });
 
     const canManageProject = project?.userRole === ProjectRole.Owner || project?.userRole === ProjectRole.Admin;
 
@@ -81,45 +112,45 @@ export function ProjectMembersTab({ project, isLoading }: { project?: ProjectDet
         });
     }, [members]);
 
-    const handleAddMember = async () => {
-        if (!newMemberEmail.trim()) return;
+    const handleAddMemberSubmit = async (values: AddMemberValues) => {
         try {
-            await addMember.mutateAsync({email: newMemberEmail, role: parseInt(newMemberRole)});
+            await addMember.mutateAsync({ email: values.email, role: parseInt(values.role) });
             toast.success('Member added');
-            setNewMemberEmail('');
-            setNewMemberRole('3');
+            addForm.reset({ email: '', role: '3' });
             setIsAddMemberOpen(false);
-        } catch {
-            toast.error('Failed to add member');
+        } catch (error: any) {
+            handleApiError(error, addForm.setError, 'Failed to add member');
         }
     };
 
-    const handleUpdateMember = async () => {
+    const handleUpdateMemberSubmit = async (values: EditMemberValues) => {
         if (!memberToEdit) return;
         try {
             await updateMember.mutateAsync({
                 userId: memberToEdit.userId,
-                role: parseInt(editRoleValue),
-                environmentRoles: editEnvRoles.length > 0 ? editEnvRoles : null
+                role: parseInt(values.role),
+                environmentRoles: values.environmentRoles.length > 0 ? values.environmentRoles : null
             });
             toast.success('Member updated');
             setMemberToEdit(null);
-        } catch (err: any) {
-            toast.error(err.response?.data?.errors?.[0]?.message || 'Failed to update member');
+        } catch (error: any) {
+            handleApiError(error, editForm.setError, 'Failed to update member');
         }
     };
 
     const handleEnvRoleChange = (envId: string, value: string) => {
+        let newRoles = [...(editForm.getValues('environmentRoles') || [])];
         if (value === 'inherit') {
-            setEditEnvRoles(editEnvRoles.filter(r => r.environmentId !== envId));
+            newRoles = newRoles.filter(r => r.environmentId !== envId);
         } else {
-            const existing = editEnvRoles.find(r => r.environmentId === envId);
+            const existing = newRoles.find(r => r.environmentId === envId);
             if (existing) {
-                setEditEnvRoles(editEnvRoles.map(r => r.environmentId === envId ? {...r, role: parseInt(value)} : r));
+                existing.role = parseInt(value);
             } else {
-                setEditEnvRoles([...editEnvRoles, {environmentId: envId, role: parseInt(value)}]);
+                newRoles.push({ environmentId: envId, role: parseInt(value) });
             }
         }
+        editForm.setValue('environmentRoles', newRoles, { shouldDirty: true });
     };
 
     const handleRemoveMember = async () => {
@@ -145,55 +176,75 @@ export function ProjectMembersTab({ project, isLoading }: { project?: ProjectDet
                 <Dialog open={isAddMemberOpen} onOpenChange={setIsAddMemberOpen}>
                     <DialogTrigger asChild>
                         <Button>
-                            <Plus className="mr-2 h-4 w-4"/>
+                            <Plus className="mr-2 h-4 w-4" />
                             Add Member
                         </Button>
                     </DialogTrigger>
-                    <DialogContent 
-                        className="border-border/40 bg-zinc-950"
-                        onKeyDown={(e) => {
-                            if (e.key === 'Enter' && newMemberEmail.trim()) {
-                                handleAddMember();
-                            }
-                        }}
-                    >
+                    <DialogContent className="border-border/40 bg-zinc-950">
                         <DialogHeader>
                             <DialogTitle>Add Team Member</DialogTitle>
                             <DialogDescription>
                                 Invite someone to collaborate on this project.
                             </DialogDescription>
                         </DialogHeader>
-                        <div className="space-y-4 py-4">
-                            <div className="space-y-2">
-                                <label className="text-sm font-medium">Email Address</label>
-                                <Input
-                                    placeholder="user@example.com"
-                                    value={newMemberEmail}
-                                    onChange={(e) => setNewMemberEmail(e.target.value)}
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <label className="text-sm font-medium">Role</label>
-                                <Select value={newMemberRole} onValueChange={setNewMemberRole}>
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Select a role"/>
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {project.userRole === ProjectRole.Owner &&
-                                            <SelectItem value="0">Owner</SelectItem>}
-                                        <SelectItem value="1">Admin</SelectItem>
-                                        <SelectItem value="2">Editor</SelectItem>
-                                        <SelectItem value="3">Viewer</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                        </div>
-                        <DialogFooter>
-                            <Button variant="outline" onClick={() => setIsAddMemberOpen(false)}>Cancel</Button>
-                            <Button onClick={handleAddMember} disabled={addMember.isPending || !newMemberEmail.trim()}>
-                                {addMember.isPending ? 'Adding...' : 'Add Member'}
-                            </Button>
-                        </DialogFooter>
+                        <Form {...addForm}>
+                            <form onSubmit={addForm.handleSubmit(handleAddMemberSubmit)}>
+                                <div className="space-y-4 py-4">
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-medium">Email Address</label>
+                                        <FormField
+                                            control={addForm.control}
+                                            name="email"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormControl>
+                                                        <Input {...field} placeholder="user@example.com" />
+                                                    </FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-medium">Role</label>
+                                        <FormField
+                                            control={addForm.control}
+                                            name="role"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormControl>
+                                                        <Select value={field.value} onValueChange={field.onChange}>
+                                                            <SelectTrigger>
+                                                                <SelectValue placeholder="Select a role" />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                {project.userRole === ProjectRole.Owner &&
+                                                                    <SelectItem value="0">Owner</SelectItem>}
+                                                                <SelectItem value="1">Admin</SelectItem>
+                                                                <SelectItem value="2">Editor</SelectItem>
+                                                                <SelectItem value="3">Viewer</SelectItem>
+                                                            </SelectContent>
+                                                        </Select>
+                                                    </FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                    </div>
+                                </div>
+                                {addForm.formState.errors.root && (
+                                    <div className="text-sm text-destructive font-medium px-1">
+                                        {addForm.formState.errors.root.message}
+                                    </div>
+                                )}
+                                <DialogFooter className="mt-4">
+                                    <Button type="button" variant="outline" onClick={() => setIsAddMemberOpen(false)}>Cancel</Button>
+                                    <Button type="submit" disabled={addMember.isPending}>
+                                        {addMember.isPending ? 'Adding...' : 'Add Member'}
+                                    </Button>
+                                </DialogFooter>
+                            </form>
+                        </Form>
                     </DialogContent>
                 </Dialog>
             </div>
@@ -201,7 +252,7 @@ export function ProjectMembersTab({ project, isLoading }: { project?: ProjectDet
             <Card className="border-border/40">
                 <CardHeader>
                     <CardTitle className="text-lg flex items-center gap-2">
-                        <Users className="h-5 w-5 text-muted-foreground"/>
+                        <Users className="h-5 w-5 text-muted-foreground" />
                         Team Members
                     </CardTitle>
                     <CardDescription>Users who have access to this project.</CardDescription>
@@ -246,20 +297,20 @@ export function ProjectMembersTab({ project, isLoading }: { project?: ProjectDet
                                                 <TableCell className="py-2">
                                                     <div className="flex items-center gap-3">
                                                         <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center border border-primary/5">
-                                                            <Users className="h-4 w-4 text-primary"/>
+                                                            <Users className="h-4 w-4 text-primary" />
                                                         </div>
                                                         <div className="flex flex-col">
-                            <span className="font-medium text-sm">
-                                {member.email}
-                                {isSelf && <span className="ml-2 text-xs text-muted-foreground font-normal">(You)</span>}
-                            </span>
+                                                            <span className="font-medium text-sm">
+                                                                {member.email}
+                                                                {isSelf && <span className="ml-2 text-xs text-muted-foreground font-normal">(You)</span>}
+                                                            </span>
                                                             <span className="text-[10px] text-muted-foreground/50 font-mono mt-0.5">{member.userId}</span>
                                                         </div>
                                                     </div>
                                                 </TableCell>
                                                 <TableCell className="py-2">
                                                     <div className="flex items-center gap-2">
-                                                        <span 
+                                                        <span
                                                             title={member.isOrganizationAdmin ? "Inherited from Organization" : undefined}
                                                             className={`inline-flex items-center rounded bg-secondary/50 px-2 py-0.5 text-xs font-medium text-secondary-foreground border border-border/10 ${member.isOrganizationAdmin ? 'cursor-help' : ''}`}
                                                         >
@@ -276,12 +327,14 @@ export function ProjectMembersTab({ project, isLoading }: { project?: ProjectDet
                                                                 className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-md cursor-pointer"
                                                                 onClick={() => {
                                                                     setMemberToEdit(member);
-                                                                    setEditRoleValue(member.role.toString());
-                                                                    setEditEnvRoles(member.environmentRoles || []);
+                                                                    editForm.reset({
+                                                                        role: member.role.toString(),
+                                                                        environmentRoles: member.environmentRoles || []
+                                                                    });
                                                                 }}
                                                                 title="Edit Role"
                                                             >
-                                                                <Pencil className="h-4 w-4"/>
+                                                                <Pencil className="h-4 w-4" />
                                                             </Button>
                                                             <Button
                                                                 variant="ghost"
@@ -289,7 +342,7 @@ export function ProjectMembersTab({ project, isLoading }: { project?: ProjectDet
                                                                 className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-muted/50 rounded-md cursor-pointer"
                                                                 onClick={() => setMemberToRemove(member)}
                                                             >
-                                                                <Trash2 className="h-4 w-4"/>
+                                                                <Trash2 className="h-4 w-4" />
                                                             </Button>
                                                         </div>
                                                     )}
@@ -297,7 +350,7 @@ export function ProjectMembersTab({ project, isLoading }: { project?: ProjectDet
                                             </TableRow>
                                         );
                                     })}
-                                    
+
                                     {members?.length === 0 && (
                                         <TableRow className="hover:bg-transparent">
                                             <TableCell colSpan={3} className="p-0 border-none">
@@ -317,73 +370,88 @@ export function ProjectMembersTab({ project, isLoading }: { project?: ProjectDet
             </Card>
 
             <Dialog open={!!memberToEdit} onOpenChange={(open) => !open && setMemberToEdit(null)}>
-                <DialogContent
-                    onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                            handleUpdateMember();
-                        }
-                    }}
-                >
+                <DialogContent>
                     <DialogHeader>
                         <DialogTitle>Edit Member Access</DialogTitle>
                         <DialogDescription>
                             Update permissions for {memberToEdit?.email}.
                         </DialogDescription>
                     </DialogHeader>
-                    <div className="py-4 space-y-4">
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium">Role</label>
-                            <Select value={editRoleValue} onValueChange={setEditRoleValue}>
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Select a role"/>
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {project.userRole === ProjectRole.Owner && <SelectItem value="0">Owner</SelectItem>}
-                                    <SelectItem value="1">Admin</SelectItem>
-                                    <SelectItem value="2">Editor</SelectItem>
-                                    <SelectItem value="3">Viewer</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-
-                        {(editRoleValue === '2' || editRoleValue === '3') && (
-                            <div className="space-y-2 pt-2">
-                                <label className="text-sm font-medium">Environment Overrides</label>
-                                <div
-                                    className="grid gap-3 border border-border/40 p-4 rounded-md max-h-[220px] overflow-auto">
-                                    {project?.environments.map(env => {
-                                        const override = editEnvRoles.find(e => e.environmentId === env.id);
-                                        const value = override ? override.role.toString() : 'inherit';
-                                        return (
-                                            <div key={env.id} className="flex items-center justify-between">
-                                                <span className="text-sm font-medium">{env.name}</span>
-                                                <Select value={value}
-                                                        onValueChange={(val) => handleEnvRoleChange(env.id, val)}>
-                                                    <SelectTrigger className="w-[160px] h-8 text-xs">
-                                                        <SelectValue/>
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="inherit">Inherit
-                                                            ({getRoleName(parseInt(editRoleValue) as ProjectRole)})</SelectItem>
-                                                        <SelectItem value="1">Admin</SelectItem>
-                                                        <SelectItem value="2">Editor</SelectItem>
-                                                        <SelectItem value="3">Viewer</SelectItem>
-                                                        <SelectItem value="4">No Access</SelectItem>
-                                                    </SelectContent>
-                                                </Select>
-                                            </div>
-                                        );
-                                    })}
+                    <Form {...editForm}>
+                        <form onSubmit={editForm.handleSubmit(handleUpdateMemberSubmit)}>
+                            <div className="py-4 space-y-4">
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium">Role</label>
+                                    <FormField
+                                        control={editForm.control}
+                                        name="role"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormControl>
+                                                    <Select value={field.value} onValueChange={field.onChange}>
+                                                        <SelectTrigger>
+                                                            <SelectValue placeholder="Select a role" />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            {project?.userRole === ProjectRole.Owner && <SelectItem value="0">Owner</SelectItem>}
+                                                            <SelectItem value="1">Admin</SelectItem>
+                                                            <SelectItem value="2">Editor</SelectItem>
+                                                            <SelectItem value="3">Viewer</SelectItem>
+                                                        </SelectContent>
+                                                    </Select>
+                                                </FormControl>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
                                 </div>
+
+                                {(editForm.watch('role') === '2' || editForm.watch('role') === '3') && (
+                                    <div className="space-y-2 pt-2">
+                                        <label className="text-sm font-medium">Environment Overrides</label>
+                                        <div
+                                            className="grid gap-3 border border-border/40 p-4 rounded-md max-h-[220px] overflow-auto">
+                                            {project?.environments.map(env => {
+                                                const envRoles = editForm.watch('environmentRoles') || [];
+                                                const override = envRoles.find(e => e.environmentId === env.id);
+                                                const value = override ? override.role.toString() : 'inherit';
+                                                return (
+                                                    <div key={env.id} className="flex items-center justify-between">
+                                                        <span className="text-sm font-medium">{env.name}</span>
+                                                        <Select value={value}
+                                                            onValueChange={(val) => handleEnvRoleChange(env.id, val)}>
+                                                            <SelectTrigger className="w-[160px] h-8 text-xs">
+                                                                <SelectValue />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                <SelectItem value="inherit">Inherit
+                                                                    ({getRoleName(parseInt(editForm.watch('role')) as ProjectRole)})</SelectItem>
+                                                                <SelectItem value="1">Admin</SelectItem>
+                                                                <SelectItem value="2">Editor</SelectItem>
+                                                                <SelectItem value="3">Viewer</SelectItem>
+                                                                <SelectItem value="4">No Access</SelectItem>
+                                                            </SelectContent>
+                                                        </Select>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
-                        )}
-                    </div>
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setMemberToEdit(null)}>Cancel</Button>
-                        <Button onClick={handleUpdateMember} disabled={updateMember.isPending}>
-                            {updateMember.isPending ? 'Saving...' : 'Save Changes'}
-                        </Button>
-                    </DialogFooter>
+                            {editForm.formState.errors.root && (
+                                <div className="text-sm text-destructive font-medium px-1">
+                                    {editForm.formState.errors.root.message}
+                                </div>
+                            )}
+                            <DialogFooter className="mt-4">
+                                <Button type="button" variant="outline" onClick={() => setMemberToEdit(null)}>Cancel</Button>
+                                <Button type="submit" disabled={updateMember.isPending}>
+                                    {updateMember.isPending ? 'Saving...' : 'Save Changes'}
+                                </Button>
+                            </DialogFooter>
+                        </form>
+                    </Form>
                 </DialogContent>
             </Dialog>
 

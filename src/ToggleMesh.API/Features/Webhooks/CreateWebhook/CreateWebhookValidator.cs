@@ -1,5 +1,6 @@
-﻿using FastEndpoints;
+using FastEndpoints;
 using FluentValidation;
+using ToggleMesh.API.Infrastructure.Security;
 
 namespace ToggleMesh.API.Features.Webhooks.CreateWebhook;
 
@@ -13,14 +14,13 @@ public class CreateWebhookValidator : Validator<CreateWebhookRequest>
 
         RuleFor(x => x.Url)
             .NotEmpty().WithMessage("Webhook URL is required.")
-            .Must(uri => Uri.TryCreate(uri, UriKind.Absolute, out var outUri) && 
-                         (outUri.Scheme == Uri.UriSchemeHttp || outUri.Scheme == Uri.UriSchemeHttps))
-            .WithMessage("A valid HTTP/HTTPS URL is required.")
+            .MustAsync(async (url, ct) => await SsrfValidator.IsSafeUrlAsync(url, ct))
+            .WithMessage("A valid public HTTP/HTTPS URL is required. Local or private networks are not allowed.")
             .MaximumLength(2048).WithMessage("URL must not exceed 2048 characters.");
 
         RuleForEach(x => x.Events)
             .NotEmpty().WithMessage("Event name cannot be empty.")
-            .Must(evt => evt is "flag.created" or "flag.updated" or "flag.deleted")
-            .WithMessage("Invalid event. Supported events: flag.created, flag.updated, flag.deleted.");
+            .Must(evt => evt is "flag.created" or "flag.updated" or "flag.deleted" or "experiment.winner_found" or "experiment.degraded")
+            .WithMessage("Invalid event. Supported events: flag.created, flag.updated, flag.deleted, experiment.winner_found, experiment.degraded.");
     }
 }

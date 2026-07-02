@@ -60,7 +60,7 @@ public class RolloutEvaluatorTests
         // Act
         var result1 = RolloutEvaluator.Evaluate(30, "flag_A", "user_123");
         var result2 = RolloutEvaluator.Evaluate(30, "flag_A", "user_123");
-        
+
         // Assert
         result1.Should().Be(result2);
     }
@@ -69,20 +69,20 @@ public class RolloutEvaluatorTests
     public void Evaluate_DifferentFlags_ShouldYieldIndependentResultsForSameUser()
     {
         var identity = "test_user_42";
-        
+
         var bucketA = CalculateBucket("flagA", identity);
         var bucketB = CalculateBucket("flagB", identity);
 
         bucketA.Should().NotBe(bucketB);
     }
-    
+
     private static int CalculateBucket(string flagKey, string identity)
     {
         var text = flagKey + identity;
         const uint offsetBasis = 2166136261;
         const uint prime = 16777619;
         var hash = offsetBasis;
-    
+
         var bytes = System.Text.Encoding.UTF8.GetBytes(text);
         foreach (var b in bytes)
         {

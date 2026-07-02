@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useProjectAuditLogs } from '@/api/queries';
+import api from '@/api/axios';
 import { Card } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -9,8 +10,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Button } from '@/components/ui/button';
 import type { ProjectDetails, AuditLog } from '@/api/types';
 import { EmptyState } from "@/components/EmptyState.tsx";
-import { ClipboardList, Clock, Calendar, ChevronDown, Check } from "lucide-react";
+import { ClipboardList, Clock, Calendar, ChevronDown, Check, Download } from "lucide-react";
 import { Input } from "@/components/ui/input.tsx";
+import { toast } from 'sonner';
 
 const relativeRanges = [
     { label: 'Last 5 minutes', value: '5m' },
@@ -39,7 +41,7 @@ const formatDate = (dateString: string) => {
     return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
 };
 
-export function ProjectAuditTab({ project, isLoading }: { project?: ProjectDetails; isLoading: boolean }) {
+export function ProjectAuditTab({ project }: { project?: ProjectDetails; isLoading?: boolean }) {
     const [filterAction, setFilterAction] = useState<string>('all');
     const [filterEntity, setFilterEntity] = useState<string>('all');
     const [sortOrder, setSortOrder] = useState<string>('desc');
@@ -57,6 +59,7 @@ export function ProjectAuditTab({ project, isLoading }: { project?: ProjectDetai
 
     const [isTimePickerOpen, setIsTimePickerOpen] = useState(false);
     const timePickerRef = useRef<HTMLDivElement>(null);
+    const [isExporting, setIsExporting] = useState(false);
 
     const projectId = project?.id ?? '';
 
@@ -121,6 +124,54 @@ export function ProjectAuditTab({ project, isLoading }: { project?: ProjectDetai
         setIsTimePickerOpen(false);
     };
 
+    const handleExportCsv = async () => {
+        try {
+            setIsExporting(true);
+            const params = new URLSearchParams();
+            if (projectId) params.append('projectId', projectId);
+            if (filterAction && filterAction !== 'all') params.append('action', filterAction);
+            if (filterEntity && filterEntity !== 'all') params.append('entityName', filterEntity);
+            if (sortOrder) params.append('sortOrder', sortOrder);
+            if (debouncedSearch) params.append('search', debouncedSearch);
+
+            if (rangeType === 'custom') {
+                if (customFrom) params.append('dateFrom', new Date(customFrom).toISOString());
+                if (customTo) params.append('dateTo', new Date(customTo).toISOString());
+            } else if (rangeType !== 'all') {
+                const now = new Date();
+                let fromDate = new Date();
+                const match = rangeType.match(/^(\d+)([mhd])$/);
+                if (match) {
+                    const val = parseInt(match[1]);
+                    const unit = match[2];
+                    if (unit === 'm') fromDate.setMinutes(now.getMinutes() - val);
+                    else if (unit === 'h') fromDate.setHours(now.getHours() - val);
+                    else if (unit === 'd') fromDate.setDate(now.getDate() - val);
+                }
+                params.append('dateFrom', fromDate.toISOString());
+            }
+
+            const response = await api.get(`/audit-logs/export?${params.toString()}`, {
+                responseType: 'blob'
+            });
+
+            const blob = new Blob([response.data], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `ToggleMesh_AuditLogs_${projectId}_${Date.now()}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+        } catch (error) {
+            console.error('Failed to export CSV', error);
+            toast.error('Failed to export Audit Logs');
+        } finally {
+            setIsExporting(false);
+        }
+    };
+
     const getTimeButtonLabel = () => {
         if (rangeType === 'all') return 'All Time';
         if (rangeType === 'custom') {
@@ -133,14 +184,8 @@ export function ProjectAuditTab({ project, isLoading }: { project?: ProjectDetai
 
     return (
         <div className="space-y-4 pb-2">
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-2 border-b border-border/10">
-                <div className="space-y-1">
-                    <h2 className="text-2xl font-bold tracking-tight h-8 flex items-center">
-                        {isLoading ? <Skeleton className="h-7 w-48" /> : project?.name}
-                    </h2>
-                    <p className="text-sm text-muted-foreground">Review project activity and audit trail.</p>
-                </div>
-                <div className="flex gap-3 flex-wrap items-center self-end">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-2 border-b border-border/10 w-full">
+                <div className="flex gap-3 flex-wrap items-center flex-1">
                     <Input
                         type="search"
                         placeholder="Search logs..."
@@ -281,6 +326,17 @@ export function ProjectAuditTab({ project, isLoading }: { project?: ProjectDetai
                         )}
                     </div>
                 </div>
+                
+                <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="h-10 px-3 bg-zinc-950/20 border-border/40 hover:bg-muted/20 whitespace-nowrap"
+                    onClick={handleExportCsv}
+                    disabled={isExporting}
+                >
+                    <Download className="h-4 w-4 mr-2" />
+                    {isExporting ? 'Exporting...' : 'Export CSV'}
+                </Button>
             </div>
 
             <Card className="border-border/40 bg-zinc-950/20 overflow-hidden shadow-lg">

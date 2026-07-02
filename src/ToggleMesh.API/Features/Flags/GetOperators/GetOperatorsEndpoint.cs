@@ -1,5 +1,3 @@
-﻿using ToggleMesh.API.Extensions;
-using ToggleMesh.API.Infrastructure;
 using ToggleMesh.API.Infrastructure.Endpoints;
 using ToggleMesh.Common.Rules;
 
@@ -18,7 +16,6 @@ public class GetOperatorsEndpoint : ToggleEndpointWithoutRequest<List<string>>
     {
         Get("/flags/operators");
         Version(1);
-        this.RequirePermission(Auth.Models.Permissions.ProjectsView); 
     }
 
     public override async Task HandleAsync(CancellationToken ct)

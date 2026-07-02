@@ -1,17 +1,20 @@
 using System.Net;
 using System.Net.Http.Json;
 using FluentAssertions;
-using ToggleMesh.API.Features.Auth.Endpoints;
-using ToggleMesh.API.Features.Auth.Endpoints.Login;
-using ToggleMesh.API.Features.Auth.Endpoints.Refresh;
-using ToggleMesh.API.Features.Auth.Endpoints.Register;
-using ToggleMesh.IntegrationTests.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
+using ToggleMesh.API.Features.Auth.Login;
+using ToggleMesh.API.Features.Auth.Refresh;
+using ToggleMesh.API.Features.Auth.Register;
+using ToggleMesh.API.Infrastructure.Data;
+using ToggleMesh.IntegrationTests.Infrastructure;
 
 namespace ToggleMesh.IntegrationTests.Auth;
 
-public class AuthApiTests : IClassFixture<TestWebApplicationFactory>
+[Collection("SharedEnv4")]
+public class AuthApiTests : IAsyncLifetime
 {
+    public async Task InitializeAsync() => await _factory.ResetDatabaseAsync();
+    public Task DisposeAsync() => Task.CompletedTask;
     private readonly HttpClient _client;
     private readonly TestWebApplicationFactory _factory;
 
@@ -24,7 +27,7 @@ public class AuthApiTests : IClassFixture<TestWebApplicationFactory>
     private async Task ConfirmUserEmailAsync(string email)
     {
         using var scope = _factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<ToggleMesh.API.Persistence.AppDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var user = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.FirstOrDefaultAsync(db.Users, u => u.Email == email);
         if (user != null)
         {
@@ -56,7 +59,7 @@ public class AuthApiTests : IClassFixture<TestWebApplicationFactory>
         // Arrange
         var email = $"user_{Guid.NewGuid()}@example.com";
         var password = "Password123!";
-        
+
         await _client.PostAsJsonAsync("/api/v1/auth/register", new RegisterRequest
         {
             Email = email,
@@ -94,7 +97,7 @@ public class AuthApiTests : IClassFixture<TestWebApplicationFactory>
         var response = await _client.PostAsJsonAsync("/api/v1/auth/login", loginRequest);
 
         // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
     [Fact]
@@ -103,7 +106,7 @@ public class AuthApiTests : IClassFixture<TestWebApplicationFactory>
         // Arrange
         var email = $"user_{Guid.NewGuid()}@example.com";
         var password = "Password123!";
-        
+
         await _client.PostAsJsonAsync("/api/v1/auth/register", new RegisterRequest
         {
             Email = email,
@@ -116,9 +119,9 @@ public class AuthApiTests : IClassFixture<TestWebApplicationFactory>
             Email = email,
             Password = password
         });
-        
+
         var loginResult = await loginResponse.Content.ReadFromJsonAsync<LoginResponse>();
-        
+
         var refreshRequest = new RefreshRequest
         {
             Token = loginResult!.Token,
@@ -131,10 +134,10 @@ public class AuthApiTests : IClassFixture<TestWebApplicationFactory>
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var refreshResult = await response.Content.ReadFromJsonAsync<LoginResponse>();
-        
+
         refreshResult!.Token.Should().NotBeNullOrEmpty();
         refreshResult.RefreshToken.Should().NotBeNullOrEmpty();
-        
+
         refreshResult.Token.Should().NotBe(loginResult.Token);
         refreshResult.RefreshToken.Should().NotBe(loginResult.RefreshToken);
     }
@@ -145,7 +148,7 @@ public class AuthApiTests : IClassFixture<TestWebApplicationFactory>
         // Arrange
         var email = $"user_{Guid.NewGuid()}@example.com";
         var password = "Password123!";
-        
+
         await _client.PostAsJsonAsync("/api/v1/auth/register", new RegisterRequest
         {
             Email = email,
@@ -158,9 +161,9 @@ public class AuthApiTests : IClassFixture<TestWebApplicationFactory>
             Email = email,
             Password = password
         });
-        
+
         var loginResult = await loginResponse.Content.ReadFromJsonAsync<LoginResponse>();
-        
+
         var refreshRequest = new RefreshRequest
         {
             Token = loginResult!.Token,

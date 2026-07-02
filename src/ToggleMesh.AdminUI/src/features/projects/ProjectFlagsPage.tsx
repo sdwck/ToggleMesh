@@ -23,6 +23,23 @@ import { Table, TableBody, TableHead, TableHeader, TableRow } from "@/components
 import { TableSkeleton } from "@/components/TableSkeleton";
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useForm } from 'react-hook-form';
+import * as z from 'zod';
+import {
+    Form,
+    FormControl,
+    FormField,
+    FormItem,
+    FormMessage,
+} from '@/components/ui/form';
+import { handleApiError } from '@/api/errorUtils';
+
+const createFlagSchema = z.object({
+    key: z.string().min(1, 'Flag key is required')
+        .regex(/^[a-zA-Z0-9_-]+$/, 'Only letters, numbers, hyphens, and underscores are allowed')
+});
+type CreateFlagValues = z.infer<typeof createFlagSchema>;
 
 export function ProjectFlagsPage() {
     const { projectId } = useParams<{ projectId: string }>();
@@ -32,9 +49,12 @@ export function ProjectFlagsPage() {
     const { data: projectTags, isLoading: isLoadingTags } = useProjectTags(projectId!);
     const createFlag = useCreateFeatureFlag(projectId!);
 
-    const [newFlagKey, setNewFlagKey] = useState('');
     const [isCreateOpen, setIsCreateOpen] = useState(false);
-    const [isCreating, setIsCreating] = useState(false);
+
+    const createForm = useForm<CreateFlagValues>({
+        resolver: zodResolver(createFlagSchema),
+        defaultValues: { key: '' }
+    });
 
     const [isTagsOpen, setIsTagsOpen] = useState(false);
     const [tagSearch, setTagSearch] = useState('');
@@ -91,21 +111,14 @@ export function ProjectFlagsPage() {
         ? (activeProject.userRole === ProjectRole.Owner || activeProject.userRole === ProjectRole.Admin || activeProject.userRole === ProjectRole.Editor)
         : false;
 
-    const handleCreateFlag = async () => {
-        if (!newFlagKey.trim()) return;
-
-        setIsCreating(true);
-
+    const handleCreateFlagSubmit = async (values: CreateFlagValues) => {
         try {
-            await createFlag.mutateAsync(newFlagKey.trim());
+            await createFlag.mutateAsync(values.key.trim());
             toast.success(`Successfully created feature flag`);
-            setNewFlagKey('');
+            createForm.reset({ key: '' });
             setIsCreateOpen(false);
-        } catch (e) {
-            console.error(`Failed to create flag`, e);
-            toast.error('Failed to create flag. It might already exist.');
-        } finally {
-            setIsCreating(false);
+        } catch (error: any) {
+            handleApiError(error, createForm.setError, 'Failed to create flag. It might already exist.');
         }
     };
 
@@ -211,8 +224,8 @@ export function ProjectFlagsPage() {
                                                     key={tag}
                                                     onClick={() => handleTagClick(tag)}
                                                     className={`flex items-center gap-2 px-2 py-1.5 rounded-sm text-sm cursor-pointer select-none transition-colors ${isSelected
-                                                            ? "bg-primary/10 text-primary font-medium"
-                                                            : "text-muted-foreground hover:bg-zinc-900 hover:text-foreground"
+                                                        ? "bg-primary/10 text-primary font-medium"
+                                                        : "text-muted-foreground hover:bg-zinc-900 hover:text-foreground"
                                                         }`}
                                                 >
                                                     <div className={`w-4 h-4 rounded border flex items-center justify-center border-border/60 ${isSelected ? "border-primary bg-primary text-primary-foreground" : ""}`}>
@@ -271,26 +284,35 @@ export function ProjectFlagsPage() {
                                         Enter a unique key for the new feature flag.
                                     </DialogDescription>
                                 </DialogHeader>
-                                <div className="py-4">
-                                    <Input
-                                        placeholder="e.g. new-billing-ui"
-                                        value={newFlagKey}
-                                        onChange={(e) => setNewFlagKey(e.target.value)}
-                                        onKeyDown={(e) => {
-                                            if (e.key === 'Enter' && !isCreating && newFlagKey.trim()) {
-                                                handleCreateFlag();
-                                            }
-                                        }}
-                                        autoFocus
-                                        className="font-mono"
-                                    />
-                                </div>
-                                <DialogFooter>
-                                    <Button variant="outline" onClick={() => setIsCreateOpen(false)}>Cancel</Button>
-                                    <Button onClick={handleCreateFlag} disabled={isCreating || !newFlagKey.trim()}>
-                                        {isCreating ? 'Creating...' : 'Create Flag'}
-                                    </Button>
-                                </DialogFooter>
+                                <Form {...createForm}>
+                                    <form onSubmit={createForm.handleSubmit(handleCreateFlagSubmit)}>
+                                        <div className="py-4">
+                                            <FormField
+                                                control={createForm.control}
+                                                name="key"
+                                                render={({ field }) => (
+                                                    <FormItem>
+                                                        <FormControl>
+                                                            <Input
+                                                                {...field}
+                                                                placeholder="e.g. new-billing-ui"
+                                                                autoFocus
+                                                                className="font-mono"
+                                                            />
+                                                        </FormControl>
+                                                        <FormMessage />
+                                                    </FormItem>
+                                                )}
+                                            />
+                                        </div>
+                                        <DialogFooter>
+                                            <Button type="button" variant="outline" onClick={() => setIsCreateOpen(false)}>Cancel</Button>
+                                            <Button type="submit" disabled={createFlag.isPending}>
+                                                {createFlag.isPending ? 'Creating...' : 'Create Flag'}
+                                            </Button>
+                                        </DialogFooter>
+                                    </form>
+                                </Form>
                             </DialogContent>
                         </Dialog>
                     ) : null}

@@ -10,13 +10,15 @@ public static class RsaKeyProvider
 
     public static RsaSecurityKey GetKey(IConfiguration configuration)
     {
-        if (_key != null) 
-            return _key;
+        var key = _key;
+        if (key != null) 
+            return key;
         
         lock (Lock)
         {
-            if (_key != null) 
-                return _key;
+            key = _key;
+            if (key != null) 
+                return key;
 
             var pemKey = configuration["Jwt:PrivateKeyPem"];
             if (string.IsNullOrWhiteSpace(pemKey))

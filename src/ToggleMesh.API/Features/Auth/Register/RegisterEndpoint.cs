@@ -2,12 +2,13 @@ using System.Text;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.EntityFrameworkCore;
-using ToggleMesh.API.Features.Auth.Models;
 using ToggleMesh.API.Infrastructure.Data;
 using ToggleMesh.API.Infrastructure.Email;
 using ToggleMesh.API.Infrastructure.Endpoints;
+using ToggleMesh.API.Infrastructure.Security.Authorization;
+using ToggleMesh.API.Infrastructure.Security.Authorization.Models;
 
-namespace ToggleMesh.API.Features.Auth.Endpoints.Register;
+namespace ToggleMesh.API.Features.Auth.Register;
 
 public class RegisterEndpoint : ToggleEndpoint<RegisterRequest, RegisterResponse>
 {
@@ -45,9 +46,7 @@ public class RegisterEndpoint : ToggleEndpoint<RegisterRequest, RegisterResponse
             var invite = await _db.OrganizationInvitations
                 .FirstOrDefaultAsync(i => i.Token == req.InviteToken && i.Email == req.Email, ct);
             if (invite != null)
-            {
                 isInviteValid = true;
-            }
         }
 
         if (!allowOpenRegistration && !isInviteValid)

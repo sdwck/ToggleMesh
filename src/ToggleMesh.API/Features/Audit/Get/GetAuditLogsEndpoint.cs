@@ -1,8 +1,12 @@
+using System.Globalization;
+using System.Text;
+using FastEndpoints;
 using Microsoft.EntityFrameworkCore;
+using ToggleMesh.API.Features.Audit.Domain;
+using ToggleMesh.API.Features.Projects.Domain;
+using ToggleMesh.API.Infrastructure.Data;
 using ToggleMesh.API.Infrastructure.Endpoints;
-using ToggleMesh.API.Persistence;
 using ToggleMesh.Common.Pagination;
-// ReSharper disable ConditionIsAlwaysTrueOrFalseAccordingToNullableAPIContract
 
 namespace ToggleMesh.API.Features.Audit.Get;
 
@@ -38,7 +42,11 @@ public class GetAuditLogsEndpoint : ToggleEndpoint<GetAuditLogsRequest, CursorPa
             projectIdToCheck = env.ProjectId;
         }
 
-        var (role, envRoles) = await _db.GetProjectRoleAndEnvOverridesAsync(projectIdToCheck, UserId, ct);
+        var (role, envRoles) = await new GetProjectRoleCommand
+        {
+            ProjectId = projectIdToCheck,
+            UserId = UserId
+        }.ExecuteAsync(ct);
 
         if (role == null)
         {
@@ -48,29 +56,27 @@ public class GetAuditLogsEndpoint : ToggleEndpoint<GetAuditLogsRequest, CursorPa
 
         var effectiveRole = role.Value;
         if (req.EnvironmentId.HasValue)
-        {
             if (envRoles.TryGetValue(req.EnvironmentId.Value, out var envRoleOverride))
                 effectiveRole = envRoleOverride;
-        }
 
-        if (effectiveRole == Projects.ProjectRole.None || effectiveRole == Projects.ProjectRole.Viewer)
+        if (effectiveRole is ProjectRole.None or ProjectRole.Viewer)
         {
             await Send.ForbiddenAsync(ct);
             return;
         }
-        
+
         DateTime? dateFrom = null;
         if (req.DateFrom.HasValue)
-            dateFrom = req.DateFrom.Value.Kind == DateTimeKind.Local 
-                ? req.DateFrom.Value.ToUniversalTime() 
+            dateFrom = req.DateFrom.Value.Kind == DateTimeKind.Local
+                ? req.DateFrom.Value.ToUniversalTime()
                 : DateTime.SpecifyKind(req.DateFrom.Value, DateTimeKind.Utc);
-        
+
 
         DateTime? dateTo = null;
         if (req.DateTo.HasValue)
         {
-            dateTo = req.DateTo.Value.Kind == DateTimeKind.Local 
-                ? req.DateTo.Value.ToUniversalTime() 
+            dateTo = req.DateTo.Value.Kind == DateTimeKind.Local
+                ? req.DateTo.Value.ToUniversalTime()
                 : DateTime.SpecifyKind(req.DateTo.Value, DateTimeKind.Utc);
 
             if (dateTo.Value.TimeOfDay == TimeSpan.Zero)
@@ -86,11 +92,11 @@ public class GetAuditLogsEndpoint : ToggleEndpoint<GetAuditLogsRequest, CursorPa
             query = query.Where(x => x.ProjectId == req.ProjectId && x.EnvironmentId == null);
 
         if (!string.IsNullOrWhiteSpace(req.Action) && req.Action != "all")
-            query = query.Where(x => 
+            query = query.Where(x =>
                 EF.Functions.ILike(x.Action, req.Action));
 
         if (!string.IsNullOrWhiteSpace(req.EntityName) && req.EntityName != "all")
-            query = query.Where(x => 
+            query = query.Where(x =>
                 EF.Functions.ILike(x.EntityName, req.EntityName));
 
         if (!string.IsNullOrWhiteSpace(req.Search))
@@ -101,7 +107,7 @@ public class GetAuditLogsEndpoint : ToggleEndpoint<GetAuditLogsRequest, CursorPa
                 EF.Functions.ILike(x.EntityId, searchTerm) ||
                 (x.PerformedByEmail != null && EF.Functions.ILike(x.PerformedByEmail, searchTerm)));
         }
-        
+
         if (dateFrom.HasValue)
             query = query.Where(x => x.Timestamp >= dateFrom.Value);
 
@@ -109,15 +115,35 @@ public class GetAuditLogsEndpoint : ToggleEndpoint<GetAuditLogsRequest, CursorPa
             query = query.Where(x => x.Timestamp <= dateTo.Value);
 
         var isAscending = req.SortOrder?.ToLower() == "asc";
-        query = isAscending 
-            ? query.OrderBy(x => x.Id) 
-            : query.OrderByDescending(x => x.Id);
+        query = isAscending
+            ? query.OrderBy(x => x.Timestamp).ThenBy(x => x.Id)
+            : query.OrderByDescending(x => x.Timestamp).ThenByDescending(x => x.Id);
 
-        if (req.Cursor.HasValue)
-            query = isAscending 
-                ? query.Where(x => x.Id > req.Cursor.Value) 
-                : query.Where(x => x.Id < req.Cursor.Value);
-        
+        if (!string.IsNullOrEmpty(req.Cursor))
+        {
+            try
+            {
+                var decoded = Encoding.UTF8.GetString(Convert.FromBase64String(req.Cursor));
+                var parts = decoded.Split('_');
+                if (parts.Length == 2 &&
+                    DateTime.TryParse(parts[0], null, DateTimeStyles.RoundtripKind, out var cursorTime) &&
+                    Guid.TryParse(parts[1], out var cursorId))
+                {
+                    query = isAscending
+                        ? query.Where(x => 
+                            x.Timestamp > cursorTime || 
+                            (x.Timestamp == cursorTime && x.Id > cursorId))
+                        : query.Where(x => 
+                            x.Timestamp < cursorTime || 
+                            (x.Timestamp == cursorTime && x.Id < cursorId));
+                }
+            }
+            catch
+            {
+                // ignore
+            }
+        }
+
 
         var totalCount = await query.CountAsync(ct);
 
@@ -129,7 +155,13 @@ public class GetAuditLogsEndpoint : ToggleEndpoint<GetAuditLogsRequest, CursorPa
         if (hasNextPage)
             logs.RemoveAt(logs.Count - 1);
 
-        var nextCursor = logs.Count > 0 ? logs.Last().Id : (Guid?)null;
+        string? nextCursor = null;
+        if (logs.Count > 0)
+        {
+            var last = logs.Last();
+            var raw = $"{last.Timestamp:O}_{last.Id}";
+            nextCursor = Convert.ToBase64String(Encoding.UTF8.GetBytes(raw));
+        }
 
         var items = logs.Select(x => new AuditLogDto(
             x.Id,
@@ -143,6 +175,7 @@ public class GetAuditLogsEndpoint : ToggleEndpoint<GetAuditLogsRequest, CursorPa
             x.PerformedByEmail,
             x.Timestamp)).ToList();
 
-        await Send.OkAsync(new CursorPagedResponse<AuditLogDto>(items, totalCount, nextCursor, hasNextPage), ct);
+        await Send.OkAsync(new CursorPagedResponse<AuditLogDto>(
+            items, totalCount, nextCursor, hasNextPage), ct);
     }
 }

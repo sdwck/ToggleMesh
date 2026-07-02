@@ -1,8 +1,8 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using ToggleMesh.API.Extensions;
-using ToggleMesh.API.Persistence;
-using ToggleMesh.API.Infrastructure;
+using ToggleMesh.API.Infrastructure.Data;
 using ToggleMesh.API.Infrastructure.Endpoints;
+using AuthModels = ToggleMesh.API.Infrastructure.Security.Authorization.Models;
 
 namespace ToggleMesh.API.Features.Flags.GetTags;
 
@@ -19,7 +19,7 @@ public class GetTagsEndpoint : ToggleEndpointWithoutRequest<List<string>>
     {
         Get("/projects/{projectId:guid}/tags");
         Version(1);
-        this.RequirePermission(Auth.Models.Permissions.FlagsView);
+        this.RequirePermission(AuthModels.Permissions.FlagsView);
     }
 
     public override async Task HandleAsync(CancellationToken ct)

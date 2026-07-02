@@ -1,4 +1,3 @@
-using Microsoft.Extensions.Caching.Hybrid;
 using Microsoft.Extensions.Caching.Memory;
 using StackExchange.Redis;
 
@@ -20,9 +19,10 @@ public class RedisCacheInvalidator : ICacheInvalidator
     
     public async Task InvalidateEnvironmentCacheAsync(Guid envId)
     {
-        var l1CacheKey = $"sdk:compiled_rules:{envId}";
-        var l2CacheKey = $"sdk:flags:states:{envId}";
+        var l1CacheKey = CacheKeys.SdkCompiledRules(envId);
+        var l2CacheKey = CacheKeys.SdkFlagsStates(envId);
         _memoryCache.Remove(l1CacheKey);
+        await _redis.GetDatabase().KeyDeleteAsync(l1CacheKey);
         await _redis.GetDatabase().KeyDeleteAsync(l2CacheKey);
         var sub = _redis.GetSubscriber();
         await sub.PublishAsync(

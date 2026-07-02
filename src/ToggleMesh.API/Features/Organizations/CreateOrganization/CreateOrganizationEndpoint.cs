@@ -1,16 +1,19 @@
+using ToggleMesh.API.Features.Organizations.Domain;
 using ToggleMesh.API.Features.Organizations.GetOrganizations;
+using ToggleMesh.API.Infrastructure.Data;
 using ToggleMesh.API.Infrastructure.Endpoints;
-using ToggleMesh.API.Persistence;
 
 namespace ToggleMesh.API.Features.Organizations.CreateOrganization;
 
 public class CreateOrganizationEndpoint : ToggleEndpoint<CreateOrganizationRequest, OrganizationDto>
 {
     private readonly AppDbContext _db;
+    private readonly IConfiguration _configuration;
 
-    public CreateOrganizationEndpoint(AppDbContext db)
+    public CreateOrganizationEndpoint(AppDbContext db, IConfiguration configuration)
     {
         _db = db;
+        _configuration = configuration;
     }
 
     public override void Configure()
@@ -21,6 +24,15 @@ public class CreateOrganizationEndpoint : ToggleEndpoint<CreateOrganizationReque
 
     public override async Task HandleAsync(CreateOrganizationRequest req, CancellationToken ct)
     {
+        var allowCreation = _configuration.GetValue("Auth:AllowUserOrganizationCreation", true);
+        if (!allowCreation)
+        {
+            var adminEmail = _configuration["DEFAULT_ADMIN_EMAIL"];
+            var user = await _db.Users.FindAsync(new object[] { UserId }, ct);
+            if (user == null || !string.Equals(user.Email, adminEmail, StringComparison.OrdinalIgnoreCase))
+                ThrowError("User organization creation is disabled in this environment.", 403);
+        }
+
         var org = new Organization
         {
             Name = req.Name,

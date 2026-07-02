@@ -21,8 +21,27 @@ import type {
     OrganizationDto,
     OrganizationMemberDto,
     UserProfile,
-    PendingInvitationDto
+    PendingInvitationDto,
+    ProjectExperimentSummaryDto,
+    ExperimentResultDto,
+    ProjectDashboardDto,
+    TimeSeriesResponsePoint,
+    ExperimentIterationDto,
+    SegmentDto,
+    CreateSegmentRequest,
+    UpdateSegmentRequest,
+    ChangePasswordRequest
 } from './types';
+
+export const useSystemConfig = () => {
+    return useQuery({
+        queryKey: ['system', 'config'],
+        queryFn: async () => {
+            const { data } = await api.get<{ allowOpenRegistration: boolean, allowUserOrganizationCreation: boolean, passwordPolicy: { minimumLength: number, requireDigit: boolean, requireLowercase: boolean, requireUppercase: boolean, requireNonAlphanumeric: boolean } }>('/system/config');
+            return data;
+        }
+    });
+};
 
 export const useOrganizations = () => {
     return useQuery({
@@ -329,6 +348,19 @@ export const useFeatureFlag = (projectId: string, envId: string, flagKey: string
             return data;
         },
         enabled: !!envId && !!projectId && !!flagKey,
+        refetchInterval: (query) => query.state.data?.isMabEnabled ? 2000 : false,
+    });
+};
+
+export const useFlagStats = (projectId: string, flagKey: string) => {
+    return useQuery({
+        queryKey: ['projects', projectId, 'flags', flagKey, 'stats'],
+        queryFn: async () => {
+            const { data } = await api.get<{ environmentId: string; trueCount: number; falseCount: number }[]>(`/projects/${projectId}/flags/${flagKey}/stats`);
+            return data;
+        },
+        enabled: !!projectId && !!flagKey,
+        refetchInterval: 10000,
     });
 };
 
@@ -646,6 +678,14 @@ export const useUpdateUserProfile = () => {
     });
 };
 
+export const useChangePassword = () => {
+    return useMutation<void, Error, ChangePasswordRequest>({
+        mutationFn: async (data) => {
+            await api.post('/api/v1/auth/change-password', data);
+        },
+    });
+};
+
 export const useCreatePersonalToken = () => {
     const queryClient = useQueryClient();
     return useMutation({
@@ -758,6 +798,111 @@ export const useWebhookDeliveries = (projectId: string, webhookId: string, page:
     });
 };
 
+export const useProjectExperiments = (projectId: string) => {
+    return useQuery({
+        queryKey: ['projects', projectId, 'experiments'],
+        queryFn: async () => {
+            const { data } = await api.get<ProjectExperimentSummaryDto[]>(`/projects/${projectId}/experiments`);
+            return data;
+        },
+        enabled: !!projectId,
+    });
+};
+
+export const useProjectHistoricalExperiments = (projectId: string) => {
+    return useQuery({
+        queryKey: ['projects', projectId, 'experiments', 'historical'],
+        queryFn: async () => {
+            const { data } = await api.get<import('./types').ProjectHistoricalExperimentDto[]>(`/projects/${projectId}/experiments/historical`);
+            return data;
+        },
+        enabled: !!projectId,
+    });
+};
+
+export const useAnalyticsSchema = (projectId: string, environmentId: string, flagKey?: string, eventName?: string) => {
+    return useQuery({
+        queryKey: ['analytics', 'schema', projectId, environmentId, flagKey, eventName],
+        queryFn: async () => {
+            const params = new URLSearchParams();
+            if (flagKey) params.append('flagKey', flagKey);
+            if (eventName) params.append('eventName', eventName);
+
+            const { data } = await api.get<{ hasValue: boolean; contextKeys: string[] }>(`/projects/${projectId}/environments/${environmentId}/analytics/schema?${params.toString()}`);
+            return data;
+        },
+        enabled: !!projectId && !!environmentId && (!!flagKey || !!eventName),
+    });
+};
+
+export const useExperimentDetails = (projectId: string, environmentId: string, flagKey: string) => {
+    return useQuery({
+        queryKey: ['projects', projectId, 'environments', environmentId, 'flags', flagKey, 'experiments'],
+        queryFn: async () => {
+            const { data } = await api.get<ExperimentResultDto[]>(`/projects/${projectId}/environments/${environmentId}/flags/${flagKey}/experiments`);
+            return data;
+        },
+        enabled: !!projectId && !!environmentId && !!flagKey,
+        refetchInterval: 3000,
+    });
+};
+
+export const useContextualExperimentDetails = (projectId: string, environmentId: string, flagKey: string) => {
+    return useQuery({
+        queryKey: ['projects', projectId, 'environments', environmentId, 'flags', flagKey, 'experiments', 'contextual'],
+        queryFn: async () => {
+            const { data } = await api.get<any[]>(`/projects/${projectId}/environments/${environmentId}/flags/${flagKey}/experiments/contextual`);
+            return data;
+        },
+        enabled: !!projectId && !!environmentId && !!flagKey,
+        refetchInterval: 3000,
+    });
+};
+
+export const useSetContextualRollout = (projectId: string, environmentId: string, flagKey: string) => {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async (req: { contextSlice: string, rolloutPercentage: number }) => {
+            await api.post(`/projects/${projectId}/environments/${environmentId}/flags/${flagKey}/contextual-rollouts/set`, req);
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['projects', projectId, 'environments', environmentId, 'flags', flagKey, 'experiments', 'contextual'] });
+            queryClient.invalidateQueries({ queryKey: ['environments', environmentId, 'flags', flagKey] });
+        },
+    });
+};
+
+export const useDeleteContextualRollout = (projectId: string, environmentId: string, flagKey: string) => {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async (contextSlice: string) => {
+            await api.delete(`/projects/${projectId}/environments/${environmentId}/flags/${flagKey}/contextual-rollouts`, { data: { contextSlice } });
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['projects', projectId, 'environments', environmentId, 'flags', flagKey, 'experiments', 'contextual'] });
+            queryClient.invalidateQueries({ queryKey: ['environments', environmentId, 'flags', flagKey] });
+        },
+    });
+};
+
+export const useProjectDashboard = (projectId: string, environmentId?: string) => {
+    return useQuery({
+        queryKey: ['projects', projectId, 'dashboard', environmentId],
+        queryFn: async () => {
+            const params = new URLSearchParams();
+            if (environmentId) {
+                params.append('environmentId', environmentId);
+            }
+            const { data } = await api.get<ProjectDashboardDto>(`/projects/${projectId}/dashboard?${params.toString()}`);
+            return data;
+        },
+        enabled: !!projectId,
+        staleTime: 5000,
+        refetchInterval: 30000,
+        placeholderData: keepPreviousData,
+    });
+};
+
 export const useRetryWebhookDelivery = (projectId: string, webhookId: string) => {
     const queryClient = useQueryClient();
     return useMutation({
@@ -778,6 +923,149 @@ export const useCancelWebhookDelivery = (projectId: string, webhookId: string) =
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['webhookDeliveries'] });
+        },
+    });
+};
+
+export const useExperimentTimeSeries = (projectId: string, environmentId: string, flagKey: string, eventName: string, hours: number = 24) => {
+    return useQuery({
+        queryKey: ['projects', projectId, 'environments', environmentId, 'flags', flagKey, 'experiments', eventName, 'timeseries', hours],
+        queryFn: async () => {
+            const { data } = await api.get<TimeSeriesResponsePoint[]>(`/projects/${projectId}/environments/${environmentId}/flags/${flagKey}/experiments/${eventName}/timeseries?hours=${hours}`);
+            return data;
+        },
+        enabled: !!projectId && !!environmentId && !!flagKey && !!eventName,
+        refetchInterval: 3000,
+    });
+};
+
+export const useUniqueEvents = (projectId: string, environmentId: string) => {
+    return useQuery({
+        queryKey: ['projects', projectId, 'environments', environmentId, 'analytics', 'events'],
+        queryFn: async () => {
+            const { data } = await api.get<string[]>(`/projects/${projectId}/environments/${environmentId}/analytics/events`);
+            return data;
+        },
+        enabled: !!projectId && !!environmentId,
+    });
+};
+
+export const useStartExperiment = (projectId: string, envId: string, flagKey: string) => {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async (req: { mode: string; goalEvent: string; optimizationType: number; contextPartitionKeys: string[], initialRolloutPercentage?: number }) => {
+            const { data } = await api.post(`/projects/${projectId}/environments/${envId}/flags/${flagKey}/experiments/start`, req);
+            return data;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['environments', envId, 'flags', flagKey] });
+            queryClient.invalidateQueries({ queryKey: ['projects'] });
+            queryClient.invalidateQueries({ queryKey: ['projects', projectId, 'experiments'] });
+            queryClient.invalidateQueries({ queryKey: ['projects', projectId, 'environments', envId, 'flags', flagKey, 'experiments'] });
+        },
+    });
+};
+
+export const useStopExperiment = (projectId: string, envId: string, flagKey: string) => {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async () => {
+            const { data } = await api.post(`/projects/${projectId}/environments/${envId}/flags/${flagKey}/experiments/stop`, {});
+            return data;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['environments', envId, 'flags', flagKey] });
+            queryClient.invalidateQueries({ queryKey: ['projects'] });
+            queryClient.invalidateQueries({ queryKey: ['projects', projectId, 'experiments'] });
+            queryClient.invalidateQueries({ queryKey: ['projects', projectId, 'environments', envId, 'flags', flagKey, 'experiments'] });
+            queryClient.invalidateQueries({ queryKey: ['experiments', projectId, envId, flagKey, 'iterations'] });
+        },
+    });
+};
+
+export const useExperimentIterations = (projectId: string, envId: string, flagKey: string) => {
+    return useQuery({
+        queryKey: ['experiments', projectId, envId, flagKey, 'iterations'],
+        queryFn: async () => {
+            const { data } = await api.get<ExperimentIterationDto[]>(`/projects/${projectId}/environments/${envId}/flags/${flagKey}/experiments/iterations`);
+            return data;
+        },
+        enabled: !!projectId && !!envId && !!flagKey,
+    });
+};
+
+export const useDeleteExperimentIteration = (projectId: string, envId: string, flagKey: string) => {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async (iterationId: string) => {
+            await api.delete(`/projects/${projectId}/environments/${envId}/flags/${flagKey}/experiments/iterations/${iterationId}`);
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['experiments', projectId, envId, flagKey, 'iterations'] });
+        },
+    });
+};
+
+export const useRestoreExperimentSnapshot = (projectId: string, envId: string, flagKey: string) => {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async (iterationId: string) => {
+            const { data } = await api.post(`/projects/${projectId}/environments/${envId}/flags/${flagKey}/experiments/iterations/${iterationId}/restore`);
+            return data;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['flags', projectId, envId, flagKey] });
+            queryClient.invalidateQueries({ queryKey: ['experiments', projectId, envId, flagKey, 'iterations'] });
+        }
+    });
+};
+
+export const useSegments = (projectId: string, environmentId: string) => {
+    return useQuery({
+        queryKey: ['projects', projectId, 'environments', environmentId, 'segments'],
+        queryFn: async () => {
+            if (!projectId || !environmentId) return [];
+            const { data } = await api.get<SegmentDto[]>(`/projects/${projectId}/environments/${environmentId}/segments`);
+            return data;
+        },
+        enabled: !!projectId && !!environmentId,
+    });
+};
+
+export const useCreateSegment = () => {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async (req: { projectId: string; environmentId: string; data: CreateSegmentRequest }) => {
+            const { data } = await api.post<SegmentDto>(`/projects/${req.projectId}/environments/${req.environmentId}/segments`, req.data);
+            return data;
+        },
+        onSuccess: (_, variables) => {
+            queryClient.invalidateQueries({ queryKey: ['projects', variables.projectId, 'environments', variables.environmentId, 'segments'] });
+        },
+    });
+};
+
+export const useUpdateSegment = () => {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async (req: { projectId: string; environmentId: string; segmentId: string; data: UpdateSegmentRequest }) => {
+            const { data } = await api.put<SegmentDto>(`/projects/${req.projectId}/environments/${req.environmentId}/segments/${req.segmentId}`, req.data);
+            return data;
+        },
+        onSuccess: (_, variables) => {
+            queryClient.invalidateQueries({ queryKey: ['projects', variables.projectId, 'environments', variables.environmentId, 'segments'] });
+        },
+    });
+};
+
+export const useDeleteSegment = () => {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async (req: { projectId: string; environmentId: string; segmentId: string }) => {
+            await api.delete(`/projects/${req.projectId}/environments/${req.environmentId}/segments/${req.segmentId}`);
+        },
+        onSuccess: (_, variables) => {
+            queryClient.invalidateQueries({ queryKey: ['projects', variables.projectId, 'environments', variables.environmentId, 'segments'] });
         },
     });
 };

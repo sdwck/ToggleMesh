@@ -1,7 +1,10 @@
 using Microsoft.EntityFrameworkCore;
 using ToggleMesh.API.Extensions;
+using ToggleMesh.API.Features.Webhooks.Domain;
+using ToggleMesh.API.Infrastructure.Data;
 using ToggleMesh.API.Infrastructure.Endpoints;
-using ToggleMesh.API.Persistence;
+using AuthModels = ToggleMesh.API.Infrastructure.Security.Authorization.Models;
+
 
 namespace ToggleMesh.API.Features.Webhooks.UpdateWebhookStatus;
 
@@ -18,7 +21,7 @@ public class UpdateWebhookStatusEndpoint : ToggleEndpoint<UpdateWebhookStatusReq
     {
         Put("/projects/{projectId:guid}/webhooks/{webhookId:guid}/status");
         Version(1);
-        this.RequirePermission(Auth.Models.Permissions.WebhooksCreate);
+        this.RequirePermission(AuthModels.Permissions.WebhooksCreate);
     }
 
     public override async Task HandleAsync(UpdateWebhookStatusRequest req, CancellationToken ct)
@@ -42,6 +45,18 @@ public class UpdateWebhookStatusEndpoint : ToggleEndpoint<UpdateWebhookStatusReq
 
         await _db.SaveChangesAsync(ct);
 
-        await Send.OkAsync(webhook, ct);
+        var dto = new WebhookDto(
+            webhook.Id, 
+            webhook.ProjectId, 
+            webhook.Name, 
+            webhook.Url, 
+            webhook.Status,
+            webhook.EnvironmentIds, 
+            webhook.Events, 
+            webhook.FlagTags,
+            webhook.ConsecutiveFailures, 
+            webhook.LastTriggeredAt);
+
+        await Send.OkAsync(dto, ct);
     }
 }

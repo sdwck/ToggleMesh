@@ -1,15 +1,15 @@
 import { useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { useRealTimeStore } from '../stores/useRealTimeStore';
+import { fetchEventSource } from '@microsoft/fetch-event-source';
 
-const BASE_RETRY_MS = 1_000;
-const MAX_RETRY_MS = 30_000;
+import api from '../api/axios';
 
 export function useRealTimeStream() {
     const queryClient = useQueryClient();
     const abortRef = useRef<AbortController | null>(null);
 
     useEffect(() => {
-        let retryCount = 0;
         let cancelled = false;
 
         async function connect() {
@@ -20,68 +20,54 @@ export function useRealTimeStream() {
             abortRef.current = controller;
 
             try {
-                const response = await fetch('/api/v1/realtime/stream', {
+                await fetchEventSource('/api/v1/realtime/stream', {
+                    method: 'GET',
                     headers: {
                         'Authorization': `Bearer ${token}`,
                         'Accept': 'text/event-stream',
                     },
                     signal: controller.signal,
-                });
-
-                if (!response.ok) {
-                    throw new Error(`SSE stream returned ${response.status}`);
-                }
-
-                const reader = response.body!.getReader();
-                const decoder = new TextDecoder();
-                let buffer = '';
-                let currentEvent = '';
-                let currentData = '';
-
-                retryCount = 0;
-
-                while (true) {
-                    const { done, value } = await reader.read();
-                    if (done) break;
-
-                    buffer += decoder.decode(value, { stream: true });
-
-                    const lines = buffer.split('\n');
-                    buffer = lines.pop()!;
-
-                    for (const line of lines) {
-                        if (line.startsWith('event: ')) {
-                            currentEvent = line.slice(7).trim();
-                        } else if (line.startsWith('data: ')) {
-                            currentData = line.slice(6).trim();
-                        } else if (line.trim() === '') {
-                            if (currentEvent === 'invalidate' && currentData) {
-                                try {
-                                    const parsed = JSON.parse(currentData);
-                                    if (parsed?.queryKey) {
-                                        queryClient.invalidateQueries({ queryKey: parsed.queryKey });
-                                    }
-                                } catch { }
+                    async onopen(response) {
+                        if (response.status === 401) {
+                            try {
+                                await api.get('/user/profile');
+                            } catch {
+                                throw new Error('Token refresh failed');
                             }
-                            currentEvent = '';
-                            currentData = '';
+                            throw new Error('SSE stream returned 401, retrying with new token');
                         }
+                    },
+                    onmessage(ev) {
+                        if (ev.event === 'connected' && ev.data) {
+                            try {
+                                const parsed = JSON.parse(ev.data);
+                                if (parsed?.connectionId) {
+                                    useRealTimeStore.getState().setConnectionId(parsed.connectionId);
+                                }
+                            } catch { }
+                        } else if (ev.event === 'invalidate' && ev.data) {
+                            try {
+                                const parsed = JSON.parse(ev.data);
+                                if (parsed?.queryKey) {
+                                    queryClient.invalidateQueries({ queryKey: parsed.queryKey });
+                                }
+                            } catch { }
+                        } else if (ev.event && ev.data) {
+                            try {
+                                const parsed = JSON.parse(ev.data);
+                                useRealTimeStore.getState().dispatch(ev.event, parsed);
+                            } catch { }
+                        }
+                    },
+                    onerror(err) {
+                        console.warn('SSE connection error, retrying...', err);
                     }
-                }
+                });
             } catch (err: unknown) {
                 if (cancelled || (err instanceof DOMException && err.name === 'AbortError')) {
                     return;
                 }
-            }
-
-            if (cancelled) return;
-
-            const delay = Math.min(BASE_RETRY_MS * Math.pow(2, retryCount), MAX_RETRY_MS);
-            retryCount++;
-            await new Promise(resolve => setTimeout(resolve, delay));
-
-            if (!cancelled) {
-                connect();
+                console.error('SSE connection failed fatally', err);
             }
         }
 

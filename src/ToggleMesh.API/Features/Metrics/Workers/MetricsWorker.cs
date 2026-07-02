@@ -1,9 +1,9 @@
 using System.Threading.Channels;
 using Microsoft.EntityFrameworkCore;
-using ToggleMesh.API.Features.Metrics;
+using ToggleMesh.API.Features.Metrics.Domain;
 using ToggleMesh.API.Infrastructure.Data;
 
-namespace ToggleMesh.API.BackgroundServices.Metrics;
+namespace ToggleMesh.API.Features.Metrics.Workers;
 
 public class MetricsWorker : BackgroundService
 {
@@ -29,7 +29,7 @@ public class MetricsWorker : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var batch = new Dictionary<(Guid, string, bool), (long TrueCount, long FalseCount)>();
+        var batch = new Dictionary<(Guid, string), (long TrueCount, long FalseCount, bool IsClientSide)>();
         var lastFlush = _timeProvider.GetUtcNow();
         var maxMetricsString = _configuration.GetSection("Metrics").GetSection("MaxMetrics").Value;
         if (!int.TryParse(maxMetricsString, out var maxMetrics))
@@ -69,14 +69,24 @@ public class MetricsWorker : BackgroundService
 
             while (batch.Count < 100 && _channel.Reader.TryRead(out var item))
             {
-                var dictKey = (item.EnvironmentId, item.Key, IsClientSide: item.IsClientSideExposed);
-                batch.TryGetValue(dictKey, out var current);
-                batch[dictKey] = (current.TrueCount + item.TrueCount, current.FalseCount + item.FalseCount);
+                var dictKey = (item.EnvironmentId, item.Key);
+                if (batch.TryGetValue(dictKey, out var current))
+                {
+                    batch[dictKey] = (
+                        current.TrueCount + item.TrueCount,
+                        current.FalseCount + item.FalseCount,
+                        current.IsClientSide && item.IsClientSideExposed
+                    );
+                }
+                else
+                {
+                    batch[dictKey] = (item.TrueCount, item.FalseCount, item.IsClientSideExposed);
+                }
             }
         }
     }
 
-    private async Task<bool> FlushToDatabaseAsync(Dictionary<(Guid, string, bool), (long True, long False)> batch,
+    private async Task<bool> FlushToDatabaseAsync(Dictionary<(Guid, string), (long True, long False, bool IsClient)> batch,
         CancellationToken ct)
     {
         var sortedBatch = batch
@@ -98,7 +108,7 @@ public class MetricsWorker : BackgroundService
             {
                 envIds[index] = kvp.Key.Item1;
                 keys[index] = kvp.Key.Item2;
-                isClientFlags[index] = kvp.Key.Item3;
+                isClientFlags[index] = kvp.Value.IsClient;
                 trueCounts[index] = kvp.Value.True;
                 falseCounts[index] = kvp.Value.False;
                 index++;

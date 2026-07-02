@@ -46,3 +46,30 @@ client.stop()
   ```python
   client.track("checkout_completed", properties={"cart_size": 3}, value=150.0, identity="user-123")
   ```
+
+---
+
+## 🚀 CLI Tool (Code Generation)
+
+The `togglemesh` Python package also includes a powerful Command Line Interface for synchronizing feature flags from the control plane and generating strongly-typed Python classes. This eliminates typos and gives you full IDE autocomplete for your flag keys!
+
+### 1. Setup Configuration
+Run the configuration wizard to link the CLI to your ToggleMesh environment.
+```bash
+togglemesh config
+```
+
+### 2. Generate Typed Flags
+Synchronize your flags and output a native Python file containing your flag constants:
+```bash
+togglemesh sync -l python -o ./flags.py
+```
+
+Now you can use the generated `Flags` class in your code:
+```python
+from flags import Flags
+from togglemesh import ToggleMeshClient, ToggleMeshOptions
+
+# ...
+client.is_enabled(Flags.NEW_CHECKOUT_FLOW, default_value=False)
+```

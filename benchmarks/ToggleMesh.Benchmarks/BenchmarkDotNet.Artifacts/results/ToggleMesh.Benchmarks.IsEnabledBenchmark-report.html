@@ -2,7 +2,7 @@
 <html lang='en'>
 <head>
 <meta charset='utf-8' />
-<title>ToggleMesh.Benchmarks.IsEnabledBenchmark-20260613-045639</title>
+<title>ToggleMesh.Benchmarks.IsEnabledBenchmark-20260627-132433</title>
 
 <style type="text/css">
 	table { border-collapse: collapse; display: block; width: 100%; overflow: auto; }
@@ -16,16 +16,21 @@
 BenchmarkDotNet v0.15.8, Windows 11 (10.0.22631.6199/23H2/2023Update/SunValley3)
 Intel Core i7-14700K 3.40GHz, 1 CPU, 28 logical and 20 physical cores
 .NET SDK 10.0.100
-  [Host]     : .NET 10.0.0 (10.0.0, 10.0.25.52411), X64 RyuJIT x86-64-v3
-  DefaultJob : .NET 10.0.0 (10.0.0, 10.0.25.52411), X64 RyuJIT x86-64-v3
+  [Host]     : .NET 10.0.9 (10.0.9, 10.0.926.27113), X64 RyuJIT x86-64-v3
+  DefaultJob : .NET 10.0.9 (10.0.9, 10.0.926.27113), X64 RyuJIT x86-64-v3
 </code></pre>
 <pre><code></code></pre>
 
 <table>
 <thead><tr><th>Method                  </th><th>Mean</th><th>Error</th><th>StdDev</th><th>Allocated</th>
 </tr>
-</thead><tbody><tr><td>IsEnabled_WithRules_Typed</td><td>46.81 ns</td><td>0.327 ns</td><td>0.306 ns</td><td>-</td>
-</tr><tr><td>IsEnabled_WithRules_Dictionary</td><td>37.24 ns</td><td>0.255 ns</td><td>0.238 ns</td><td>-</td>
+</thead><tbody><tr><td>IsEnabled_WithRules_Typed</td><td>52.40 ns</td><td>0.352 ns</td><td>0.329 ns</td><td>-</td>
+</tr><tr><td>IsEnabled_WithRules_AOT</td><td>24.68 ns</td><td>0.169 ns</td><td>0.158 ns</td><td>-</td>
+</tr><tr><td>IsEnabled_WithRules_Dictionary</td><td>49.38 ns</td><td>0.269 ns</td><td>0.252 ns</td><td>-</td>
+</tr><tr><td>IsEnabled_Complex_Typed</td><td>98.90 ns</td><td>0.337 ns</td><td>0.315 ns</td><td>-</td>
+</tr><tr><td>IsEnabled_Complex_AOT</td><td>77.42 ns</td><td>0.295 ns</td><td>0.261 ns</td><td>-</td>
+</tr><tr><td>IsEnabled_Complex_Dictionary</td><td>98.79 ns</td><td>0.397 ns</td><td>0.371 ns</td><td>-</td>
+</tr><tr><td>Track_Event</td><td>46.37 ns</td><td>0.136 ns</td><td>0.127 ns</td><td>-</td>
 </tr></tbody></table>
 </body>
 </html>

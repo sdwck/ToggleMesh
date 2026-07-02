@@ -1,4 +1,4 @@
-namespace ToggleMesh.API.Features.Auth.Endpoints.ConfirmEmail;
+namespace ToggleMesh.API.Features.Auth.ConfirmEmail;
 
 public class ConfirmEmailRequest
 {

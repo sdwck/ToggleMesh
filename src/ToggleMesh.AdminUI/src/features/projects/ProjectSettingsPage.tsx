@@ -17,6 +17,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
     Dialog,
@@ -35,6 +36,35 @@ import { toast } from 'sonner';
 import { EmptyState } from "@/components/EmptyState.tsx";
 import { WebhookDeliveriesModal } from './components/WebhookDeliveriesModal';
 import { EditWebhookModal } from './components/EditWebhookModal';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useForm } from 'react-hook-form';
+import * as z from 'zod';
+import {
+    Form,
+    FormControl,
+    FormField,
+    FormItem,
+    FormMessage,
+} from '@/components/ui/form';
+import { handleApiError } from '@/api/errorUtils';
+
+const renameProjectSchema = z.object({
+    name: z.string().min(1, 'Project name is required'),
+});
+type RenameProjectValues = z.infer<typeof renameProjectSchema>;
+
+const deleteProjectSchema = z.object({
+    confirmName: z.string().min(1, 'Confirmation is required'),
+});
+type DeleteProjectValues = z.infer<typeof deleteProjectSchema>;
+
+const createWebhookSchema = z.object({
+    name: z.string().min(1, 'Webhook name is required'),
+    url: z.string().url('Invalid URL'),
+    events: z.array(z.string()).min(1, 'At least one event must be selected'),
+    flagTagsStr: z.string().optional(),
+});
+type CreateWebhookValues = z.infer<typeof createWebhookSchema>;
 
 const formatProjectDate = (dateString?: string) => {
     if (!dateString) return 'Unknown';
@@ -77,23 +107,35 @@ export function ProjectSettingsPage() {
         setSearchParams({ tab });
     };
 
-    const [projectName, setProjectName] = useState('');
-    const [deleteConfirmName, setDeleteConfirmName] = useState('');
     const [isDeleteProjectOpen, setIsDeleteProjectOpen] = useState(false);
-
     const [editingWebhook, setEditingWebhook] = useState<Webhook | null>(null);
+    const [dashboardEnv, setDashboardEnv] = useState<string>(() => {
+        return localStorage.getItem(`togglemesh_dashboard_env_${projectId}`) || 'all';
+    });
+
+    const renameForm = useForm<RenameProjectValues>({
+        resolver: zodResolver(renameProjectSchema),
+        defaultValues: { name: '' },
+    });
+
+    const deleteForm = useForm<DeleteProjectValues>({
+        resolver: zodResolver(deleteProjectSchema),
+        defaultValues: { confirmName: '' },
+    });
+
+    const webhookForm = useForm<CreateWebhookValues>({
+        resolver: zodResolver(createWebhookSchema),
+        defaultValues: { name: '', url: '', events: [], flagTagsStr: '' },
+    });
 
     const handleOpenDeleteDialog = (open: boolean) => {
         setIsDeleteProjectOpen(open);
         if (!open) {
-            setDeleteConfirmName('');
+            deleteForm.reset({ confirmName: '' });
         }
     };
 
     const [isWebhookOpen, setIsWebhookOpen] = useState(false);
-    const [webhookName, setWebhookName] = useState('');
-    const [webhookUrl, setWebhookUrl] = useState('');
-    const [selectedEvents, setSelectedEvents] = useState<string[]>([]);
     const [revealedSecret, setRevealedSecret] = useState<string | null>(null);
 
     const [webhookToDelete, setWebhookToDelete] = useState<string | null>(null);
@@ -101,9 +143,16 @@ export function ProjectSettingsPage() {
 
     useEffect(() => {
         if (project?.name) {
-            setProjectName(project.name);
+            renameForm.reset({ name: project.name });
+            deleteForm.reset({ confirmName: '' });
         }
-    }, [project?.name]);
+    }, [project?.name, renameForm, deleteForm]);
+
+    useEffect(() => {
+        if (isWebhookOpen) {
+            webhookForm.reset({ name: '', url: '', events: [], flagTagsStr: '' });
+        }
+    }, [isWebhookOpen, webhookForm]);
 
     const handleCopyProjectId = () => {
         if (project?.id) {
@@ -143,22 +192,18 @@ export function ProjectSettingsPage() {
         }
     };
 
-    const handleUpdateName = async () => {
-        if (!projectName.trim()) {
-            toast.error('Project name cannot be empty');
-            return;
-        }
+    const handleUpdateNameSubmit = async (values: RenameProjectValues) => {
         try {
-            await updateProject.mutateAsync(projectName);
+            await updateProject.mutateAsync(values.name.trim());
             toast.success('Project name updated');
-        } catch {
-            toast.error('Failed to update project name');
+        } catch (error: any) {
+            handleApiError(error, renameForm.setError, 'Failed to update project name');
         }
     };
 
-    const handleDeleteProject = async () => {
-        if (deleteConfirmName !== project?.name) {
-            toast.error('Confirmation name does not match');
+    const handleDeleteProjectSubmit = async (values: DeleteProjectValues) => {
+        if (values.confirmName !== project?.name) {
+            deleteForm.setError('confirmName', { type: 'manual', message: 'Confirmation name does not match' });
             return;
         }
         try {
@@ -166,30 +211,24 @@ export function ProjectSettingsPage() {
             toast.success('Project successfully deleted');
             setIsDeleteProjectOpen(false);
             navigate('/projects');
-        } catch {
-            toast.error('Failed to delete project');
+        } catch (error: any) {
+            handleApiError(error, deleteForm.setError, 'Failed to delete project');
         }
     };
 
-    const handleCreateWebhook = async () => {
-        if (!webhookName.trim() || !webhookUrl.trim()) {
-            toast.error('Name and URL are required');
-            return;
-        }
+    const handleCreateWebhookSubmit = async (values: CreateWebhookValues) => {
         try {
             const response = await createWebhook.mutateAsync({
-                name: webhookName,
-                url: webhookUrl,
+                name: values.name.trim(),
+                url: values.url.trim(),
                 environmentIds: [],
-                events: selectedEvents
+                events: values.events,
+                flagTags: values.flagTagsStr ? values.flagTagsStr.split(',').map(t => t.trim()).filter(Boolean) : []
             });
-            setWebhookName('');
-            setWebhookUrl('');
-            setSelectedEvents([]);
             setRevealedSecret(response.secretKey);
             toast.success('Webhook created successfully');
-        } catch {
-            toast.error('Failed to create webhook');
+        } catch (error: any) {
+            handleApiError(error, webhookForm.setError, 'Failed to create webhook');
         }
     };
 
@@ -348,120 +387,184 @@ export function ProjectSettingsPage() {
                         </div>
 
                         <div className="lg:col-span-8 flex flex-col gap-5">
-                            <Card className="border-border/40 bg-zinc-950/20 backdrop-blur-sm overflow-hidden shadow-sm max-w-xl w-full flex flex-col justify-between">
-                                <CardHeader className="pb-3 px-5 pt-4">
-                                    <CardTitle className="text-sm font-semibold text-zinc-200">Rename Project</CardTitle>
-                                    <CardDescription className="text-xs text-muted-foreground">Change the visible name of this project in the ToggleMesh Admin Console.</CardDescription>
-                                </CardHeader>
-                                <CardContent className="space-y-3 px-5 pt-0 pb-4">
-                                    <div className="space-y-1.5">
-                                        <label className="text-[11px] font-medium text-zinc-400">Project Name</label>
-                                        <Input
-                                            placeholder="Enter project name"
-                                            value={projectName}
-                                            onChange={(e) => setProjectName(e.target.value)}
-                                            onKeyDown={(e) => {
-                                                if (e.key === 'Enter' && projectName.trim() && projectName !== project?.name) {
-                                                    handleUpdateName();
-                                                }
-                                            }}
-                                            disabled={isProjectLoading}
-                                            className="border-zinc-800 bg-zinc-900/30 w-full h-8 text-xs text-zinc-200 focus-visible:ring-1 focus-visible:ring-zinc-700"
-                                        />
-                                        <p className="text-[10px] text-zinc-500">
-                                            A descriptive name helps your team identify this project quickly.
+                            <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 w-full">
+                                {canManageProject && (
+                                    <Card className="border-border/40 bg-zinc-950/20 backdrop-blur-sm overflow-hidden shadow-sm w-full flex flex-col justify-between">
+                                        <CardHeader className="pb-3 px-5 pt-4">
+                                            <CardTitle className="text-sm font-semibold text-zinc-200">Rename Project</CardTitle>
+                                            <CardDescription className="text-xs text-muted-foreground">Change the visible name of this project in the ToggleMesh Admin Console.</CardDescription>
+                                        </CardHeader>
+                                        <Form {...renameForm}>
+                                            <form onSubmit={renameForm.handleSubmit(handleUpdateNameSubmit)} className="flex flex-col h-full">
+                                                <CardContent className="space-y-3 px-5 pt-0 pb-4 flex-1">
+                                                    <div className="space-y-1.5">
+                                                        <label className="text-[11px] font-medium text-zinc-400">Project Name</label>
+                                                        <FormField
+                                                            control={renameForm.control}
+                                                            name="name"
+                                                            render={({ field }) => (
+                                                                <FormItem>
+                                                                    <FormControl>
+                                                                        <Input
+                                                                            {...field}
+                                                                            placeholder="Enter project name"
+                                                                            disabled={isProjectLoading}
+                                                                            className="border-zinc-800 bg-zinc-900/30 w-full h-8 text-xs text-zinc-200 focus-visible:ring-1 focus-visible:ring-zinc-700"
+                                                                        />
+                                                                    </FormControl>
+                                                                    <FormMessage />
+                                                                </FormItem>
+                                                            )}
+                                                        />
+                                                        <p className="text-[10px] text-zinc-500">
+                                                            A descriptive name helps your team identify this project quickly.
+                                                        </p>
+                                                    </div>
+                                                </CardContent>
+                                                <CardFooter className="bg-zinc-900/25 border-t border-border/20 px-5 py-2.5 flex items-center justify-between mt-auto">
+                                                    <span className="text-[11px] text-muted-foreground">Visible to your organization.</span>
+                                                    <Button
+                                                        type="submit"
+                                                        disabled={updateProject.isPending || !renameForm.watch('name')?.trim() || renameForm.watch('name') === project?.name}
+                                                        className="px-3 py-1.5 h-7 text-xs font-semibold"
+                                                    >
+                                                        {updateProject.isPending ? 'Saving...' : 'Save'}
+                                                    </Button>
+                                                </CardFooter>
+                                            </form>
+                                        </Form>
+                                    </Card>
+                                )}
+
+                                <Card className="border-border/40 bg-zinc-950/20 backdrop-blur-sm overflow-hidden shadow-sm w-full flex flex-col justify-between">
+                                    <CardHeader className="pb-3 px-5 pt-4">
+                                        <CardTitle className="text-sm font-semibold text-zinc-200">Dashboard Preferences</CardTitle>
+                                        <CardDescription className="text-xs text-muted-foreground">Select the default environment to display on the project dashboard.</CardDescription>
+                                    </CardHeader>
+                                    <CardContent className="space-y-3 px-5 pt-0 pb-4 flex-1">
+                                        <div className="space-y-1.5">
+                                            <label className="text-[11px] font-medium text-zinc-400">Default Environment</label>
+                                            <Select 
+                                                value={dashboardEnv}
+                                                onValueChange={(val) => {
+                                                    setDashboardEnv(val);
+                                                    localStorage.setItem(`togglemesh_dashboard_env_${project?.id}`, val);
+                                                    toast.success('Dashboard preference updated');
+                                                }}
+                                            >
+                                                <SelectTrigger className="border-zinc-800 bg-zinc-900/30 w-full h-8 text-xs text-zinc-200 focus-visible:ring-1 focus-visible:ring-zinc-700">
+                                                    <SelectValue placeholder="All Environments" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="all">All Environments</SelectItem>
+                                                    {project?.environments?.map(env => (
+                                                        <SelectItem key={env.id} value={env.id}>{env.name}</SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                            <p className="text-[10px] text-zinc-500">
+                                                Saved locally in your browser and applies only to you.
+                                            </p>
+                                        </div>
+                                    </CardContent>
+                                    <CardFooter className="bg-zinc-900/25 border-t border-border/20 px-5 py-2.5 flex items-center justify-between mt-auto">
+                                        <span className="text-[11px] text-muted-foreground">Applies immediately.</span>
+                                    </CardFooter>
+                                </Card>
+                            </div>
+
+                            {canManageProject && (
+                                <Card className="border-destructive/30 bg-destructive/5/10 backdrop-blur-sm overflow-hidden shadow-sm w-full flex-1 flex flex-col justify-between">
+                                    <CardHeader className="pb-3 px-5 pt-4">
+                                        <CardTitle className="text-destructive flex items-center gap-2 text-sm font-semibold">
+                                            <AlertTriangle className="h-3.5 w-3.5 text-destructive/80" /> Danger Zone
+                                        </CardTitle>
+                                        <CardDescription className="text-zinc-400 text-[11px] mt-1">
+                                            Permanently delete this project and all associated data, including feature flags, environments, and logs. This action is irreversible.
+                                        </CardDescription>
+                                    </CardHeader>
+                                    <CardContent className="px-5 pt-0 pb-4">
+                                        <p className="text-[11px] text-zinc-400 leading-relaxed">
+                                            This action will immediately terminate all active API keys, remove all environment configurations, and render all integrated SDK clients inactive.
                                         </p>
-                                    </div>
-                                </CardContent>
-                                <CardFooter className="bg-zinc-900/25 border-t border-border/20 px-5 py-2.5 flex items-center justify-between mt-auto">
-                                    <span className="text-[11px] text-muted-foreground">This name will be visible to everyone in your organization.</span>
-                                    <Button
-                                        onClick={handleUpdateName}
-                                        disabled={updateProject.isPending || !projectName.trim() || projectName === project?.name}
-                                        className="px-3 py-1.5 h-7 text-xs font-semibold"
-                                    >
-                                        {updateProject.isPending ? 'Saving...' : 'Save Changes'}
-                                    </Button>
-                                </CardFooter>
-                            </Card>
-
-                            <Card className="border-destructive/30 bg-destructive/5/10 backdrop-blur-sm overflow-hidden shadow-sm max-w-xl w-full flex-1 flex flex-col justify-between">
-                                <CardHeader className="pb-3 px-5 pt-4">
-                                    <CardTitle className="text-destructive flex items-center gap-2 text-sm font-semibold">
-                                        <AlertTriangle className="h-3.5 w-3.5 text-destructive/80" /> Danger Zone
-                                    </CardTitle>
-                                    <CardDescription className="text-zinc-400 text-[11px] mt-1">
-                                        Permanently delete this project and all associated data, including feature flags, environments, and logs. This action is irreversible.
-                                    </CardDescription>
-                                </CardHeader>
-                                <CardContent className="px-5 pt-0 pb-4">
-                                    <p className="text-[11px] text-zinc-400 leading-relaxed">
-                                        This action will immediately terminate all active API keys, remove all environment configurations, and render all integrated SDK clients inactive.
-                                    </p>
-                                </CardContent>
-                                <CardFooter className="bg-destructive/5 border-t border-destructive/20 px-5 py-2.5 flex items-center justify-between mt-auto">
-                                    <span className="text-[11px] text-destructive-foreground/70">Once deleted, this project cannot be recovered.</span>
-                                    <Dialog open={isDeleteProjectOpen} onOpenChange={handleOpenDeleteDialog}>
-                                        <DialogTrigger asChild>
-                                            <Button variant="destructive" disabled={isProjectLoading} className="text-xs font-semibold px-3 py-1.5 h-7 bg-destructive/90 hover:bg-destructive text-white shadow-sm transition-all duration-200">
-                                                Delete Project
-                                            </Button>
-                                        </DialogTrigger>
-                                        <DialogContent className="border-destructive/20 bg-zinc-950 max-w-md p-6">
-                                            <DialogHeader className="space-y-3">
-                                                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10 text-destructive">
-                                                    <AlertTriangle className="h-6 w-6" />
-                                                </div>
-                                                <div className="text-center space-y-1">
-                                                    <DialogTitle className="text-lg font-semibold text-zinc-100">Delete project</DialogTitle>
-                                                    <DialogDescription className="text-sm text-zinc-400">
-                                                        This action is permanent and will delete all configurations, flags, environments, and logs.
-                                                    </DialogDescription>
-                                                </div>
-                                            </DialogHeader>
-
-                                            <div className="space-y-4 py-4">
-                                                <div className="rounded-lg bg-destructive/5 border border-destructive/20 p-3 text-xs text-destructive-foreground/90 space-y-1">
-                                                    <span className="font-semibold block text-destructive">Warning:</span>
-                                                    This will immediately deactivate all SDK connections for project <span className="font-semibold text-foreground font-mono">{project?.name}</span>.
-                                                </div>
-
-                                                <div className="space-y-2">
-                                                    <label className="text-xs font-medium text-zinc-300">
-                                                        To confirm, type <span className="font-semibold text-foreground font-mono select-all">{project?.name}</span> below:
-                                                    </label>
-                                                    <Input
-                                                        placeholder="Type project name"
-                                                        value={deleteConfirmName}
-                                                        onChange={(e) => setDeleteConfirmName(e.target.value)}
-                                                        className="border-zinc-800 focus-visible:ring-destructive bg-zinc-900/50 text-sm font-mono text-zinc-200"
-                                                        autoFocus
-                                                    />
-                                                </div>
-                                            </div>
-
-                                            <DialogFooter className="gap-2 sm:gap-0">
-                                                <Button
-                                                    type="button"
-                                                    variant="outline"
-                                                    onClick={() => handleOpenDeleteDialog(false)}
-                                                    className="border-zinc-800 text-zinc-300 hover:bg-zinc-900 hover:text-zinc-100"
-                                                >
-                                                    Cancel
+                                    </CardContent>
+                                    <CardFooter className="bg-destructive/5 border-t border-destructive/20 px-5 py-2.5 flex items-center justify-between mt-auto">
+                                        <span className="text-[11px] text-destructive-foreground/70">Once deleted, this project cannot be recovered.</span>
+                                        <Dialog open={isDeleteProjectOpen} onOpenChange={handleOpenDeleteDialog}>
+                                            <DialogTrigger asChild>
+                                                <Button variant="destructive" disabled={isProjectLoading} className="text-xs font-semibold px-3 py-1.5 h-7 bg-destructive/90 hover:bg-destructive text-white shadow-sm transition-all duration-200">
+                                                    Delete Project
                                                 </Button>
-                                                <Button
-                                                    variant="destructive"
-                                                    onClick={handleDeleteProject}
-                                                    disabled={deleteProject.isPending || !project?.name || deleteConfirmName !== project.name}
-                                                    className="bg-destructive hover:bg-destructive/90 text-white font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-                                                >
-                                                    {deleteProject.isPending ? 'Deleting...' : 'Delete Project'}
-                                                </Button>
-                                            </DialogFooter>
-                                        </DialogContent>
-                                    </Dialog>
-                                </CardFooter>
-                            </Card>
+                                            </DialogTrigger>
+                                            <DialogContent className="border-destructive/20 bg-zinc-950 max-w-md p-6">
+                                                <DialogHeader className="space-y-3">
+                                                    <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+                                                        <AlertTriangle className="h-6 w-6" />
+                                                    </div>
+                                                    <div className="text-center space-y-1">
+                                                        <DialogTitle className="text-lg font-semibold text-zinc-100">Delete project</DialogTitle>
+                                                        <DialogDescription className="text-sm text-zinc-400">
+                                                            This action is permanent and will delete all configurations, flags, environments, and logs.
+                                                        </DialogDescription>
+                                                    </div>
+                                                </DialogHeader>
+
+                                                <Form {...deleteForm}>
+                                                    <form onSubmit={deleteForm.handleSubmit(handleDeleteProjectSubmit)}>
+                                                        <div className="space-y-4 py-4">
+                                                            <div className="rounded-lg bg-destructive/5 border border-destructive/20 p-3 text-xs text-destructive-foreground/90 space-y-1">
+                                                                <span className="font-semibold block text-destructive">Warning:</span>
+                                                                This will immediately deactivate all SDK connections for project <span className="font-semibold text-foreground font-mono">{project?.name}</span>.
+                                                            </div>
+                                                            <div className="space-y-2">
+                                                                <label className="text-xs font-medium text-zinc-300">
+                                                                    To confirm, type <span className="font-semibold text-foreground font-mono select-all">{project?.name}</span> below:
+                                                                </label>
+                                                                <FormField
+                                                                    control={deleteForm.control}
+                                                                    name="confirmName"
+                                                                    render={({ field }) => (
+                                                                        <FormItem>
+                                                                            <FormControl>
+                                                                                <Input
+                                                                                    {...field}
+                                                                                    placeholder="Type project name"
+                                                                                    className="border-zinc-800 focus-visible:ring-destructive bg-zinc-900/50 text-sm font-mono text-zinc-200"
+                                                                                    autoFocus
+                                                                                />
+                                                                            </FormControl>
+                                                                            <FormMessage />
+                                                                        </FormItem>
+                                                                    )}
+                                                                />
+                                                            </div>
+                                                        </div>
+
+                                                        <DialogFooter className="gap-2 sm:gap-0 mt-4">
+                                                            <Button
+                                                                type="button"
+                                                                variant="outline"
+                                                                onClick={() => handleOpenDeleteDialog(false)}
+                                                                className="border-zinc-800 text-zinc-300 hover:bg-zinc-900 hover:text-zinc-100"
+                                                            >
+                                                                Cancel
+                                                            </Button>
+                                                            <Button
+                                                                type="submit"
+                                                                variant="destructive"
+                                                                disabled={deleteProject.isPending || !project?.name || deleteForm.watch('confirmName') !== project.name}
+                                                                className="bg-destructive hover:bg-destructive/90 text-white font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                                                            >
+                                                                {deleteProject.isPending ? 'Deleting...' : 'Delete Project'}
+                                                            </Button>
+                                                        </DialogFooter>
+                                                    </form>
+                                                </Form>
+                                            </DialogContent>
+                                        </Dialog>
+                                    </CardFooter>
+                                </Card>
+                            )}
                         </div>
                     </div>
                 </TabsContent>
@@ -482,18 +585,10 @@ export function ProjectSettingsPage() {
                                     <Plus className="mr-2 h-4 w-4" /> Add Webhook
                                 </Button>
                             </DialogTrigger>
-                            <DialogContent
-                                className="border-border/40 bg-zinc-950"
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter' && webhookName.trim() && webhookUrl.trim()) {
-                                        handleCreateWebhook();
-                                    }
-                                }}
-                            >
+                            <DialogContent className="border-border/40 bg-zinc-950">
                                 <DialogHeader>
                                     <DialogTitle>Configure Webhook</DialogTitle>
-                                    <DialogDescription>Add a new integration URL to push
-                                        notifications.</DialogDescription>
+                                    <DialogDescription>Add a new integration URL to push notifications.</DialogDescription>
                                 </DialogHeader>
 
                                 {revealedSecret ? (
@@ -510,50 +605,117 @@ export function ProjectSettingsPage() {
                                         </div>
                                     </div>
                                 ) : (
-                                    <div className="space-y-4 py-4">
-                                        <div className="space-y-2">
-                                            <label className="text-sm font-medium">Name</label>
-                                            <Input placeholder="e.g. Slack Webhook" value={webhookName}
-                                                onChange={(e) => setWebhookName(e.target.value)} />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <label className="text-sm font-medium">Payload URL</label>
-                                            <Input placeholder="https://example.com/webhook" value={webhookUrl}
-                                                onChange={(e) => setWebhookUrl(e.target.value)} />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <label className="text-sm font-medium">Events</label>
-                                            <div className="grid grid-cols-3 gap-2">
-                                                {['flag.created', 'flag.updated', 'flag.deleted'].map((evt) => (
-                                                    <div key={evt} className="flex items-center space-x-2">
-                                                        <Checkbox
-                                                            id={evt}
-                                                            checked={selectedEvents.includes(evt)}
-                                                            onCheckedChange={(checked) => {
-                                                                if (checked) setSelectedEvents([...selectedEvents, evt]);
-                                                                else setSelectedEvents(selectedEvents.filter(x => x !== evt));
-                                                            }}
-                                                        />
-                                                        <label htmlFor={evt} className="text-xs font-mono">{evt}</label>
-                                                    </div>
-                                                ))}
+                                    <Form {...webhookForm}>
+                                        <form onSubmit={webhookForm.handleSubmit(handleCreateWebhookSubmit)}>
+                                            <div className="space-y-4 py-4">
+                                                <div className="space-y-2">
+                                                    <label className="text-sm font-medium">Name</label>
+                                                    <FormField
+                                                        control={webhookForm.control}
+                                                        name="name"
+                                                        render={({ field }) => (
+                                                            <FormItem>
+                                                                <FormControl>
+                                                                    <Input {...field} placeholder="e.g. Slack Webhook" />
+                                                                </FormControl>
+                                                                <FormMessage />
+                                                            </FormItem>
+                                                        )}
+                                                    />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <label className="text-sm font-medium">Payload URL</label>
+                                                    <FormField
+                                                        control={webhookForm.control}
+                                                        name="url"
+                                                        render={({ field }) => (
+                                                            <FormItem>
+                                                                <FormControl>
+                                                                    <Input {...field} placeholder="https://example.com/webhook" />
+                                                                </FormControl>
+                                                                <FormMessage />
+                                                            </FormItem>
+                                                        )}
+                                                    />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <label className="text-sm font-medium">Filter by Tags (optional)</label>
+                                                    <FormField
+                                                        control={webhookForm.control}
+                                                        name="flagTagsStr"
+                                                        render={({ field }) => (
+                                                            <FormItem>
+                                                                <FormControl>
+                                                                    <Input {...field} placeholder="e.g. backend, team-a (comma separated)" />
+                                                                </FormControl>
+                                                                <p className="text-[10px] text-zinc-500 mt-1">Only send events for flags with matching tags.</p>
+                                                                <FormMessage />
+                                                            </FormItem>
+                                                        )}
+                                                    />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <label className="text-sm font-medium">Events</label>
+                                                    <FormField
+                                                        control={webhookForm.control}
+                                                        name="events"
+                                                        render={() => (
+                                                            <FormItem>
+                                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                                                    {['flag.created', 'flag.updated', 'flag.deleted', 'experiment.winner_found', 'experiment.degraded'].map((evt) => (
+                                                                        <FormField
+                                                                            key={evt}
+                                                                            control={webhookForm.control}
+                                                                            name="events"
+                                                                            render={({ field }) => {
+                                                                                return (
+                                                                                    <FormItem
+                                                                                        key={evt}
+                                                                                        className="flex flex-row items-start space-x-2 space-y-0"
+                                                                                    >
+                                                                                        <FormControl>
+                                                                                            <Checkbox
+                                                                                                checked={field.value?.includes(evt)}
+                                                                                                onCheckedChange={(checked) => {
+                                                                                                    return checked
+                                                                                                        ? field.onChange([...field.value, evt])
+                                                                                                        : field.onChange(
+                                                                                                            field.value?.filter(
+                                                                                                                (value) => value !== evt
+                                                                                                            )
+                                                                                                        )
+                                                                                                }}
+                                                                                            />
+                                                                                        </FormControl>
+                                                                                        <label className="text-xs font-mono font-normal">
+                                                                                            {evt}
+                                                                                        </label>
+                                                                                    </FormItem>
+                                                                                )
+                                                                            }}
+                                                                        />
+                                                                    ))}
+                                                                </div>
+                                                                <FormMessage />
+                                                            </FormItem>
+                                                        )}
+                                                    />
+                                                </div>
                                             </div>
-                                        </div>
-                                    </div>
+                                            <DialogFooter className="mt-4">
+                                                <Button type="button" variant="outline"
+                                                    onClick={() => setIsWebhookOpen(false)}>Cancel</Button>
+                                                <Button type="submit"
+                                                    disabled={createWebhook.isPending}>Save</Button>
+                                            </DialogFooter>
+                                        </form>
+                                    </Form>
                                 )}
-
-                                <DialogFooter>
-                                    {revealedSecret ? (
+                                {revealedSecret && (
+                                    <DialogFooter className="mt-4">
                                         <Button onClick={() => setIsWebhookOpen(false)}>Done</Button>
-                                    ) : (
-                                        <>
-                                            <Button variant="outline"
-                                                onClick={() => setIsWebhookOpen(false)}>Cancel</Button>
-                                            <Button onClick={handleCreateWebhook}
-                                                disabled={createWebhook.isPending}>Save</Button>
-                                        </>
-                                    )}
-                                </DialogFooter>
+                                    </DialogFooter>
+                                )}
                             </DialogContent>
                         </Dialog>
                     </div>
@@ -607,6 +769,11 @@ export function ProjectSettingsPage() {
                                                             className="text-[10px] font-mono">{e}</Badge>)
                                                     )}
                                                 </div>
+                                                {hook.flagTags && hook.flagTags.length > 0 && (
+                                                    <div className="mt-2 text-[10px] text-zinc-400">
+                                                        Tags: <span className="font-mono text-zinc-300">{hook.flagTags.join(', ')}</span>
+                                                    </div>
+                                                )}
                                             </TableCell>
                                             <TableCell className="text-xs text-muted-foreground font-mono">
                                                 {hook.lastTriggeredAt ? new Date(hook.lastTriggeredAt).toLocaleString() : 'Never'}

@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ToggleMeshClient } from './index.js';
 
+const BASE_URL = 'http://localhost:5264';
+
 describe('ToggleMeshClient SDK', () => {
     beforeEach(() => {
         vi.restoreAllMocks();
@@ -8,7 +10,7 @@ describe('ToggleMeshClient SDK', () => {
 
     it('should initialize with correct options', () => {
         const client = new ToggleMeshClient({
-            baseUrl: 'http://localhost:5264/',
+            baseUrl: `${BASE_URL}/`,
             clientKey: 'tm_client_test'
         });
 
@@ -18,7 +20,7 @@ describe('ToggleMeshClient SDK', () => {
 
     it('should fetch and evaluate flags correctly', async () => {
         const client = new ToggleMeshClient({
-            baseUrl: 'http://localhost:5264',
+            baseUrl: BASE_URL,
             clientKey: 'tm_client_test'
         });
 
@@ -33,7 +35,7 @@ describe('ToggleMeshClient SDK', () => {
 
         await client.identify('user_123', { Country: 'MD' });
 
-        expect(mockFetch).toHaveBeenCalledWith('http://localhost:5264/api/v1/sdk/evaluate', {
+        expect(mockFetch).toHaveBeenCalledWith(`${BASE_URL}/api/v1/sdk/evaluate`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -52,7 +54,7 @@ describe('ToggleMeshClient SDK', () => {
 
     it('should notify listeners when flags are updated', async () => {
         const client = new ToggleMeshClient({
-            baseUrl: 'http://localhost:5264',
+            baseUrl: BASE_URL,
             clientKey: 'tm_client_test'
         });
 
@@ -79,5 +81,131 @@ describe('ToggleMeshClient SDK', () => {
 
         await client.identify('user_123');
         expect(callbackCalled).toBe(false);
+    });
+
+    describe('track()', () => {
+        it('should not track without identity', () => {
+            const client = new ToggleMeshClient({
+                baseUrl: BASE_URL,
+                clientKey: 'tm_client_test'
+            });
+
+            const mockFetch = vi.fn().mockResolvedValue({ ok: true });
+            global.fetch = mockFetch as any;
+
+            client.track('purchase');
+
+            expect(mockFetch).not.toHaveBeenCalled();
+        });
+
+        it('should buffer events and flush when threshold is reached', async () => {
+            const client = new ToggleMeshClient({
+                baseUrl: BASE_URL,
+                clientKey: 'tm_client_test'
+            });
+
+            const mockFetch = vi.fn().mockResolvedValue({
+                ok: true,
+                json: async () => []
+            });
+            global.fetch = mockFetch as any;
+
+            await client.identify('user_42');
+            mockFetch.mockClear();
+
+            for (let i = 0; i < 19; i++) {
+                client.track(`event_${i}`);
+            }
+            expect(mockFetch).not.toHaveBeenCalled();
+
+            client.track('event_19');
+
+            expect(mockFetch).toHaveBeenCalledTimes(1);
+            const [url, options] = mockFetch.mock.calls[0];
+            expect(url).toBe(`${BASE_URL}/api/v1/sdk/events`);
+            expect(options.method).toBe('POST');
+
+            const body = JSON.parse(options.body);
+            expect(body.Events).toHaveLength(20);
+            expect(body.Events[0].Identity).toBe('user_42');
+            expect(body.Events[0].Type).toBe(1);
+            expect(body.Events[0].EventName).toBe('event_0');
+        });
+
+        it('should include properties and value in tracked events', async () => {
+            const client = new ToggleMeshClient({
+                baseUrl: BASE_URL,
+                clientKey: 'tm_client_test'
+            });
+
+            const mockFetch = vi.fn().mockResolvedValue({
+                ok: true,
+                json: async () => []
+            });
+            global.fetch = mockFetch as any;
+
+            await client.identify('user_99');
+            mockFetch.mockClear();
+
+            client.track('purchase', { item: 'sword' }, 49.99);
+
+            for (let i = 0; i < 19; i++) {
+                client.track(`filler_${i}`);
+            }
+
+            const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+            const purchaseEvent = body.Events[0];
+            expect(purchaseEvent.EventName).toBe('purchase');
+            expect(purchaseEvent.Properties).toEqual({ item: 'sword' });
+            expect(purchaseEvent.Value).toBe(49.99);
+        });
+
+        it('should flush remaining events on clearIdentity', async () => {
+            const client = new ToggleMeshClient({
+                baseUrl: BASE_URL,
+                clientKey: 'tm_client_test'
+            });
+
+            const mockFetch = vi.fn().mockResolvedValue({
+                ok: true,
+                json: async () => []
+            });
+            global.fetch = mockFetch as any;
+
+            await client.identify('user_1');
+            mockFetch.mockClear();
+
+            client.track('page_view');
+            client.track('click');
+
+            client.clearIdentity();
+
+            expect(mockFetch).toHaveBeenCalledTimes(1);
+            const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+            expect(body.Events).toHaveLength(2);
+        });
+
+        it('should send Events payload with correct wrapper format', async () => {
+            const client = new ToggleMeshClient({
+                baseUrl: BASE_URL,
+                clientKey: 'tm_client_test'
+            });
+
+            const mockFetch = vi.fn().mockResolvedValue({
+                ok: true,
+                json: async () => []
+            });
+            global.fetch = mockFetch as any;
+
+            await client.identify('user_x');
+            mockFetch.mockClear();
+
+            client.track('signup');
+            client.clearIdentity();
+
+            const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+            expect(body).toHaveProperty('Events');
+            expect(Array.isArray(body.Events)).toBe(true);
+        });
     });
 });

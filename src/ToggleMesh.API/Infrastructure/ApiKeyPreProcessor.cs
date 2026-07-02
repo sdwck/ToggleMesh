@@ -1,8 +1,8 @@
-﻿using FastEndpoints;
+using FastEndpoints;
 using Microsoft.EntityFrameworkCore;
-using ToggleMesh.API.Features.Projects;
+using ToggleMesh.API.Features.Projects.Domain;
+using ToggleMesh.API.Infrastructure.Data;
 using ToggleMesh.API.Infrastructure.Security;
-using ToggleMesh.API.Persistence;
 
 namespace ToggleMesh.API.Infrastructure;
 
@@ -60,9 +60,12 @@ public class ApiKeyPreProcessor<TRequest> : IPreProcessor<TRequest>
         var db = httpContext.RequestServices.GetRequiredService<AppDbContext>();
         var tokenHash = ApiKeyHasher.Hash(patToken);
         
+        var timeProvider = httpContext.RequestServices.GetRequiredService<TimeProvider>();
+        var now = timeProvider.GetUtcNow().UtcDateTime;
+
         var pat = await db.PersonalAccessTokens
             .Include(x => x.User)
-            .FirstOrDefaultAsync(x => x.TokenHash == tokenHash && (x.ExpiresAt == null || x.ExpiresAt > DateTime.UtcNow), ct);
+            .FirstOrDefaultAsync(x => x.TokenHash == tokenHash && (x.ExpiresAt == null || x.ExpiresAt > now), ct);
 
         if (pat is null)
         {
@@ -80,7 +83,7 @@ public class ApiKeyPreProcessor<TRequest> : IPreProcessor<TRequest>
         await db.PersonalAccessTokens
             .Where(x => x.Id == pat.Id)
             .ExecuteUpdateAsync(s => 
-                s.SetProperty(t => t.LastUsedAt, DateTime.UtcNow), ct);
+                s.SetProperty(t => t.LastUsedAt, timeProvider.GetUtcNow().UtcDateTime), ct);
 
         context.Request?.EnvId = envId;
         context.Request?.KeyType = KeyType.Server;

@@ -1,4 +1,4 @@
-namespace ToggleMesh.API.Features.Audit;
+namespace ToggleMesh.API.Features.Audit.Domain;
 
 public record AuditLogDto(
     Guid Id,

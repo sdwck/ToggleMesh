@@ -1,12 +1,11 @@
-using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using StackExchange.Redis;
 using ToggleMesh.API.Extensions;
-using ToggleMesh.API.Hubs;
-using ToggleMesh.API.Persistence;
-using ToggleMesh.API.Infrastructure;
 using ToggleMesh.API.Infrastructure.Caching;
+using ToggleMesh.API.Infrastructure.Data;
 using ToggleMesh.API.Infrastructure.Endpoints;
+using ToggleMesh.API.Infrastructure.Streaming;
+using AuthModels = ToggleMesh.API.Infrastructure.Security.Authorization.Models;
 
 namespace ToggleMesh.API.Features.Flags.UpdatePrivacy;
 
@@ -14,20 +13,20 @@ public class UpdateFlagPrivacyEndpoint : ToggleEndpoint<UpdateFlagPrivacyRequest
 {
     private readonly AppDbContext _db;
     private readonly ICacheInvalidator _cacheInvalidator;
-    private readonly IHubContext<ToggleHub> _hubContext;
+    private readonly IToggleEventPublisher _publisher;
     private readonly IDatabase _redis;
     private readonly ILogger<UpdateFlagPrivacyEndpoint> _logger;
 
     public UpdateFlagPrivacyEndpoint(
         AppDbContext db, 
         ICacheInvalidator cacheInvalidator, 
-        IHubContext<ToggleHub> hubContext, 
+        IToggleEventPublisher publisher, 
         IConnectionMultiplexer redis,
         ILogger<UpdateFlagPrivacyEndpoint> logger)
     {
         _db = db;
         _cacheInvalidator = cacheInvalidator;
-        _hubContext = hubContext;
+        _publisher = publisher;
         _redis = redis.GetDatabase();
         _logger = logger;
     }
@@ -36,13 +35,13 @@ public class UpdateFlagPrivacyEndpoint : ToggleEndpoint<UpdateFlagPrivacyRequest
     {
         Patch("/projects/{projectId:guid}/flags/{flagKey}/privacy");
         Version(1);
-        this.RequirePermission(Auth.Models.Permissions.FlagsEdit);
+        this.RequirePermission(AuthModels.Permissions.FlagsEdit);
     }
 
     public override async Task HandleAsync(UpdateFlagPrivacyRequest req, CancellationToken ct)
     {
         var projectId = Route<Guid>("projectId");
-        var flagKey = Route<string>("flagKey");
+        var flagKey = Route<string>("flagKey")!;
 
         var flag = await _db.FeatureFlags
             .FirstOrDefaultAsync(x => x.ProjectId == projectId && x.Key == flagKey, ct);
@@ -66,7 +65,7 @@ public class UpdateFlagPrivacyEndpoint : ToggleEndpoint<UpdateFlagPrivacyRequest
         {
             try
             {
-                var cacheKey = $"flags:{envId}:{flagKey}";
+                var cacheKey = CacheKeys.FlagState(envId, flagKey);
                 await _redis.KeyDeleteAsync(cacheKey);
                 await _cacheInvalidator.InvalidateEnvironmentCacheAsync(envId);
             }
@@ -77,9 +76,11 @@ public class UpdateFlagPrivacyEndpoint : ToggleEndpoint<UpdateFlagPrivacyRequest
 
             try
             {
-                await _hubContext.Clients
-                    .Group(envId.ToString())
-                    .SendAsync("StateReloadRequired", ct);
+                await _publisher.PublishEventAsync<object?>(
+                    envId.ToString(),
+                    "StateReloadRequired",
+                    null
+                );
             }
             catch (Exception e)
             {

@@ -1,4 +1,4 @@
-namespace ToggleMesh.API.Features.Webhooks;
+namespace ToggleMesh.API.Features.Webhooks.Domain;
 
 public enum WebhookStatus
 {

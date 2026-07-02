@@ -1,18 +1,22 @@
-﻿using System.Net;
+using System.Net;
 using System.Net.Http.Json;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using ToggleMesh.API.Features.Auth.Endpoints.CreateToken;
-using ToggleMesh.API.Features.Projects;
+using ToggleMesh.API.Features.Auth.CreateToken;
+using ToggleMesh.API.Features.Projects.Domain;
+using ToggleMesh.API.Infrastructure.Data;
 using ToggleMesh.API.Infrastructure.Security;
-using ToggleMesh.API.Persistence;
+using ToggleMesh.API.Infrastructure.Security.Authorization.Models;
 using ToggleMesh.IntegrationTests.Infrastructure;
 
 namespace ToggleMesh.IntegrationTests.Auth;
 
-public class PersonalAccessTokensTests : IClassFixture<TestWebApplicationFactory>
+[Collection("SharedEnv3")]
+public class PersonalAccessTokensTests : IAsyncLifetime
 {
+    public async Task InitializeAsync() => await _factory.ResetDatabaseAsync();
+    public Task DisposeAsync() => Task.CompletedTask;
     private readonly HttpClient _client;
     private readonly TestWebApplicationFactory _factory;
 
@@ -59,11 +63,11 @@ public class PersonalAccessTokensTests : IClassFixture<TestWebApplicationFactory
         var env = new ProjectEnvironment { Name = "Prod_PAT", Project = project };
         db.Environments.Add(env);
         await db.SaveChangesAsync();
-        
+
         var rawSecret = Guid.NewGuid().ToString("N");
         var plainToken = $"tmp_{rawSecret}";
         var tokenHash = ApiKeyHasher.Hash(plainToken);
-        var pat = new ToggleMesh.API.Features.Auth.Models.PersonalAccessToken
+        var pat = new PersonalAccessToken
         {
             Id = Guid.CreateVersion7(),
             UserId = Guid.Parse(TestAuthHandler.TestUserId),
@@ -88,6 +92,6 @@ public class PersonalAccessTokensTests : IClassFixture<TestWebApplicationFactory
         db.ChangeTracker.Clear();
         var dbPat = await db.PersonalAccessTokens.FindAsync(pat.Id);
         dbPat!.LastUsedAt.Should().NotBeNull();
-        dbPat.LastUsedAt.Value.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
+        dbPat.LastUsedAt.Value.Should().BeCloseTo(_factory.TimeProvider.GetUtcNow().UtcDateTime, TimeSpan.FromSeconds(5));
     }
 }

@@ -7,6 +7,7 @@ public readonly struct ContextAccessor<T> : IContextAccessor
 {
     private readonly T _instance;
     private static readonly Dictionary<string, Func<T, string?>> Getters;
+    // ReSharper disable once StaticMemberInGenericType
     private static readonly bool IsDictionary;
 
     static ContextAccessor()

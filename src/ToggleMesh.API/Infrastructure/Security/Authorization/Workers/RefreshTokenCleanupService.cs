@@ -1,7 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using ToggleMesh.API.Infrastructure.Data;
 
-namespace ToggleMesh.API.Features.Auth.Workers;
+namespace ToggleMesh.API.Infrastructure.Security.Authorization.Workers;
 
 public class RefreshTokenCleanupService : BackgroundService
 {

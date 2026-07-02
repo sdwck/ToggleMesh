@@ -1,9 +1,9 @@
 using Microsoft.AspNetCore.Identity;
-using ToggleMesh.API.Features.Organizations;
-using ToggleMesh.API.Features.Projects;
+using ToggleMesh.API.Features.Organizations.Domain;
+using ToggleMesh.API.Features.Projects.Domain;
 using ToggleMesh.API.Infrastructure.Data.Abstractions;
 
-namespace ToggleMesh.API.Features.Auth.Models;
+namespace ToggleMesh.API.Infrastructure.Security.Authorization.Models;
 
 public class ApplicationUser : IdentityUser<Guid>, ISoftDeletable
 {

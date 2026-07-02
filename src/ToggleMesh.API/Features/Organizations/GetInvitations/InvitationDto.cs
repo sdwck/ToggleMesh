@@ -1,3 +1,5 @@
+using ToggleMesh.API.Features.Organizations.Domain;
+
 namespace ToggleMesh.API.Features.Organizations.GetInvitations;
 
 public class InvitationDto

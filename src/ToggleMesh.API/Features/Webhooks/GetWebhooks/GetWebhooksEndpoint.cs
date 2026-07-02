@@ -1,8 +1,10 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using ToggleMesh.API.Extensions;
-using ToggleMesh.API.Infrastructure;
+using ToggleMesh.API.Features.Webhooks.Domain;
+using ToggleMesh.API.Infrastructure.Data;
 using ToggleMesh.API.Infrastructure.Endpoints;
-using ToggleMesh.API.Persistence;
+using AuthModels = ToggleMesh.API.Infrastructure.Security.Authorization.Models;
+
 
 namespace ToggleMesh.API.Features.Webhooks.GetWebhooks;
 
@@ -19,7 +21,7 @@ public class GetWebhooksEndpoint : ToggleEndpointWithoutRequest
     {
         Get("/projects/{projectId:guid}/webhooks");
         Version(1);
-        this.RequirePermission(Auth.Models.Permissions.ProjectsView);
+        this.RequirePermission(AuthModels.Permissions.ProjectsView);
     }
 
     public override async Task HandleAsync(CancellationToken ct)
@@ -27,7 +29,19 @@ public class GetWebhooksEndpoint : ToggleEndpointWithoutRequest
         var projectId = Route<Guid>("projectId");
         var hooks = await _db.Webhooks
             .AsNoTracking()
-            .Where(w => w.ProjectId == projectId).ToListAsync(ct);
+            .Where(w => w.ProjectId == projectId)
+            .Select(w => new WebhookDto(
+                w.Id, 
+                w.ProjectId, 
+                w.Name, 
+                w.Url, 
+                w.Status,
+                w.EnvironmentIds, 
+                w.Events, 
+                w.FlagTags,
+                w.ConsecutiveFailures, 
+                w.LastTriggeredAt))
+            .ToListAsync(ct);
         await Send.OkAsync(hooks, ct);
     }
 }

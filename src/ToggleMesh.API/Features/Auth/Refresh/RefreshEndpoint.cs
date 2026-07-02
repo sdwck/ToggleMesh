@@ -2,13 +2,14 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using ToggleMesh.API.Features.Auth.Endpoints.Login;
-using ToggleMesh.API.Features.Auth.Models;
+using ToggleMesh.API.Features.Auth.Login;
 using ToggleMesh.API.Infrastructure.Data;
 using ToggleMesh.API.Infrastructure.Endpoints;
 using ToggleMesh.API.Infrastructure.Security;
+using ToggleMesh.API.Infrastructure.Security.Authorization;
+using ToggleMesh.API.Infrastructure.Security.Authorization.Models;
 
-namespace ToggleMesh.API.Features.Auth.Endpoints.Refresh;
+namespace ToggleMesh.API.Features.Auth.Refresh;
 
 public class RefreshEndpoint : ToggleEndpoint<RefreshRequest, LoginResponse>
 {

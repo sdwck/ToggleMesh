@@ -4,11 +4,12 @@ using FastEndpoints;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Identity;
 using StackExchange.Redis;
-using ToggleMesh.API.Features.Auth.Endpoints.SsoTicketExchange;
-using ToggleMesh.API.Features.Auth.Models;
+using ToggleMesh.API.Features.Auth.SsoTicketExchange;
 using ToggleMesh.API.Infrastructure.Data;
+using ToggleMesh.API.Infrastructure.Security.Authorization;
+using ToggleMesh.API.Infrastructure.Security.Authorization.Models;
 
-namespace ToggleMesh.API.Features.Auth.Endpoints.SsoCallback;
+namespace ToggleMesh.API.Features.Auth.SsoCallback;
 
 public class SsoCallbackEndpoint : EndpointWithoutRequest
 {

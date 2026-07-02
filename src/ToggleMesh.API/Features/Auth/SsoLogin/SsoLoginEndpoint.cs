@@ -2,7 +2,7 @@ using FastEndpoints;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 
-namespace ToggleMesh.API.Features.Auth.Endpoints.SsoLogin;
+namespace ToggleMesh.API.Features.Auth.SsoLogin;
 
 public class SsoLoginEndpoint : EndpointWithoutRequest
 {

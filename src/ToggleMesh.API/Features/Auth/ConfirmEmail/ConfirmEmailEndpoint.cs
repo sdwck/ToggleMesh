@@ -1,10 +1,10 @@
 using System.Text;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.WebUtilities;
-using ToggleMesh.API.Features.Auth.Models;
 using ToggleMesh.API.Infrastructure.Endpoints;
+using ToggleMesh.API.Infrastructure.Security.Authorization.Models;
 
-namespace ToggleMesh.API.Features.Auth.Endpoints.ConfirmEmail;
+namespace ToggleMesh.API.Features.Auth.ConfirmEmail;
 
 public class ConfirmEmailEndpoint : ToggleEndpoint<ConfirmEmailRequest>
 {

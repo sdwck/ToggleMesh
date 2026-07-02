@@ -1,9 +1,15 @@
-using StackExchange.Redis;
+using FastEndpoints;
 using Microsoft.EntityFrameworkCore;
-using ToggleMesh.API.Extensions;
-using ToggleMesh.API.Infrastructure.Endpoints;
-using ToggleMesh.API.Persistence;
 using Microsoft.Extensions.Caching.Memory;
+using StackExchange.Redis;
+using ToggleMesh.API.Infrastructure.Sse;
+using ToggleMesh.API.Extensions;
+using ToggleMesh.API.Features.Projects.Domain;
+using ToggleMesh.API.Infrastructure.Caching;
+using ToggleMesh.API.Infrastructure.Data;
+using ToggleMesh.API.Infrastructure.Endpoints;
+using AuthModels = ToggleMesh.API.Infrastructure.Security.Authorization.Models;
+
 
 namespace ToggleMesh.API.Features.Projects.UpdateMember;
 
@@ -12,19 +18,21 @@ public class UpdateMemberEndpoint : ToggleEndpoint<UpdateMemberRequest>
     private readonly AppDbContext _db;
     private readonly IDatabase _redis;
     private readonly IMemoryCache _memoryCache;
+    private readonly ISseService _sseService;
 
-    public UpdateMemberEndpoint(AppDbContext db, IConnectionMultiplexer redis, IMemoryCache memoryCache)
+    public UpdateMemberEndpoint(AppDbContext db, IConnectionMultiplexer redis, IMemoryCache memoryCache, ISseService sseService)
     {
         _db = db;
         _redis = redis.GetDatabase();
         _memoryCache = memoryCache;
+        _sseService = sseService;
     }
 
     public override void Configure()
     {
         Put("/projects/{projectId:guid}/members/{userId:guid}");
         Version(1);
-        this.RequirePermission(Auth.Models.Permissions.ProjectsManageMembers);
+        this.RequirePermission(AuthModels.Permissions.ProjectsManageMembers);
     }
 
     public override async Task HandleAsync(UpdateMemberRequest req, CancellationToken ct)
@@ -33,11 +41,7 @@ public class UpdateMemberEndpoint : ToggleEndpoint<UpdateMemberRequest>
         var userId = Route<Guid>("userId");
 
         if (UserId == userId)
-        {
-            AddError("You cannot change your own role.");
-            await Send.ErrorsAsync(cancellation: ct);
-            return;
-        }
+            ThrowError("You cannot change your own role.", 400);
 
         var member = await _db.ProjectMembers
             .Include(m => m.EnvironmentRoles)
@@ -49,7 +53,11 @@ public class UpdateMemberEndpoint : ToggleEndpoint<UpdateMemberRequest>
             return;
         }
 
-        var (currentUserRole, _) = await _db.GetProjectRoleAndEnvOverridesAsync(projectId, UserId, ct);
+        var (currentUserRole, _) = await new GetProjectRoleCommand 
+        { 
+            ProjectId = projectId, 
+            UserId = UserId 
+        }.ExecuteAsync(ct);
 
         if (currentUserRole is null or > ProjectRole.Admin)
         {
@@ -57,22 +65,8 @@ public class UpdateMemberEndpoint : ToggleEndpoint<UpdateMemberRequest>
             return;
         }
 
-        if (currentUserRole.Value == ProjectRole.Admin)
-        {
-            if (member.Role == ProjectRole.Owner)
-            {
-                AddError("Admins cannot modify Owners.");
-                await Send.ErrorsAsync(403, cancellation: ct);
-                return;
-            }
-            
-            if (req.Role is ProjectRole.Owner or ProjectRole.Admin)
-            {
-                AddError("Admins cannot grant Owner or Admin roles.");
-                await Send.ErrorsAsync(403, cancellation: ct);
-                return;
-            }
-        }
+        if (!RoleHierarchy.CanManageMember(currentUserRole.Value, member.Role, req.Role))
+            ThrowError("You do not have permission to perform this role modification.", 403);
 
         member.Role = req.Role;
 
@@ -85,8 +79,16 @@ public class UpdateMemberEndpoint : ToggleEndpoint<UpdateMemberRequest>
                 or ProjectRole.None 
             && req.EnvironmentRoles != null)
         {
+            var validEnvIds = await _db.Environments
+                .Where(e => e.ProjectId == projectId)
+                .Select(e => e.Id)
+                .ToListAsync(ct);
+
             foreach (var er in req.EnvironmentRoles)
             {
+                if (!validEnvIds.Contains(er.EnvironmentId))
+                    ThrowError($"Environment {er.EnvironmentId} does not belong to this project.", 400);
+
                 member.EnvironmentRoles.Add(new MemberEnvironmentRole
                 {
                     EnvironmentId = er.EnvironmentId,
@@ -97,9 +99,11 @@ public class UpdateMemberEndpoint : ToggleEndpoint<UpdateMemberRequest>
 
         await _db.SaveChangesAsync(ct);
 
-        var cacheKey = $"project-member-state:{projectId}:{userId}";
+        var cacheKey = CacheKeys.ProjectMemberState(projectId, userId);
         await _redis.KeyDeleteAsync(cacheKey);
         _memoryCache.Remove(cacheKey);
+
+        _sseService.DisconnectUser(userId);
 
         await Send.NoContentAsync(ct);
     }

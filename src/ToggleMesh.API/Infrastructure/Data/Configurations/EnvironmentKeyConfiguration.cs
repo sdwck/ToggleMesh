@@ -1,0 +1,32 @@
+﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using ToggleMesh.API.Features.Projects.Domain;
+
+namespace ToggleMesh.API.Infrastructure.Data.Configurations;
+
+public sealed class EnvironmentKeyConfiguration
+    : IEntityTypeConfiguration<EnvironmentKey>
+{
+    public void Configure(EntityTypeBuilder<EnvironmentKey> entity)
+    {
+        entity.HasKey(x => x.Id);
+
+        entity.Property(x => x.Id)
+            .ValueGeneratedOnAdd();
+
+        entity.Property(x => x.KeyHash)
+            .HasMaxLength(64)
+            .IsRequired();
+
+        entity.Property(x => x.Name)
+            .HasMaxLength(128)
+            .IsRequired();
+
+        entity.HasIndex(x => x.KeyHash)
+            .IsUnique();
+        
+        entity.Property(x => x.KeyPreview)
+            .HasMaxLength(32)
+            .IsRequired();
+    }
+}

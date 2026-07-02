@@ -1,9 +1,9 @@
-﻿using Microsoft.EntityFrameworkCore;
-using FastEndpoints;
+using Microsoft.EntityFrameworkCore;
 using ToggleMesh.API.Extensions;
-using ToggleMesh.API.Persistence;
-using ToggleMesh.API.Infrastructure;
+using ToggleMesh.API.Infrastructure.Data;
 using ToggleMesh.API.Infrastructure.Endpoints;
+using AuthModels = ToggleMesh.API.Infrastructure.Security.Authorization.Models;
+
 
 namespace ToggleMesh.API.Features.Projects.ReorderEnvironments;
 
@@ -16,7 +16,7 @@ public class ReorderEnvironmentsEndpoint : ToggleEndpoint<ReorderEnvironmentsReq
     {
         Post("/projects/{projectId:guid}/environments/reorder");
         Version(1);
-        this.RequirePermission(Auth.Models.Permissions.EnvironmentsEdit);
+        this.RequirePermission(AuthModels.Permissions.EnvironmentsEdit);
     }
 
     public override async Task HandleAsync(ReorderEnvironmentsRequest req, CancellationToken ct)

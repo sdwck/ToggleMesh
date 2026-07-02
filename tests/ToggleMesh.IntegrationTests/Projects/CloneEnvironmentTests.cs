@@ -1,18 +1,20 @@
 using System.Net;
 using FluentAssertions;
-using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using ToggleMesh.API.Features.Flags;
-using ToggleMesh.API.Features.Projects;
+using ToggleMesh.API.Features.Flags.Domain;
+using ToggleMesh.API.Features.Projects.Domain;
+using ToggleMesh.API.Infrastructure.Data;
 using ToggleMesh.API.Infrastructure.Security;
-using ToggleMesh.API.Persistence;
 using ToggleMesh.IntegrationTests.Infrastructure;
 
 namespace ToggleMesh.IntegrationTests.Projects;
 
-public class CloneEnvironmentTests : IClassFixture<TestWebApplicationFactory>
+[Collection("SharedEnv2")]
+public class CloneEnvironmentTests : IAsyncLifetime
 {
+    public async Task InitializeAsync() => await _factory.ResetDatabaseAsync();
+    public Task DisposeAsync() => Task.CompletedTask;
     private readonly HttpClient _client;
     private readonly TestWebApplicationFactory _factory;
 
@@ -23,14 +25,15 @@ public class CloneEnvironmentTests : IClassFixture<TestWebApplicationFactory>
     }
 
     [Fact]
-    public async Task CloneEnvironment_ShouldCopyAllFlagsAndRules_AndCleanTarget_AndNotifyViaSignalR()
+    public async Task CloneEnvironment_ShouldCopyAllFlagsAndRules_AndCleanTarget_AndNotifyViaSse()
     {
         // Arrange
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
         var project = new Project { Name = "Clone Test Project" };
-        db.Projects.Add(project); db.ProjectMembers.Add(new ToggleMesh.API.Features.Projects.ProjectMember { Project = project, UserId = Guid.Parse(ToggleMesh.IntegrationTests.Infrastructure.TestAuthHandler.TestUserId), Role = ToggleMesh.API.Features.Projects.ProjectRole.Owner });
+        db.Projects.Add(project); 
+        db.ProjectMembers.Add(new ProjectMember { Project = project, UserId = Guid.Parse(TestAuthHandler.TestUserId), Role = ProjectRole.Owner });
 
         var sourceEnv = new ProjectEnvironment { Name = "Source", Project = project };
         var targetEnv = new ProjectEnvironment { Name = "Target", Project = project };
@@ -52,14 +55,13 @@ public class CloneEnvironmentTests : IClassFixture<TestWebApplicationFactory>
             Project = project,
             Key = "shared_feature"
         };
-        
+
         var sourceState = new FlagEnvironmentState
         {
             FeatureFlag = flag,
             Environment = sourceEnv,
             IsEnabled = true,
-            Rules = 
-            [
+            Rules = [
                 new FlagRule { Attribute = "User", Operator = "Equals", Value = "Admin", GroupId = 0 }
             ]
         };
@@ -76,19 +78,40 @@ public class CloneEnvironmentTests : IClassFixture<TestWebApplicationFactory>
         await db.SaveChangesAsync();
 
         var tcs = new TaskCompletionSource<bool>();
-        var hubConnection = new HubConnectionBuilder()
-            .WithUrl("http://localhost/api/v1/hubs/toggle", options => 
+        var sseClient = _factory.CreateClient();
+        sseClient.DefaultRequestHeaders.Add("x-api-key", plainKey);
+        var cts = new CancellationTokenSource();
+        _ = Task.Run(async () =>
+        {
+            try
             {
-                options.Headers.Add("x-api-key", plainKey);
-                options.HttpMessageHandlerFactory = _ => _factory.Server.CreateHandler();
-            })
-            .Build();
+                var req = new HttpRequestMessage(HttpMethod.Get, "/api/v1/stream");
+                req.Headers.Add("Accept", "text/event-stream");
+                var resp = await sseClient.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, cts.Token);
+                var stream = await resp.Content.ReadAsStreamAsync(cts.Token);
+                using var reader = new StreamReader(stream);
+                while (!cts.IsCancellationRequested)
+                {
+                    var line = await reader.ReadLineAsync(cts.Token);
+                    if (line?.StartsWith("data: ") == true)
+                    {
+                        var data = line.Substring(6);
+                        var doc = System.Text.Json.JsonDocument.Parse(data);
+                        if (doc.RootElement.TryGetProperty("EventName", out var evtName) && evtName.GetString() == "StateReloadRequired")
+                        {
+                            tcs.TrySetResult(true);
+                            break;
+                        }
+                    }
+                }
+            }
+            catch { /* ignore */ }
+        }, cts.Token);
 
-        hubConnection.On("StateReloadRequired", () => tcs.SetResult(true));
-        await hubConnection.StartAsync();
+        await Task.Delay(500, cts.Token);
 
         // Act
-        var response = await _client.PostAsync($"/api/v1/projects/{project.Id}/environments/{sourceEnv.Id}/clone-to/{targetEnv.Id}", null);
+        var response = await _client.PostAsync($"/api/v1/projects/{project.Id}/environments/{sourceEnv.Id}/clone-to/{targetEnv.Id}", null, cts.Token);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.NoContent);
@@ -98,18 +121,18 @@ public class CloneEnvironmentTests : IClassFixture<TestWebApplicationFactory>
         var targetStates = await db.FlagEnvironmentStates
             .Where(x => x.EnvironmentId == targetEnv.Id)
             .Include(x => x.Rules)
-            .ToListAsync();
+            .ToListAsync(cancellationToken: cts.Token);
 
         targetStates.Should().HaveCount(1);
         targetStates[0].IsEnabled.Should().BeTrue();
         targetStates[0].Rules.Should().HaveCount(1);
         targetStates[0].Rules.First().Attribute.Should().Be("User");
 
-        var signalRTask = tcs.Task;
-        var timeoutTask = Task.Delay(TimeSpan.FromSeconds(5), _factory.TimeProvider);
+        var sseTask = tcs.Task;
+        var timeoutTask = Task.Delay(TimeSpan.FromSeconds(5), _factory.TimeProvider, cts.Token);
         _factory.TimeProvider.Advance(TimeSpan.FromSeconds(5.1));
-        var completedTask = await Task.WhenAny(signalRTask, timeoutTask);
-        completedTask.Should().Be(signalRTask, "SignalR notification 'StateReloadRequired' was not received");
+        var completedTask = await Task.WhenAny(sseTask, timeoutTask);
+        completedTask.Should().Be(sseTask, "SSE notification 'StateReloadRequired' was not received");
     }
 
     [Fact]

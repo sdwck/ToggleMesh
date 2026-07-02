@@ -3,7 +3,7 @@ using ToggleMesh.API.Infrastructure.Data;
 using ToggleMesh.API.Infrastructure.Email;
 using ToggleMesh.API.Infrastructure.Email.Models;
 
-namespace ToggleMesh.API.BackgroundServices.Email;
+namespace ToggleMesh.API.Infrastructure.BackgroundServices.Email;
 
 public class EmailOutboxWorker : BackgroundService
 {

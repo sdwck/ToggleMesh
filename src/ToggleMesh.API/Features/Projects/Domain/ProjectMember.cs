@@ -1,7 +1,7 @@
-using ToggleMesh.API.Features.Auth.Models;
 using ToggleMesh.API.Infrastructure.Data.Abstractions;
+using ToggleMesh.API.Infrastructure.Security.Authorization.Models;
 
-namespace ToggleMesh.API.Features.Projects;
+namespace ToggleMesh.API.Features.Projects.Domain;
 
 public class ProjectMember : AuditableEntity
 {

@@ -1,4 +1,4 @@
-﻿namespace ToggleMesh.API.Features.Organizations.GetMembers;
+namespace ToggleMesh.API.Features.Organizations.GetMembers;
 
 public class GetOrganizationMembersRequest
 {

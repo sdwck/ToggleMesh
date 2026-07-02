@@ -1,4 +1,4 @@
-﻿namespace ToggleMesh.API.Features.Flags.Toggle;
+namespace ToggleMesh.API.Features.Flags.Toggle;
 
 public class ToggleFlagRequest
 {

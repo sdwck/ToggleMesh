@@ -1,10 +1,11 @@
-using Microsoft.Extensions.Caching.Memory;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using StackExchange.Redis;
-using ToggleMesh.API.Features.Projects;
+using ToggleMesh.API.Features.Projects.Domain;
+using ToggleMesh.API.Infrastructure.Caching;
+using ToggleMesh.API.Infrastructure.Data;
 using ToggleMesh.API.Infrastructure.Security;
-using ToggleMesh.API.Persistence;
 
 namespace ToggleMesh.API.Infrastructure;
 
@@ -19,21 +20,24 @@ public class ApiKeyCacheService : IApiKeyCacheService
     private readonly IConnectionMultiplexer _redis;
     private readonly IMemoryCache _memoryCache;
     private readonly TimeSpan _cacheTtl = TimeSpan.FromMinutes(5);
+    private readonly TimeProvider _timeProvider;
 
     public ApiKeyCacheService(
         AppDbContext db,
         IConnectionMultiplexer redis,
-        IMemoryCache memoryCache)
+        IMemoryCache memoryCache,
+        TimeProvider timeProvider)
     {
         _db = db;
         _redis = redis;
         _memoryCache = memoryCache;
+        _timeProvider = timeProvider;
     }
 
     public async Task<CachedKeyInfo?> GetKeyInfoAsync(string apiKey, CancellationToken ct = default)
     {
         var keyHash = ApiKeyHasher.Hash(apiKey);
-        var cacheKey = $"apikey:{keyHash}";
+        var cacheKey = CacheKeys.ApiKey(keyHash);
 
         return await _memoryCache.GetOrCreateAsync<CachedKeyInfo?>(cacheKey, async entry =>
         {
@@ -45,10 +49,12 @@ public class ApiKeyCacheService : IApiKeyCacheService
                 return JsonSerializer.Deserialize<CachedKeyInfo>((string)redisValue!);
             
 
+            var now = _timeProvider.GetUtcNow().UtcDateTime;
+
             var envKey = await _db.EnvironmentKeys
                 .AsNoTracking()
                 .FirstOrDefaultAsync(
-                    x => x.KeyHash == keyHash && (x.ExpireOn == null || x.ExpireOn > DateTime.UtcNow), ct);
+                    x => x.KeyHash == keyHash && (x.ExpireOn == null || x.ExpireOn > now), ct);
 
             if (envKey == null)
                 return null;
@@ -57,13 +63,13 @@ public class ApiKeyCacheService : IApiKeyCacheService
                 .Where(x => x.Id == envKey.Id)
                 .ExecuteUpdateAsync(s => 
                     s.SetProperty(k => 
-                        k.LastUsedAt, DateTime.UtcNow), ct);
+                        k.LastUsedAt, now), ct);
 
             var info = new CachedKeyInfo(envKey.EnvironmentId, envKey.KeyType);
 
             if (envKey.ExpireOn.HasValue)
             {
-                var timeToExpire = envKey.ExpireOn.Value - DateTime.UtcNow;
+                var timeToExpire = envKey.ExpireOn.Value - now;
                 if (timeToExpire <= TimeSpan.Zero)
                     return null;
 
@@ -84,7 +90,7 @@ public class ApiKeyCacheService : IApiKeyCacheService
 
     public async Task RemoveEnvironmentIdAsync(string keyHash, CancellationToken ct = default)
     {
-        var cacheKey = $"apikey:{keyHash}";
+        var cacheKey = CacheKeys.ApiKey(keyHash);
         _memoryCache.Remove(cacheKey);
         await _redis.GetDatabase().KeyDeleteAsync(cacheKey);
 
@@ -97,7 +103,7 @@ public class ApiKeyCacheService : IApiKeyCacheService
     public async Task SetEnvironmentIdAsync(string keyHash, Guid environmentId, bool isClient = false,
         CancellationToken ct = default)
     {
-        var cacheKey = $"apikey:{keyHash}";
+        var cacheKey = CacheKeys.ApiKey(keyHash);
         var keyType = isClient ? KeyType.Client : KeyType.Server;
         var keyInfo = new CachedKeyInfo(environmentId, keyType);
 

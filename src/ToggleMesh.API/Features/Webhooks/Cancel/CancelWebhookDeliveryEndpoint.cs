@@ -1,26 +1,29 @@
-using FastEndpoints;
 using Microsoft.EntityFrameworkCore;
-using ToggleMesh.API.Features.Webhooks;
-using ToggleMesh.API.Infrastructure.Endpoints;
-using ToggleMesh.API.Persistence;
 using ToggleMesh.API.Extensions;
+using ToggleMesh.API.Features.Webhooks.Domain;
+using ToggleMesh.API.Infrastructure.Data;
+using ToggleMesh.API.Infrastructure.Endpoints;
+using AuthModels = ToggleMesh.API.Infrastructure.Security.Authorization.Models;
+
 
 namespace ToggleMesh.API.Features.Webhooks.Cancel;
 
 public class CancelWebhookDeliveryEndpoint : ToggleEndpointWithoutRequest
 {
     private readonly AppDbContext _db;
+    private readonly TimeProvider _timeProvider;
 
-    public CancelWebhookDeliveryEndpoint(AppDbContext db)
+    public CancelWebhookDeliveryEndpoint(AppDbContext db, TimeProvider timeProvider)
     {
         _db = db;
+        _timeProvider = timeProvider;
     }
 
     public override void Configure()
     {
         Post("/projects/{projectId:guid}/webhooks/{webhookId:guid}/deliveries/{deliveryId:guid}/cancel");
         Version(1);
-        this.RequirePermission(Auth.Models.Permissions.WebhooksCreate);
+        this.RequirePermission(AuthModels.Permissions.WebhooksCreate);
     }
 
     public override async Task HandleAsync(CancellationToken ct)
@@ -50,7 +53,7 @@ public class CancelWebhookDeliveryEndpoint : ToggleEndpointWithoutRequest
         }
 
         delivery.Status = WebhookDeliveryStatus.Canceled;
-        delivery.CompletedAt = DateTime.UtcNow;
+        delivery.CompletedAt = _timeProvider.GetUtcNow().UtcDateTime;
         delivery.NextAttemptAt = null;
         
         await _db.SaveChangesAsync(ct);

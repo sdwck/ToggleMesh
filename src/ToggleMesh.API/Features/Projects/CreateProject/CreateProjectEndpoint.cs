@@ -1,5 +1,6 @@
-using ToggleMesh.API.Persistence;
-using ToggleMesh.API.Infrastructure;
+using Microsoft.EntityFrameworkCore;
+using ToggleMesh.API.Features.Projects.Domain;
+using ToggleMesh.API.Infrastructure.Data;
 using ToggleMesh.API.Infrastructure.Endpoints;
 
 namespace ToggleMesh.API.Features.Projects.CreateProject;
@@ -21,6 +22,18 @@ public class CreateProjectEndpoint : ToggleEndpoint<CreateProjectRequest, Create
 
     public override async Task HandleAsync(CreateProjectRequest req, CancellationToken ct)
     {
+        if (req.OrganizationId == Guid.Empty)
+            req.OrganizationId = await _db.OrganizationMembers
+                .Where(om => om.UserId == UserId)
+                .Select(om => om.OrganizationId)
+                .FirstOrDefaultAsync(ct);
+
+        var isMember = await _db.OrganizationMembers
+            .AnyAsync(om => om.OrganizationId == req.OrganizationId && om.UserId == UserId, ct);
+
+        if (!isMember)
+            ThrowError("You must be a member of the organization to create a project.", 403);
+
         var project = new Project
         {
             Name = req.Name,

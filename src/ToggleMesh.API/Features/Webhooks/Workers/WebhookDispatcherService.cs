@@ -1,10 +1,10 @@
 using System.Text.Json;
 using System.Threading.Channels;
 using Microsoft.EntityFrameworkCore;
-using ToggleMesh.API.Features.Webhooks;
+using ToggleMesh.API.Features.Webhooks.Domain;
 using ToggleMesh.API.Infrastructure.Data;
 
-namespace ToggleMesh.API.BackgroundServices.Webhooks;
+namespace ToggleMesh.API.Features.Webhooks.Workers;
 
 public class WebhookDispatcherService : BackgroundService
 {
@@ -72,14 +72,12 @@ public class WebhookDispatcherService : BackgroundService
 
         string? envName = null;
         if (webhookEvent.EnvironmentId.HasValue)
-        {
             envName = await db.Environments
                 .AsNoTracking()
                 .Where(e => 
                     e.Id == webhookEvent.EnvironmentId.Value)
                 .Select(e => e.Name)
                 .FirstOrDefaultAsync(ct);
-        }
 
         string[]? flagTags = null;
         if (webhooks.Any(w => w.FlagTags.Length > 0) && !string.IsNullOrEmpty(webhookEvent.FlagKey))

@@ -1,4 +1,4 @@
-﻿<div align="center">
+<div align="center">
   <h1>🚀 ToggleMesh</h1>
   <p><b>Enterprise-Grade, Zero-Allocation Feature Flag & Configuration Engine</b></p>
   <p>A self-hosted, blazing-fast alternative to LaunchDarkly, natively built for the .NET ecosystem.</p>
@@ -107,7 +107,7 @@ if (client.isEnabled(Flags.NewCheckoutFlow)) {
 // Program.cs
 builder.Services.AddToggleMeshClient(options => 
 {
-    options.BaseUrl = "https://api.togglemesh.yourcompany.com";
+    options.BaseUrl = "https://api.togglemesh.dev";
     options.ApiKey = "tm_your_environment_api_key_here";
 });
 
@@ -137,6 +137,16 @@ var userContext = new { Email = "user@company.com", Plan = "Premium" };
 if (_toggleMesh.IsEnabled("beta-feature", contextObject: userContext))
 {
     // ...
+}
+```
+
+---
+
+## 💻 Tech Stack
+* **Backend:** C#, .NET 10, FastEndpoints, EF Core, SignalR
+* **Infrastructure:** PostgreSQL, Redis, Docker Compose
+* **Frontend:** React, Vite, TypeScript, Tailwind CSS, Shadcn UI
+* **Quality Assurance:** `Testcontainers` for Integration Testing, `FakeTimeProvider` for deterministic async testing, `k6` for load testing.
 }
 ```
 

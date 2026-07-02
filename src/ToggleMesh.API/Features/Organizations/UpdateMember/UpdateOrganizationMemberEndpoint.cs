@@ -1,9 +1,11 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
+using StackExchange.Redis;
+using ToggleMesh.API.Features.Organizations.Domain;
+using ToggleMesh.API.Infrastructure.Caching;
+using ToggleMesh.API.Infrastructure.Data;
 using ToggleMesh.API.Infrastructure.Endpoints;
 using ToggleMesh.API.Infrastructure.Sse;
-using ToggleMesh.API.Persistence;
-using StackExchange.Redis;
-using Microsoft.Extensions.Caching.Memory;
 
 namespace ToggleMesh.API.Features.Organizations.UpdateMember;
 
@@ -26,28 +28,16 @@ public class UpdateOrganizationMemberEndpoint : ToggleEndpoint<UpdateOrganizatio
     {
         Put("/organizations/{OrganizationId:guid}/members/{UserId:guid}");
         Version(1);
+        PreProcessor<RequireOrgAdminPreProcessor<UpdateOrganizationMemberRequest>>();
     }
 
     public override async Task HandleAsync(UpdateOrganizationMemberRequest req, CancellationToken ct)
     {
         var organizationId = Route<Guid>("OrganizationId");
         var userId = Route<Guid>("UserId");
-
-        var currentUserMember = await _db.OrganizationMembers
-            .FirstOrDefaultAsync(m => m.OrganizationId == organizationId && m.UserId == UserId, ct);
-
-        if (currentUserMember is not { Role: OrganizationRole.Admin })
-        {
-            await Send.ForbiddenAsync(ct);
-            return;
-        }
-
+        
         if (UserId == userId)
-        {
-            AddError("You cannot change your own organization role.");
-            await Send.ErrorsAsync(400, cancellation: ct);
-            return;
-        }
+            ThrowError("You cannot change your own organization role.", 400);
 
         var memberToUpdate = await _db.OrganizationMembers
             .FirstOrDefaultAsync(m => m.OrganizationId == organizationId && m.UserId == userId, ct);
@@ -64,11 +54,7 @@ public class UpdateOrganizationMemberEndpoint : ToggleEndpoint<UpdateOrganizatio
                 .CountAsync(m => m.OrganizationId == organizationId && m.Role == OrganizationRole.Admin, ct);
             
             if (adminCount <= 1)
-            {
-                AddError("Cannot demote the last administrator of the organization.");
-                await Send.ErrorsAsync(400, cancellation: ct);
-                return;
-            }
+                ThrowError("Cannot demote the last administrator of the organization.", 400);
         }
 
         memberToUpdate.Role = req.Role;
@@ -79,15 +65,24 @@ public class UpdateOrganizationMemberEndpoint : ToggleEndpoint<UpdateOrganizatio
             .Select(p => p.Id)
             .ToListAsync(ct);
 
+        var redisKeys = projectIds
+            .Select(pId => (RedisKey)CacheKeys.ProjectMemberState(pId, userId))
+            .ToArray();
+
+        if (redisKeys.Length > 0)
+        {
+            await _redis.KeyDeleteAsync(redisKeys);
+        }
+
         foreach (var pId in projectIds)
         {
-            var cacheKey = $"project-member-state:{pId}:{userId}";
-            await _redis.KeyDeleteAsync(cacheKey);
-            _memoryCache.Remove(cacheKey);
+            _memoryCache.Remove(CacheKeys.ProjectMemberState(pId, userId));
         }
 
         await _sseService.BroadcastAsync("invalidate", new { queryKey = new object[] { "organizations", organizationId, "members" } });
         await _sseService.BroadcastAsync("invalidate", new { queryKey = new object[] { "projects" } });
+
+        _sseService.DisconnectUser(userId);
 
         await Send.NoContentAsync(ct);
     }

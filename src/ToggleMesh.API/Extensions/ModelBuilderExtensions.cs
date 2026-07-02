@@ -10,9 +10,7 @@ public static class ModelBuilderExtensions
         {
             var pk = entityType.FindPrimaryKey();
             if (pk is { Properties.Count: 1 } && pk.Properties[0].ClrType == typeof(Guid))
-            {
                 pk.Properties[0].SetValueGeneratorFactory((_, _) => new UuidV7ValueGenerator());
-            }
         }
     }
 }

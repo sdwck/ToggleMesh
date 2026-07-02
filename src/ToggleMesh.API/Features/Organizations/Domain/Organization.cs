@@ -1,8 +1,7 @@
-using ToggleMesh.API.Features.Projects;
 using ToggleMesh.API.Features.Projects.Domain;
 using ToggleMesh.API.Infrastructure.Data.Abstractions;
 
-namespace ToggleMesh.API.Features.Organizations;
+namespace ToggleMesh.API.Features.Organizations.Domain;
 
 public class Organization : AuditableEntity, ISoftDeletable
 {

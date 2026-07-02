@@ -1,7 +1,6 @@
 using Microsoft.EntityFrameworkCore;
-using ToggleMesh.API.Infrastructure;
+using ToggleMesh.API.Infrastructure.Data;
 using ToggleMesh.API.Infrastructure.Endpoints;
-using ToggleMesh.API.Persistence;
 
 namespace ToggleMesh.API.Features.Organizations.UpdateOrganization;
 
@@ -18,27 +17,15 @@ public class UpdateOrganizationEndpoint : ToggleEndpoint<UpdateOrganizationReque
     {
         Put("/organizations/{OrganizationId:guid}");
         Version(1);
+        PreProcessor<RequireOrgAdminPreProcessor<UpdateOrganizationRequest>>();
     }
 
     public override async Task HandleAsync(UpdateOrganizationRequest req, CancellationToken ct)
     {
         var organizationId = Route<Guid>("OrganizationId");
-
-        var currentUserMember = await _db.OrganizationMembers
-            .FirstOrDefaultAsync(m => m.OrganizationId == organizationId && m.UserId == UserId, ct);
-
-        if (currentUserMember is not { Role: OrganizationRole.Admin })
-        {
-            await Send.ForbiddenAsync(ct);
-            return;
-        }
-
+        
         if (string.IsNullOrWhiteSpace(req.Name))
-        {
-            AddError("Organization name is required.");
-            await Send.ErrorsAsync(400, cancellation: ct);
-            return;
-        }
+            ThrowError("Organization name is required.", 400);
 
         var org = await _db.Organizations.FirstOrDefaultAsync(o => o.Id == organizationId, ct);
         if (org == null)

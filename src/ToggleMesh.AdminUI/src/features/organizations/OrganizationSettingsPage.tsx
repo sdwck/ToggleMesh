@@ -39,6 +39,33 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Building2, Users, UserPlus, Crown, User, ShieldCheck, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { jwtDecode } from 'jwt-decode';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useForm } from 'react-hook-form';
+import * as z from 'zod';
+import {
+    Form,
+    FormControl,
+    FormField,
+    FormItem,
+    FormMessage,
+} from '@/components/ui/form';
+import { handleApiError } from '@/api/errorUtils';
+
+const renameOrgSchema = z.object({
+    name: z.string().min(1, 'Organization name is required'),
+});
+type RenameOrgValues = z.infer<typeof renameOrgSchema>;
+
+const inviteMemberSchema = z.object({
+    email: z.string().email('Invalid email address'),
+    role: z.string(),
+});
+type InviteMemberValues = z.infer<typeof inviteMemberSchema>;
+
+const deleteOrgSchema = z.object({
+    confirmName: z.string().min(1, 'Confirmation is required'),
+});
+type DeleteOrgValues = z.infer<typeof deleteOrgSchema>;
 
 function RoleBadge({ role }: { role: OrganizationRole }) {
     if (role === OrganizationRole.Admin) {
@@ -78,19 +105,42 @@ export function OrganizationSettingsPage() {
     }
 
     const [isInviteOpen, setIsInviteOpen] = useState(false);
-    const [inviteEmail, setInviteEmail] = useState('');
-    const [inviteRole, setInviteRole] = useState<string>(String(OrganizationRole.Member));
     const [memberToRemove, setMemberToRemove] = useState<OrganizationMemberDto | null>(null);
-
-    const [orgName, setOrgName] = useState('');
     const [isDeleteOpen, setIsDeleteOpen] = useState(false);
-    const [confirmName, setConfirmName] = useState('');
+
+    const renameForm = useForm<RenameOrgValues>({
+        resolver: zodResolver(renameOrgSchema),
+        defaultValues: { name: '' },
+    });
+
+    const inviteForm = useForm<InviteMemberValues>({
+        resolver: zodResolver(inviteMemberSchema),
+        defaultValues: { email: '', role: String(OrganizationRole.Member) },
+    });
+
+    const deleteForm = useForm<DeleteOrgValues>({
+        resolver: zodResolver(deleteOrgSchema),
+        defaultValues: { confirmName: '' },
+    });
 
     useEffect(() => {
         if (activeOrg) {
-            setOrgName(activeOrg.name);
+            renameForm.reset({ name: activeOrg.name });
+            deleteForm.reset({ confirmName: '' });
         }
-    }, [activeOrg]);
+    }, [activeOrg, renameForm, deleteForm]);
+
+    useEffect(() => {
+        if (isInviteOpen) {
+            inviteForm.reset({ email: '', role: String(OrganizationRole.Member) });
+        }
+    }, [isInviteOpen, inviteForm]);
+
+    useEffect(() => {
+        if (!isDeleteOpen) {
+            deleteForm.reset({ confirmName: '' });
+        }
+    }, [isDeleteOpen, deleteForm]);
 
     const userEmail = useMemo(() => {
         try {
@@ -111,20 +161,18 @@ export function OrganizationSettingsPage() {
         });
     }, [members]);
 
-    const handleInvite = async () => {
-        if (!activeOrganizationId || !inviteEmail.trim()) return;
+    const handleInviteSubmit = async (values: InviteMemberValues) => {
+        if (!activeOrganizationId) return;
         try {
             await inviteMember.mutateAsync({
                 organizationId: activeOrganizationId,
-                email: inviteEmail.trim(),
-                role: parseInt(inviteRole),
+                email: values.email.trim(),
+                role: parseInt(values.role),
             });
-            toast.success(`Invitation sent to ${inviteEmail}`);
-            setInviteEmail('');
-            setInviteRole(String(OrganizationRole.Member));
+            toast.success(`Invitation sent to ${values.email}`);
             setIsInviteOpen(false);
-        } catch {
-            toast.error('Failed to invite member. Make sure the email is registered.');
+        } catch (error: any) {
+            handleApiError(error, inviteForm.setError, 'Failed to invite member. Make sure the email is registered.');
         }
     };
 
@@ -155,21 +203,25 @@ export function OrganizationSettingsPage() {
         }
     };
 
-    const handleRename = async () => {
-        if (!activeOrganizationId || !orgName.trim()) return;
+    const handleRenameSubmit = async (values: RenameOrgValues) => {
+        if (!activeOrganizationId) return;
         try {
             await updateOrg.mutateAsync({
                 organizationId: activeOrganizationId,
-                name: orgName.trim(),
+                name: values.name.trim(),
             });
             toast.success('Organization renamed successfully');
-        } catch {
-            toast.error('Failed to rename organization');
+        } catch (error: any) {
+            handleApiError(error, renameForm.setError, 'Failed to rename organization');
         }
     };
 
-    const handleDeleteOrg = async () => {
+    const handleDeleteOrgSubmit = async (values: DeleteOrgValues) => {
         if (!activeOrganizationId || !activeOrg) return;
+        if (values.confirmName !== activeOrg.name) {
+            deleteForm.setError('confirmName', { type: 'manual', message: 'Name does not match' });
+            return;
+        }
         try {
             await deleteOrg.mutateAsync(activeOrganizationId);
             toast.success(`Organization "${activeOrg.name}" deleted successfully`);
@@ -182,10 +234,9 @@ export function OrganizationSettingsPage() {
             }
 
             setIsDeleteOpen(false);
-            setConfirmName('');
             navigate('/projects');
-        } catch {
-            toast.error('Failed to delete organization');
+        } catch (error: any) {
+            handleApiError(error, deleteForm.setError, 'Failed to delete organization');
         }
     };
 
@@ -255,29 +306,36 @@ export function OrganizationSettingsPage() {
                                     <CardDescription>Update your organization details.</CardDescription>
                                 </CardHeader>
                                 <CardContent className="space-y-4">
-                                    <div className="flex flex-col sm:flex-row gap-3 items-end">
-                                        <div className="flex-1 space-y-2">
-                                            <label className="text-sm text-muted-foreground">Organization Name</label>
-                                            <Input
-                                                value={orgName}
-                                                onChange={(e) => setOrgName(e.target.value)}
-                                                onKeyDown={(e) => {
-                                                    if (e.key === 'Enter' && orgName.trim() && orgName !== activeOrg?.name) {
-                                                        handleRename();
-                                                    }
-                                                }}
-                                                placeholder="Enter organization name"
-                                                className="border-border/40 bg-zinc-950/40"
-                                            />
-                                        </div>
-                                        <Button
-                                            onClick={handleRename}
-                                            disabled={updateOrg.isPending || !orgName.trim() || orgName === activeOrg?.name}
-                                            className="w-full sm:w-auto"
-                                        >
-                                            {updateOrg.isPending ? 'Saving...' : 'Save Changes'}
-                                        </Button>
-                                    </div>
+                                    <Form {...renameForm}>
+                                        <form onSubmit={renameForm.handleSubmit(handleRenameSubmit)} className="flex flex-col sm:flex-row gap-3 items-start sm:items-end">
+                                            <div className="flex-1 space-y-2 w-full">
+                                                <label className="text-sm text-muted-foreground">Organization Name</label>
+                                                <FormField
+                                                    control={renameForm.control}
+                                                    name="name"
+                                                    render={({ field }) => (
+                                                        <FormItem>
+                                                            <FormControl>
+                                                                <Input
+                                                                    {...field}
+                                                                    placeholder="Enter organization name"
+                                                                    className="border-border/40 bg-zinc-950/40"
+                                                                />
+                                                            </FormControl>
+                                                            <FormMessage />
+                                                        </FormItem>
+                                                    )}
+                                                />
+                                            </div>
+                                            <Button
+                                                type="submit"
+                                                disabled={updateOrg.isPending || !renameForm.watch('name')?.trim() || renameForm.watch('name') === activeOrg?.name}
+                                                className="w-full sm:w-auto mt-2 sm:mt-0"
+                                            >
+                                                {updateOrg.isPending ? 'Saving...' : 'Save Changes'}
+                                            </Button>
+                                        </form>
+                                    </Form>
                                 </CardContent>
                             </Card>
 
@@ -489,49 +547,78 @@ export function OrganizationSettingsPage() {
                             Invite a registered user to join <strong>{activeOrg?.name}</strong>.
                         </DialogDescription>
                     </DialogHeader>
-                    <div className="space-y-4 py-2">
-                        <div className="space-y-2">
-                            <label className="text-sm text-muted-foreground">Email address</label>
-                            <Input
-                                placeholder="user@example.com"
-                                value={inviteEmail}
-                                onChange={(e) => setInviteEmail(e.target.value)}
-                                autoFocus
-                                onKeyDown={(e) => e.key === 'Enter' && handleInvite()}
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <label className="text-sm text-muted-foreground">Role</label>
-                            <Select value={inviteRole} onValueChange={setInviteRole}>
-                                <SelectTrigger>
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value={String(OrganizationRole.Member)}>
-                                        <div className="flex items-center gap-2">
-                                            <User className="h-3.5 w-3.5" />
-                                            Member — access to assigned projects only
-                                        </div>
-                                    </SelectItem>
-                                    <SelectItem value={String(OrganizationRole.Admin)}>
-                                        <div className="flex items-center gap-2">
-                                            <Crown className="h-3.5 w-3.5 text-violet-400" />
-                                            Admin — full access to all projects
-                                        </div>
-                                    </SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-                    </div>
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setIsInviteOpen(false)}>Cancel</Button>
-                        <Button
-                            onClick={handleInvite}
-                            disabled={inviteMember.isPending || !inviteEmail.trim()}
-                        >
-                            {inviteMember.isPending ? 'Inviting...' : 'Send Invite'}
-                        </Button>
-                    </DialogFooter>
+                    <Form {...inviteForm}>
+                        <form onSubmit={inviteForm.handleSubmit(handleInviteSubmit)}>
+                            <div className="space-y-4 py-2">
+                                <div className="space-y-2">
+                                    <label className="text-sm text-muted-foreground">Email address</label>
+                                    <FormField
+                                        control={inviteForm.control}
+                                        name="email"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormControl>
+                                                    <Input
+                                                        {...field}
+                                                        placeholder="user@example.com"
+                                                        autoFocus
+                                                    />
+                                                </FormControl>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-sm text-muted-foreground">Role</label>
+                                    <FormField
+                                        control={inviteForm.control}
+                                        name="role"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <Select value={field.value} onValueChange={field.onChange}>
+                                                    <FormControl>
+                                                        <SelectTrigger>
+                                                            <SelectValue />
+                                                        </SelectTrigger>
+                                                    </FormControl>
+                                                    <SelectContent>
+                                                        <SelectItem value={String(OrganizationRole.Member)}>
+                                                            <div className="flex items-center gap-2">
+                                                                <User className="h-3.5 w-3.5" />
+                                                                Member — access to assigned projects only
+                                                            </div>
+                                                        </SelectItem>
+                                                        <SelectItem value={String(OrganizationRole.Admin)}>
+                                                            <div className="flex items-center gap-2">
+                                                                <Crown className="h-3.5 w-3.5 text-violet-400" />
+                                                                Admin — full access to all projects
+                                                            </div>
+                                                        </SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
+                                </div>
+                                {inviteForm.formState.errors.root && (
+                                    <div className="text-sm text-destructive font-medium">
+                                        {inviteForm.formState.errors.root.message}
+                                    </div>
+                                )}
+                            </div>
+                            <DialogFooter className="mt-4">
+                                <Button type="button" variant="outline" onClick={() => setIsInviteOpen(false)}>Cancel</Button>
+                                <Button
+                                    type="submit"
+                                    disabled={inviteMember.isPending}
+                                >
+                                    {inviteMember.isPending ? 'Inviting...' : 'Send Invite'}
+                                </Button>
+                            </DialogFooter>
+                        </form>
+                    </Form>
                 </DialogContent>
             </Dialog>
 
@@ -557,12 +644,7 @@ export function OrganizationSettingsPage() {
                 </DialogContent>
             </Dialog>
 
-            <Dialog open={isDeleteOpen} onOpenChange={(open) => {
-                if (!open) {
-                    setIsDeleteOpen(false);
-                    setConfirmName('');
-                }
-            }}>
+            <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
                 <DialogContent className="border-destructive/20 bg-zinc-950">
                     <DialogHeader>
                         <DialogTitle className="text-red-400">Delete Organization</DialogTitle>
@@ -570,32 +652,43 @@ export function OrganizationSettingsPage() {
                             This action is final. All project configurations, environment keys, and audit logs inside <strong>{activeOrg?.name}</strong> will be permanently deleted.
                         </DialogDescription>
                     </DialogHeader>
-                    <div className="space-y-4 py-2">
-                        <div className="space-y-2">
-                            <p className="text-sm text-zinc-400">
-                                To confirm, type <span className="font-semibold text-foreground select-all font-mono bg-zinc-900 px-1 py-0.5 rounded">"{activeOrg?.name}"</span> below:
-                            </p>
-                            <Input
-                                value={confirmName}
-                                onChange={(e) => setConfirmName(e.target.value)}
-                                placeholder={activeOrg?.name}
-                                className="border-destructive/20 bg-zinc-950 focus-visible:ring-destructive font-mono"
-                            />
-                        </div>
-                    </div>
-                    <DialogFooter className="gap-2 sm:gap-0">
-                        <Button variant="outline" onClick={() => {
-                            setIsDeleteOpen(false);
-                            setConfirmName('');
-                        }}>Cancel</Button>
-                        <Button
-                            variant="destructive"
-                            onClick={handleDeleteOrg}
-                            disabled={deleteOrg.isPending || confirmName !== activeOrg?.name}
-                        >
-                            {deleteOrg.isPending ? 'Deleting...' : 'Delete Permanently'}
-                        </Button>
-                    </DialogFooter>
+                    <Form {...deleteForm}>
+                        <form onSubmit={deleteForm.handleSubmit(handleDeleteOrgSubmit)}>
+                            <div className="space-y-4 py-2">
+                                <div className="space-y-2">
+                                    <p className="text-sm text-zinc-400">
+                                        To confirm, type <span className="font-semibold text-foreground select-all font-mono bg-zinc-900 px-1 py-0.5 rounded">"{activeOrg?.name}"</span> below:
+                                    </p>
+                                    <FormField
+                                        control={deleteForm.control}
+                                        name="confirmName"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormControl>
+                                                    <Input
+                                                        {...field}
+                                                        placeholder={activeOrg?.name}
+                                                        className="border-destructive/20 bg-zinc-950 focus-visible:ring-destructive font-mono"
+                                                    />
+                                                </FormControl>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
+                                </div>
+                            </div>
+                            <DialogFooter className="gap-2 sm:gap-0 mt-4">
+                                <Button type="button" variant="outline" onClick={() => setIsDeleteOpen(false)}>Cancel</Button>
+                                <Button
+                                    type="submit"
+                                    variant="destructive"
+                                    disabled={deleteOrg.isPending || deleteForm.watch('confirmName') !== activeOrg?.name}
+                                >
+                                    {deleteOrg.isPending ? 'Deleting...' : 'Delete Permanently'}
+                                </Button>
+                            </DialogFooter>
+                        </form>
+                    </Form>
                 </DialogContent>
             </Dialog>
         </div>

@@ -3,18 +3,21 @@ using System.Net.Http.Json;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using ToggleMesh.API.Features.Projects;
 using ToggleMesh.API.Features.Projects.CreateEnvironment;
 using ToggleMesh.API.Features.Projects.CreateKey;
 using ToggleMesh.API.Features.Projects.CreateProject;
+using ToggleMesh.API.Features.Projects.Domain;
 using ToggleMesh.API.Features.Projects.GetKeys;
-using ToggleMesh.API.Persistence;
+using ToggleMesh.API.Infrastructure.Data;
 using ToggleMesh.IntegrationTests.Infrastructure;
 
 namespace ToggleMesh.IntegrationTests.Projects;
 
-public class EnvironmentApiTests : IClassFixture<TestWebApplicationFactory>
+[Collection("SharedEnv2")]
+public class EnvironmentApiTests : IAsyncLifetime
 {
+    public async Task InitializeAsync() => await _factory.ResetDatabaseAsync();
+    public Task DisposeAsync() => Task.CompletedTask;
     private readonly HttpClient _client;
     private readonly TestWebApplicationFactory _factory;
 
@@ -37,7 +40,7 @@ public class EnvironmentApiTests : IClassFixture<TestWebApplicationFactory>
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
-        
+
         var result = await response.Content.ReadFromJsonAsync<CreateEnvironmentResponse>();
         result.Should().NotBeNull();
         result.Name.Should().Be("Staging");
@@ -55,7 +58,7 @@ public class EnvironmentApiTests : IClassFixture<TestWebApplicationFactory>
         // Arrange
         var createResponse = await _client.PostAsJsonAsync("/api/v1/projects", new CreateProjectRequest { Name = "Key Test Project" });
         var project = await createResponse.Content.ReadFromJsonAsync<CreateProjectResponse>();
-        
+
         var envResponse = await _client.PostAsJsonAsync($"/api/v1/projects/{project!.Id}/environments", new CreateEnvironmentRequest { Name = "Prod" });
         var env = await envResponse.Content.ReadFromJsonAsync<CreateEnvironmentResponse>();
 
@@ -67,9 +70,9 @@ public class EnvironmentApiTests : IClassFixture<TestWebApplicationFactory>
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var result = await response.Content.ReadFromJsonAsync<CreateKeyResponse>();
-        
+
         result.Should().NotBeNull();
-        result!.Name.Should().Be("Production Server Key");
+        result.Name.Should().Be("Production Server Key");
         result.KeyType.Should().Be(KeyType.Server);
         result.PlainKey.Should().StartWith("tm_server_");
         result.KeyPreview.Should().NotBeNullOrEmpty();
@@ -88,7 +91,7 @@ public class EnvironmentApiTests : IClassFixture<TestWebApplicationFactory>
         // Arrange
         var createResponse = await _client.PostAsJsonAsync("/api/v1/projects", new CreateProjectRequest { Name = "Key Get Project" });
         var project = await createResponse.Content.ReadFromJsonAsync<CreateProjectResponse>();
-        
+
         var envResponse = await _client.PostAsJsonAsync($"/api/v1/projects/{project!.Id}/environments", new CreateEnvironmentRequest { Name = "Prod" });
         var env = await envResponse.Content.ReadFromJsonAsync<CreateEnvironmentResponse>();
 
@@ -101,9 +104,9 @@ public class EnvironmentApiTests : IClassFixture<TestWebApplicationFactory>
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var result = await response.Content.ReadFromJsonAsync<List<GetKeysResponse>>();
-        
+
         result.Should().NotBeNull();
-        result!.Should().HaveCount(2);
+        result.Should().HaveCount(2);
         result.Should().ContainSingle(k => k.Name == "Server Key" && k.KeyType == KeyType.Server);
         result.Should().ContainSingle(k => k.Name == "Client Key" && k.KeyType == KeyType.Client);
     }
@@ -114,7 +117,7 @@ public class EnvironmentApiTests : IClassFixture<TestWebApplicationFactory>
         // Arrange
         var createResponse = await _client.PostAsJsonAsync("/api/v1/projects", new CreateProjectRequest { Name = "Key Revoke Project" });
         var project = await createResponse.Content.ReadFromJsonAsync<CreateProjectResponse>();
-        
+
         var envResponse = await _client.PostAsJsonAsync($"/api/v1/projects/{project!.Id}/environments", new CreateEnvironmentRequest { Name = "Prod" });
         var env = await envResponse.Content.ReadFromJsonAsync<CreateEnvironmentResponse>();
 

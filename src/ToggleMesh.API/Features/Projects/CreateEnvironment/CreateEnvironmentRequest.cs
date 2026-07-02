@@ -1,4 +1,4 @@
-﻿namespace ToggleMesh.API.Features.Projects.CreateEnvironment;
+namespace ToggleMesh.API.Features.Projects.CreateEnvironment;
 
 public class CreateEnvironmentRequest
 {

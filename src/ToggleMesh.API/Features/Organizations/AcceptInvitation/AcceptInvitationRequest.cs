@@ -1,4 +1,4 @@
-﻿namespace ToggleMesh.API.Features.Organizations.AcceptInvitation;
+namespace ToggleMesh.API.Features.Organizations.AcceptInvitation;
 
 public class AcceptInvitationRequest
 {

@@ -1,5 +1,6 @@
-﻿using FastEndpoints;
-using ToggleMesh.API.Features.Projects;
+using FastEndpoints;
+using ToggleMesh.API.Features.Metrics.Domain;
+using ToggleMesh.API.Features.Projects.Domain;
 using ToggleMesh.API.Infrastructure;
 
 namespace ToggleMesh.API.Features.Metrics.SdkIngest;
@@ -12,5 +13,6 @@ public class SdkIngestMetricsRequest : ISdkRequest
     public KeyType KeyType { get; set; }
 
     [FromBody]
+    // ReSharper disable once CollectionNeverUpdated.Global
     public List<MetricPayloadDto> Metrics { get; set; } = [];
 }

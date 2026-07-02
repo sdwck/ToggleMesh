@@ -1,3 +1,5 @@
+using ToggleMesh.API.Features.Flags.Domain;
+
 namespace ToggleMesh.API.Features.Flags.Update;
 
 public class UpdateFlagRequest

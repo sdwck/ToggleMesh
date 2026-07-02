@@ -1,7 +1,7 @@
+using FastEndpoints;
 using Microsoft.EntityFrameworkCore;
-using ToggleMesh.API.Infrastructure;
+using ToggleMesh.API.Infrastructure.Data;
 using ToggleMesh.API.Infrastructure.Endpoints;
-using ToggleMesh.API.Persistence;
 
 namespace ToggleMesh.API.Features.Organizations.DeleteOrganization;
 
@@ -18,20 +18,12 @@ public class DeleteOrganizationEndpoint : ToggleEndpointWithoutRequest
     {
         Delete("/organizations/{OrganizationId:guid}");
         Version(1);
+        PreProcessor<RequireOrgAdminPreProcessor<EmptyRequest>>();
     }
 
     public override async Task HandleAsync(CancellationToken ct)
     {
         var organizationId = Route<Guid>("OrganizationId");
-
-        var currentUserMember = await _db.OrganizationMembers
-            .FirstOrDefaultAsync(m => m.OrganizationId == organizationId && m.UserId == UserId, ct);
-
-        if (currentUserMember is not { Role: OrganizationRole.Admin })
-        {
-            await Send.ForbiddenAsync(ct);
-            return;
-        }
 
         var org = await _db.Organizations.FirstOrDefaultAsync(o => o.Id == organizationId, ct);
         if (org == null)

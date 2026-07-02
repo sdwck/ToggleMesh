@@ -1,8 +1,9 @@
 ﻿using FastEndpoints;
 using Microsoft.EntityFrameworkCore;
+using ToggleMesh.API.Features.Organizations.Domain;
 using ToggleMesh.API.Infrastructure.Data;
 
-namespace ToggleMesh.API.Features.Projects;
+namespace ToggleMesh.API.Features.Projects.Domain;
 
 public class GetProjectRoleCommandHandler : ICommandHandler<GetProjectRoleCommand, ProjectRoleResult>
 {
@@ -32,7 +33,7 @@ public class GetProjectRoleCommandHandler : ICommandHandler<GetProjectRoleComman
         if (data == null) 
             return new(null, []);
 
-        if (data.OrgMember?.Role == ToggleMesh.API.Features.Organizations.OrganizationRole.Admin)
+        if (data.OrgMember?.Role == OrganizationRole.Admin)
             return new(ProjectRole.Owner, []);
 
         if (data.ProjMember == null)

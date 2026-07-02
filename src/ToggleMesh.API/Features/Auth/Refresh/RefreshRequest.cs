@@ -1,4 +1,4 @@
-namespace ToggleMesh.API.Features.Auth.Endpoints.Refresh;
+namespace ToggleMesh.API.Features.Auth.Refresh;
 
 public class RefreshRequest
 {

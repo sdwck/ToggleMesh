@@ -36,7 +36,7 @@ public class RuleEngineTests
         var provider = services.BuildServiceProvider();
         _engine = provider.GetRequiredService<IRuleEngine>();
     }
-    
+
     private bool EvaluateHelper(IEnumerable<RuleDto> rules, IDictionary<string, string> context)
     {
         var compiledRules = _engine.CompileRules(rules);

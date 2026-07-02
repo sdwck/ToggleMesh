@@ -1,15 +1,17 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using StackExchange.Redis;
-using ToggleMesh.API.Features.Flags.Get;
-using ToggleMesh.API.Features.Projects;
+using ToggleMesh.API.Features.Flags.Domain;
+using ToggleMesh.API.Features.Projects.Domain;
+using ToggleMesh.API.Features.Segments.Domain;
 using ToggleMesh.API.Infrastructure;
+using ToggleMesh.API.Infrastructure.Caching;
+using ToggleMesh.API.Infrastructure.Data;
 using ToggleMesh.API.Infrastructure.Endpoints;
-using ToggleMesh.API.Persistence;
 
 namespace ToggleMesh.API.Features.Flags.SdkGetAll;
 
-public class SdkGetFlagsEndpoint : ToggleEndpoint<SdkGetFlagsRequest, List<GetFlagResponse>>
+public class SdkGetFlagsEndpoint : ToggleEndpoint<SdkGetFlagsRequest, SdkGetFlagsResponse>
 {
     private readonly AppDbContext _db;
     private readonly IDatabase _redis;
@@ -39,38 +41,58 @@ public class SdkGetFlagsEndpoint : ToggleEndpoint<SdkGetFlagsRequest, List<GetFl
             return;
         }
 
-        var cacheKey = $"sdk:flags:states:{req.EnvId}";
+        var cacheKey = CacheKeys.SdkFlagsStates(req.EnvId);
 
         var redisValue = await _redis.StringGetAsync(cacheKey);
 
-        if (redisValue.HasValue)
+        if (redisValue.HasValue && !string.IsNullOrWhiteSpace(redisValue))
         {
-            var cachedStates = JsonSerializer.Deserialize<List<GetFlagResponse>>((string)redisValue!);
-            if (cachedStates is not null)
+            try
             {
-                await Send.OkAsync(cachedStates, ct);
-                return;
+                var cachedResponse = JsonSerializer.Deserialize<SdkGetFlagsResponse>((string)redisValue!);
+                if (cachedResponse is not null)
+                {
+                    await Send.OkAsync(cachedResponse, ct);
+                    return;
+                }
+            }
+            catch (JsonException)
+            {
+                // ignore
             }
         }
 
-        var states = await _db.FlagEnvironmentStates
+        var statesData = await _db.FlagEnvironmentStates
             .AsNoTracking()
             .Include(x => x.FeatureFlag)
             .Include(x => x.Rules)
+            .Include(x => x.ContextualRollouts)
             .Where(x => x.EnvironmentId == req.EnvId)
-            .Select(state => new GetFlagResponse(
-                state.FeatureFlag.Key,
-                state.IsEnabled,
-                state.Rules.Select(r => new RuleDto(r.GroupId, r.Attribute, r.Operator, r.Value)),
-                state.FeatureFlag.Tags,
-                state.RolloutPercentage,
-                state.TrueCount,
-                state.FalseCount))
+            .AsSplitQuery()
             .ToListAsync(ct);
 
-        var json = JsonSerializer.Serialize(states);
-        await _redis.StringSetAsync(cacheKey, json, TimeSpan.FromMinutes(10));
+        var states = statesData.Select(state => state.ToDto()).ToList();
 
-        await Send.OkAsync(states, ct);
+        var segments = await _db.Segments
+            .AsNoTracking()
+            .Include(x => x.Rules)
+            .Where(x => x.EnvironmentId == req.EnvId)
+            .Select(s => new SegmentDto(
+                s.Id,
+                s.EnvironmentId,
+                s.Name,
+                s.Description,
+                s.Rules.Select(r => new RuleDto(r.GroupId, r.Attribute, r.Operator, r.Value)),
+                s.CreatedAt))
+            .AsSplitQuery()
+            .ToListAsync(ct);
+
+        var response = new SdkGetFlagsResponse(states, segments);
+
+        var json = JsonSerializer.Serialize(response);
+        var ttl = TimeSpan.FromMinutes(Config.GetValue("Caching:DefaultTtlMinutes", 10));
+        await _redis.StringSetAsync(cacheKey, json, ttl);
+
+        await Send.OkAsync(response, ct);
     }
 }

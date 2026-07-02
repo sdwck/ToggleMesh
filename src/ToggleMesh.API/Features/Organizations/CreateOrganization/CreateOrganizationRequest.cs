@@ -1,4 +1,4 @@
-﻿namespace ToggleMesh.API.Features.Organizations.CreateOrganization;
+namespace ToggleMesh.API.Features.Organizations.CreateOrganization;
 
 public class CreateOrganizationRequest
 {

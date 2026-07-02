@@ -1,8 +1,7 @@
-using ToggleMesh.API.Features.Projects;
 using ToggleMesh.API.Features.Projects.Domain;
 using ToggleMesh.API.Infrastructure.Data.Abstractions;
 
-namespace ToggleMesh.API.Features.Webhooks;
+namespace ToggleMesh.API.Features.Webhooks.Domain;
 
 public class Webhook : AuditableEntity
 {

@@ -2,7 +2,7 @@
 using ToggleMesh.API.Infrastructure.Data;
 using ToggleMesh.API.Infrastructure.Endpoints;
 
-namespace ToggleMesh.API.Features.Auth.Endpoints.DeleteToken;
+namespace ToggleMesh.API.Features.Auth.DeleteToken;
 
 public class DeleteTokenEndpoint : ToggleEndpointWithoutRequest
 {

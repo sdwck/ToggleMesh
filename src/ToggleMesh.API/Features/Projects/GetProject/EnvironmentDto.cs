@@ -1,5 +1,6 @@
-﻿namespace ToggleMesh.API.Features.Projects.GetProject;
+using ToggleMesh.API.Features.Projects.Domain;
 
+namespace ToggleMesh.API.Features.Projects.GetProject;
 public class EnvironmentDto
 {
     public Guid Id { get; set; }

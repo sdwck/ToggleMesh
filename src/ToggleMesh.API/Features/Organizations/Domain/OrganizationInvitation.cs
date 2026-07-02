@@ -1,6 +1,6 @@
 using ToggleMesh.API.Infrastructure.Data.Abstractions;
 
-namespace ToggleMesh.API.Features.Organizations;
+namespace ToggleMesh.API.Features.Organizations.Domain;
 
 public class OrganizationInvitation : AuditableEntity
 {

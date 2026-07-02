@@ -1,4 +1,6 @@
-﻿namespace ToggleMesh.API.Features.Organizations.GetOrganizations;
+using ToggleMesh.API.Features.Organizations.Domain;
+
+namespace ToggleMesh.API.Features.Organizations.GetOrganizations;
 
 public class OrganizationDto
 {

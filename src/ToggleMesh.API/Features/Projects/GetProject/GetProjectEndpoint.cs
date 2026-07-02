@@ -1,8 +1,11 @@
+using FastEndpoints;
 using Microsoft.EntityFrameworkCore;
 using ToggleMesh.API.Extensions;
-using ToggleMesh.API.Persistence;
-using ToggleMesh.API.Infrastructure;
+using ToggleMesh.API.Features.Projects.Domain;
+using ToggleMesh.API.Infrastructure.Data;
 using ToggleMesh.API.Infrastructure.Endpoints;
+using AuthModels = ToggleMesh.API.Infrastructure.Security.Authorization.Models;
+
 
 namespace ToggleMesh.API.Features.Projects.GetProject;
 
@@ -19,14 +22,18 @@ public class GetProjectEndpoint : ToggleEndpointWithoutRequest<GetProjectRespons
     {
         Get("/projects/{projectId}");
         Version(1);
-        this.RequirePermission(Auth.Models.Permissions.ProjectsView);
+        this.RequirePermission(AuthModels.Permissions.ProjectsView);
     }
 
     public override async Task HandleAsync(CancellationToken ct)
     {
         var projectId = Route<Guid>("projectId");
 
-        (var role, var envRoles) = await _db.GetProjectRoleAndEnvOverridesAsync(projectId, UserId, ct);
+        var (role, envRoles) = await new GetProjectRoleCommand 
+        { 
+            ProjectId = projectId, 
+            UserId = UserId 
+        }.ExecuteAsync(ct);
 
         if (role == null)
         {

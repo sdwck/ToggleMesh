@@ -1,11 +1,11 @@
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
-using ToggleMesh.API.Features.Webhooks;
+using ToggleMesh.API.Features.Webhooks.Domain;
 using ToggleMesh.API.Infrastructure.Data;
 using ToggleMesh.API.Infrastructure.Security;
 
-namespace ToggleMesh.API.BackgroundServices.Webhooks;
+namespace ToggleMesh.API.Features.Webhooks.Workers;
 
 public class WebhookDeliveryWorker : BackgroundService
 {

@@ -1,10 +1,15 @@
+using FastEndpoints;
 using Microsoft.EntityFrameworkCore;
-using ToggleMesh.API.Extensions;
-using ToggleMesh.API.Features.Projects.GetMembers;
-using ToggleMesh.API.Infrastructure.Endpoints;
-using ToggleMesh.API.Persistence;
-using StackExchange.Redis;
 using Microsoft.Extensions.Caching.Memory;
+using StackExchange.Redis;
+using ToggleMesh.API.Extensions;
+using ToggleMesh.API.Features.Projects.Domain;
+using ToggleMesh.API.Features.Projects.GetMembers;
+using ToggleMesh.API.Infrastructure.Caching;
+using ToggleMesh.API.Infrastructure.Data;
+using ToggleMesh.API.Infrastructure.Endpoints;
+using AuthModels = ToggleMesh.API.Infrastructure.Security.Authorization.Models;
+
 
 namespace ToggleMesh.API.Features.Projects.AddMember;
 
@@ -25,7 +30,7 @@ public class AddMemberEndpoint : ToggleEndpoint<AddMemberRequest, MemberDto>
     {
         Post("/projects/{projectId}/members");
         Version(1);
-        this.RequirePermission(Auth.Models.Permissions.ProjectsManageMembers);
+        this.RequirePermission(AuthModels.Permissions.ProjectsManageMembers);
     }
 
     public override async Task HandleAsync(AddMemberRequest req, CancellationToken ct)
@@ -33,17 +38,13 @@ public class AddMemberEndpoint : ToggleEndpoint<AddMemberRequest, MemberDto>
         var projectId = Route<Guid>("projectId");
         var user = await _db.Users.FirstOrDefaultAsync(u => u.Email == req.Email, ct);
         if (user == null)
-        {
-            AddError("User not found.");
-            await Send.ErrorsAsync(cancellation: ct);
-            return;
-        }
+            ThrowError("User not found.", 400);
         
-        var (currentUserRole, _) =
-            await _db.GetProjectRoleAndEnvOverridesAsync(
-                projectId, 
-                UserId, 
-                ct);
+        var (currentUserRole, _) = await new GetProjectRoleCommand 
+        { 
+            ProjectId = projectId, 
+            UserId = UserId 
+        }.ExecuteAsync(ct);
 
         if (currentUserRole is null or > ProjectRole.Admin)
         {
@@ -62,23 +63,10 @@ public class AddMemberEndpoint : ToggleEndpoint<AddMemberRequest, MemberDto>
             .AnyAsync(om => om.OrganizationId == project.OrganizationId && om.UserId == user.Id, ct);
             
         if (!isOrgMember)
-        {
-            AddError("User must be a member of the organization first.");
-            await Send.ErrorsAsync(cancellation: ct);
-            return;
-        }
-
-
-
-        if (currentUserRole.Value == ProjectRole.Admin
-            && req.Role 
-                is ProjectRole.Owner 
-                or ProjectRole.Admin)
-        {
-            AddError("Admins cannot grant Owner or Admin roles.");
-            await Send.ErrorsAsync(403, cancellation: ct);
-            return;
-        }
+            ThrowError("User must be a member of the organization first.", 400);
+        
+        if (!RoleHierarchy.CanManageMember(currentUserRole.Value, ProjectRole.None, req.Role))
+            ThrowError("You do not have permission to grant this role.", 403);
 
         var existingMember = await _db.ProjectMembers
             .FirstOrDefaultAsync(m =>
@@ -86,11 +74,7 @@ public class AddMemberEndpoint : ToggleEndpoint<AddMemberRequest, MemberDto>
                 m.UserId == user.Id, ct);
 
         if (existingMember != null)
-        {
-            AddError("User is already a member of this project.");
-            await Send.ErrorsAsync(cancellation: ct);
-            return;
-        }
+            ThrowError("User is already a member of this project.", 400);
 
         var newMember = new ProjectMember
         {
@@ -102,7 +86,7 @@ public class AddMemberEndpoint : ToggleEndpoint<AddMemberRequest, MemberDto>
         _db.ProjectMembers.Add(newMember);
         await _db.SaveChangesAsync(ct);
 
-        var cacheKey = $"project-member-state:{projectId}:{user.Id}";
+        var cacheKey = CacheKeys.ProjectMemberState(projectId, user.Id);
         await _redis.KeyDeleteAsync(cacheKey);
         _memoryCache.Remove(cacheKey);
 

@@ -1,6 +1,5 @@
-using ToggleMesh.API.Infrastructure;
-using ToggleMesh.API.Persistence;
 using Microsoft.EntityFrameworkCore;
+using ToggleMesh.API.Infrastructure.Data;
 using ToggleMesh.API.Infrastructure.Endpoints;
 
 namespace ToggleMesh.API.Features.Organizations.GetMembers;
@@ -18,21 +17,13 @@ public class GetOrganizationMembersEndpoint : ToggleEndpoint<GetOrganizationMemb
     {
         Get("/organizations/{OrganizationId}/members");
         Version(1);
+        PreProcessor<RequireOrgAdminPreProcessor<GetOrganizationMembersRequest>>();
     }
 
     public override async Task HandleAsync(GetOrganizationMembersRequest req, CancellationToken ct)
     {
-        var currentUserMember = await _db.OrganizationMembers.FirstOrDefaultAsync(m => 
-            m.OrganizationId == req.OrganizationId && m.UserId == UserId, ct);
-        if (currentUserMember is not { Role: OrganizationRole.Admin })
-        {
-            await Send.ForbiddenAsync(ct);
-            return;
-        }
-
         var members = await _db.OrganizationMembers
             .AsNoTracking()
-            .Include(m => m.User)
             .Where(m => 
                 m.OrganizationId == req.OrganizationId)
             .Select(m => new OrganizationMemberDto

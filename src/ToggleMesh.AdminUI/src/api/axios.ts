@@ -37,7 +37,7 @@ api.interceptors.response.use(
   async (error: AxiosError) => {
     const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
 
-    if (error.response?.status === 401 && !originalRequest._retry && originalRequest.url !== '/auth/refresh') {
+    if (error.response?.status === 401 && !originalRequest._retry && originalRequest.url !== '/auth/refresh' && originalRequest.url !== '/auth/login') {
       if (isRefreshing) {
         return new Promise(function (resolve, reject) {
           failedQueue.push({ resolve, reject });
@@ -77,6 +77,13 @@ api.interceptors.response.use(
         localStorage.removeItem('accessToken');
         localStorage.removeItem('refreshToken');
         localStorage.removeItem('REACT_QUERY_OFFLINE_CACHE');
+        localStorage.removeItem('togglemesh-org-storage');
+        try {
+          const { del } = await import('idb-keyval');
+          await del('REACT_QUERY_OFFLINE_CACHE');
+        } catch (e) {
+          console.error('Failed to clear IndexedDB cache', e);
+        }
         window.location.href = '/login';
         return Promise.reject(refreshError);
       } finally {

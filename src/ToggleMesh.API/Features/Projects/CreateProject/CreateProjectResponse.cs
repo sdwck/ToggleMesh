@@ -1,4 +1,4 @@
-﻿namespace ToggleMesh.API.Features.Projects.CreateProject;
+namespace ToggleMesh.API.Features.Projects.CreateProject;
 
 public class CreateProjectResponse
 {

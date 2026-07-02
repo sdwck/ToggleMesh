@@ -1,6 +1,6 @@
 ﻿using StackExchange.Redis;
 
-namespace ToggleMesh.API.BackgroundServices.Caching;
+namespace ToggleMesh.API.Infrastructure.BackgroundServices.Caching;
 
 public class CacheInvalidationWorker : BackgroundService
 {

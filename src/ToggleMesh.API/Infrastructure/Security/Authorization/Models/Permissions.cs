@@ -1,7 +1,7 @@
 
 
 // ReSharper disable MemberCanBePrivate.Global
-namespace ToggleMesh.API.Features.Auth.Models;
+namespace ToggleMesh.API.Infrastructure.Security.Authorization.Models;
 
 public static class Permissions
 {
@@ -70,7 +70,10 @@ public static class Permissions
     [
         ProjectsView,
         EnvironmentsView,
+        EnvironmentsEdit,
         FlagsView,
+        FlagsCreate,
+        FlagsDelete,
         FlagsToggle,
         FlagsEdit
     ];

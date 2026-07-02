@@ -1,6 +1,5 @@
-using ToggleMesh.API.Infrastructure;
-using ToggleMesh.API.Persistence;
 using Microsoft.EntityFrameworkCore;
+using ToggleMesh.API.Infrastructure.Data;
 using ToggleMesh.API.Infrastructure.Endpoints;
 
 namespace ToggleMesh.API.Features.Organizations.GetOrganizations;

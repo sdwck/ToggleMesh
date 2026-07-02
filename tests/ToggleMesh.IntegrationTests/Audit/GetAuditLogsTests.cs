@@ -1,20 +1,21 @@
 using System.Net;
 using System.Net.Http.Json;
 using FluentAssertions;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using ToggleMesh.API.Features.Audit;
-using ToggleMesh.API.Features.Audit.Get;
-using ToggleMesh.API.Features.Projects;
-using ToggleMesh.API.Features.Organizations;
-using ToggleMesh.API.Persistence;
+using ToggleMesh.API.Features.Audit.Domain;
+using ToggleMesh.API.Features.Organizations.Domain;
+using ToggleMesh.API.Features.Projects.Domain;
+using ToggleMesh.API.Infrastructure.Data;
 using ToggleMesh.Common.Pagination;
 using ToggleMesh.IntegrationTests.Infrastructure;
 
 namespace ToggleMesh.IntegrationTests.Audit;
 
-public class GetAuditLogsTests : IClassFixture<TestWebApplicationFactory>
+[Collection("SharedEnv4")]
+public class GetAuditLogsTests : IAsyncLifetime
 {
+    public async Task InitializeAsync() => await _factory.ResetDatabaseAsync();
+    public Task DisposeAsync() => Task.CompletedTask;
     private readonly HttpClient _client;
     private readonly TestWebApplicationFactory _factory;
 
@@ -122,12 +123,12 @@ public class GetAuditLogsTests : IClassFixture<TestWebApplicationFactory>
         resProj.StatusCode.Should().Be(HttpStatusCode.OK);
         var dtoProj = await resProj.Content.ReadFromJsonAsync<CursorPagedResponse<AuditLogDto>>();
         dtoProj.Should().NotBeNull();
-        dtoProj!.Items.Should().ContainSingle(x => x.Id == logProj.Id);
+        dtoProj.Items.Should().ContainSingle(x => x.Id == logProj.Id);
 
         resEnv1.StatusCode.Should().Be(HttpStatusCode.OK);
         var dtoEnv1 = await resEnv1.Content.ReadFromJsonAsync<CursorPagedResponse<AuditLogDto>>();
         dtoEnv1.Should().NotBeNull();
-        dtoEnv1!.Items.Should().ContainSingle(x => x.Id == logEnv1.Id);
+        dtoEnv1.Items.Should().ContainSingle(x => x.Id == logEnv1.Id);
     }
 
     [Fact]
@@ -186,12 +187,12 @@ public class GetAuditLogsTests : IClassFixture<TestWebApplicationFactory>
         res1.StatusCode.Should().Be(HttpStatusCode.OK);
         var dto1 = await res1.Content.ReadFromJsonAsync<CursorPagedResponse<AuditLogDto>>();
         dto1.Should().NotBeNull();
-        dto1!.Items.Should().ContainSingle(x => x.Id == log1.Id);
+        dto1.Items.Should().ContainSingle(x => x.Id == log1.Id);
 
         res2.StatusCode.Should().Be(HttpStatusCode.OK);
         var dto2 = await res2.Content.ReadFromJsonAsync<CursorPagedResponse<AuditLogDto>>();
         dto2.Should().NotBeNull();
-        dto2!.Items.Should().ContainSingle(x => x.Id == log2.Id);
+        dto2.Items.Should().ContainSingle(x => x.Id == log2.Id);
     }
 
     [Fact]
@@ -267,17 +268,17 @@ public class GetAuditLogsTests : IClassFixture<TestWebApplicationFactory>
         resFriendly.StatusCode.Should().Be(HttpStatusCode.OK);
         var dtoFriendly = await resFriendly.Content.ReadFromJsonAsync<CursorPagedResponse<AuditLogDto>>();
         dtoFriendly.Should().NotBeNull();
-        dtoFriendly!.Items.Should().ContainSingle(x => x.Id == logFriendly.Id);
+        dtoFriendly.Items.Should().ContainSingle(x => x.Id == logFriendly.Id);
 
         resEntityId.StatusCode.Should().Be(HttpStatusCode.OK);
         var dtoEntityId = await resEntityId.Content.ReadFromJsonAsync<CursorPagedResponse<AuditLogDto>>();
         dtoEntityId.Should().NotBeNull();
-        dtoEntityId!.Items.Should().ContainSingle(x => x.Id == logEntityId.Id);
+        dtoEntityId.Items.Should().ContainSingle(x => x.Id == logEntityId.Id);
 
         resEmail.StatusCode.Should().Be(HttpStatusCode.OK);
         var dtoEmail = await resEmail.Content.ReadFromJsonAsync<CursorPagedResponse<AuditLogDto>>();
         dtoEmail.Should().NotBeNull();
-        dtoEmail!.Items.Should().ContainSingle(x => x.Id == logEmail.Id);
+        dtoEmail.Items.Should().ContainSingle(x => x.Id == logEmail.Id);
     }
 
     [Fact]
@@ -354,7 +355,7 @@ public class GetAuditLogsTests : IClassFixture<TestWebApplicationFactory>
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var dto = await response.Content.ReadFromJsonAsync<CursorPagedResponse<AuditLogDto>>();
         dto.Should().NotBeNull();
-        dto!.Items.Should().ContainSingle(x => x.Id == logTarget.Id);
+        dto.Items.Should().ContainSingle(x => x.Id == logTarget.Id);
     }
 
     [Fact]
@@ -395,7 +396,7 @@ public class GetAuditLogsTests : IClassFixture<TestWebApplicationFactory>
         db.AuditLogs.AddRange(logs);
         await db.SaveChangesAsync();
 
-        var sortedLogs = logs.OrderByDescending(l => l.Id).ToList();
+        var sortedLogs = logs.OrderByDescending(l => l.Timestamp).ThenByDescending(l => l.Id).ToList();
 
         // Act
         var resFirstPage = await _client.GetAsync($"/api/v1/audit-logs?projectId={project.Id}&pageSize=2&sortOrder=desc");
@@ -406,15 +407,15 @@ public class GetAuditLogsTests : IClassFixture<TestWebApplicationFactory>
 
         // Assert
         dtoFirst.Should().NotBeNull();
-        dtoFirst!.Items.Should().HaveCount(2);
+        dtoFirst.Items.Should().HaveCount(2);
         var firstPageItems = dtoFirst.Items.ToList();
         firstPageItems[0].Id.Should().Be(sortedLogs[0].Id);
         firstPageItems[1].Id.Should().Be(sortedLogs[1].Id);
         dtoFirst.HasNextPage.Should().BeTrue();
-        dtoFirst.NextCursor.Should().Be(sortedLogs[1].Id);
+        dtoFirst.NextCursor.Should().NotBeNullOrEmpty();
 
         dtoSecond.Should().NotBeNull();
-        dtoSecond!.Items.Should().HaveCount(2);
+        dtoSecond.Items.Should().HaveCount(2);
         var secondPageItems = dtoSecond.Items.ToList();
         secondPageItems[0].Id.Should().Be(sortedLogs[2].Id);
         secondPageItems[1].Id.Should().Be(sortedLogs[3].Id);

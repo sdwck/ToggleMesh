@@ -1,9 +1,9 @@
 using System.Text.Json;
 using StackExchange.Redis;
-using ToggleMesh.API.Features.Auth.Endpoints.Login;
+using ToggleMesh.API.Features.Auth.Login;
 using ToggleMesh.API.Infrastructure.Endpoints;
 
-namespace ToggleMesh.API.Features.Auth.Endpoints.SsoTicketExchange;
+namespace ToggleMesh.API.Features.Auth.SsoTicketExchange;
 
 public class SsoTicketExchangeEndpoint : ToggleEndpoint<SsoTicketExchangeRequest, LoginResponse>
 {

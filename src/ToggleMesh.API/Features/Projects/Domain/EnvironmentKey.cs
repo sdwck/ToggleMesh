@@ -1,9 +1,8 @@
-using ToggleMesh.API.Infrastructure;
 using ToggleMesh.API.Infrastructure.Data.Abstractions;
 
-namespace ToggleMesh.API.Features.Projects;
+namespace ToggleMesh.API.Features.Projects.Domain;
 
-public class EnvironmentKey : Entity, IHasEnvironment
+public class EnvironmentKey : Entity
 {
     public string Name { get; set; } = string.Empty;
     public string KeyHash { get; set; } = string.Empty; 

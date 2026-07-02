@@ -1,4 +1,4 @@
-using ToggleMesh.API.Persistence.Abstractions;
+using ToggleMesh.API.Infrastructure.Data.Abstractions;
 
 namespace ToggleMesh.API.Infrastructure.Email.Models;
 

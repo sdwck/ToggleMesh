@@ -1,4 +1,6 @@
-﻿namespace ToggleMesh.API.Features.Webhooks.UpdateWebhookStatus;
+using ToggleMesh.API.Features.Webhooks.Domain;
+
+namespace ToggleMesh.API.Features.Webhooks.UpdateWebhookStatus;
 
 public class UpdateWebhookStatusRequest
 {

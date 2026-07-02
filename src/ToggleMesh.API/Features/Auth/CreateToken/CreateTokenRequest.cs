@@ -1,4 +1,4 @@
-namespace ToggleMesh.API.Features.Auth.Endpoints.CreateToken;
+namespace ToggleMesh.API.Features.Auth.CreateToken;
 
 public class CreateTokenRequest
 {
