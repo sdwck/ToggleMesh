@@ -1,6 +1,6 @@
 {
   "name": "togglemesh",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "Enterprise-grade real-time feature flag CLI for ToggleMesh.",
   "keywords": [
     "togglemesh",
