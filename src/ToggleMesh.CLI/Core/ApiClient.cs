@@ -22,7 +22,7 @@ public class ApiClient
             {
                 var paged = await response.Content.ReadFromJsonAsync<ProjectFlagsResponse>(
                     ToggleMeshJsonContext.Default.ProjectFlagsResponse, ct);
-                return paged?.Data ?? [];
+                return paged?.Items ?? [];
             }
             var errorBody = await response.Content.ReadAsStringAsync(ct);
             throw new Exception($"API Request Failed [{(int)response.StatusCode}]. Details: {errorBody}");

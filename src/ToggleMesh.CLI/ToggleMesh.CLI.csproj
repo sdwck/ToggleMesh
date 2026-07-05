@@ -18,7 +18,7 @@
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
         <RepositoryUrl>https://github.com/sdwck/ToggleMesh</RepositoryUrl>
         <PackageReadmeFile>README.md</PackageReadmeFile>
-        <Version>1.0.6</Version>
+        <Version>1.0.7</Version>
     </PropertyGroup>
 
     <ItemGroup>

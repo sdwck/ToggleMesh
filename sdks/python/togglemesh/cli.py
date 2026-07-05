@@ -6,7 +6,7 @@ import tarfile
 import subprocess
 from pathlib import Path
 
-CLI_VERSION = "1.0.6"
+CLI_VERSION = "1.0.7"
 
 def get_binary_meta():
     system = platform.system().lower()

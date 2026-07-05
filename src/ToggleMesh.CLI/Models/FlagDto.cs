@@ -4,7 +4,7 @@ namespace ToggleMesh.CLI.Models;
 
 public record FlagDto(string Key);
 public record SdkFlagsResponse(List<FlagDto> Flags);
-public record ProjectFlagsResponse(List<FlagDto> Data);
+public record ProjectFlagsResponse(List<FlagDto> Items);
 
 [JsonSerializable(typeof(SdkFlagsResponse))]
 [JsonSerializable(typeof(ProjectFlagsResponse))]
