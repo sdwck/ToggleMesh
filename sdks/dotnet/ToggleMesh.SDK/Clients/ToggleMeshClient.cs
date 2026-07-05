@@ -140,6 +140,8 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService, ISegmentProvi
 
         var accessor = new ContextAccessor<TContext>(contextObject);
         var evalContext = new EvaluationContext<ContextAccessor<TContext>>(accessor, _contextProviders, _identityKeys);
+        
+        var actualIdentity = evalContext.GetIdentity(identity);
 
         bool result;
 
@@ -181,19 +183,18 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService, ISegmentProvi
                 result = false;
             else
             {
-                var actualIdentity = evalContext.GetIdentity(identity);
                 result = RolloutEvaluator.Evaluate(activeRolloutPercentage, flagKey, actualIdentity);
             }
         }
 
         UpdateMetrics(flagKey, result);
         
-        if (!string.IsNullOrEmpty(identity) && flag.IsExperimentActive)
+        if (!string.IsNullOrEmpty(actualIdentity) && flag.IsExperimentActive)
         {
             var evt = ObjectPools<TContext>.Pool.Get();
             evt.Type = AnalyticsEventType.Exposure;
             evt.Timestamp = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
-            evt.Identity = identity;
+            evt.Identity = actualIdentity;
             evt.FlagKey = flagKey;
             evt.Result = result;
             evt.Properties = contextObject;
@@ -214,6 +215,8 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService, ISegmentProvi
             return defaultValue;
 
         var evalContext = new EvaluationContext<TContext>(contextObject, _contextProviders, _identityKeys);
+        
+        var actualIdentity = evalContext.GetIdentity(identity);
 
         bool result;
 
@@ -255,19 +258,18 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService, ISegmentProvi
                 result = false;
             else
             {
-                var actualIdentity = evalContext.GetIdentity(identity);
                 result = RolloutEvaluator.Evaluate(activeRolloutPercentage, flagKey, actualIdentity);
             }
         }
 
         UpdateMetrics(flagKey, result);
         
-        if (!string.IsNullOrEmpty(identity) && flag.IsExperimentActive)
+        if (!string.IsNullOrEmpty(actualIdentity) && flag.IsExperimentActive)
         {
             var evt = ObjectPools<TContext>.Pool.Get();
             evt.Type = AnalyticsEventType.Exposure;
             evt.Timestamp = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
-            evt.Identity = identity;
+            evt.Identity = actualIdentity;
             evt.FlagKey = flagKey;
             evt.Result = result;
             evt.Properties = contextObject;

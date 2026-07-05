@@ -6,7 +6,7 @@
         <Nullable>enable</Nullable>
         <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
         <PackageId>ToggleMesh.SDK</PackageId>
-        <Version>0.2.3</Version>
+        <Version>0.2.4</Version>
         <Authors>sdwck</Authors>
         <Company>ToggleMesh</Company>
         <Description>Official high-performance, zero-allocation real-time C# Client SDK for ToggleMesh Feature Flag Engine.</Description>
