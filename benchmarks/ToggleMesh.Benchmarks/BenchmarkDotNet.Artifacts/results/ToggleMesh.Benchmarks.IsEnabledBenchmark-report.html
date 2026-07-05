@@ -2,7 +2,7 @@
 <html lang='en'>
 <head>
 <meta charset='utf-8' />
-<title>ToggleMesh.Benchmarks.IsEnabledBenchmark-20260627-132433</title>
+<title>ToggleMesh.Benchmarks.IsEnabledBenchmark-20260705-010512</title>
 
 <style type="text/css">
 	table { border-collapse: collapse; display: block; width: 100%; overflow: auto; }
@@ -22,15 +22,18 @@ Intel Core i7-14700K 3.40GHz, 1 CPU, 28 logical and 20 physical cores
 <pre><code></code></pre>
 
 <table>
-<thead><tr><th>Method                  </th><th>Mean</th><th>Error</th><th>StdDev</th><th>Allocated</th>
+<thead><tr><th>Method                  </th><th>Mean</th><th>Error</th><th>StdDev</th><th>Median</th><th>Max</th><th>Min</th><th>P95</th><th>Allocated</th>
 </tr>
-</thead><tbody><tr><td>IsEnabled_WithRules_Typed</td><td>52.40 ns</td><td>0.352 ns</td><td>0.329 ns</td><td>-</td>
-</tr><tr><td>IsEnabled_WithRules_AOT</td><td>24.68 ns</td><td>0.169 ns</td><td>0.158 ns</td><td>-</td>
-</tr><tr><td>IsEnabled_WithRules_Dictionary</td><td>49.38 ns</td><td>0.269 ns</td><td>0.252 ns</td><td>-</td>
-</tr><tr><td>IsEnabled_Complex_Typed</td><td>98.90 ns</td><td>0.337 ns</td><td>0.315 ns</td><td>-</td>
-</tr><tr><td>IsEnabled_Complex_AOT</td><td>77.42 ns</td><td>0.295 ns</td><td>0.261 ns</td><td>-</td>
-</tr><tr><td>IsEnabled_Complex_Dictionary</td><td>98.79 ns</td><td>0.397 ns</td><td>0.371 ns</td><td>-</td>
-</tr><tr><td>Track_Event</td><td>46.37 ns</td><td>0.136 ns</td><td>0.127 ns</td><td>-</td>
+</thead><tbody><tr><td>IsEnabled_WithRules_Typed</td><td>36.72 ns</td><td>0.755 ns</td><td>0.928 ns</td><td>37.33 ns</td><td>37.65 ns</td><td>35.32 ns</td><td>37.60 ns</td><td>-</td>
+</tr><tr><td>IsEnabled_WithRules_AOT</td><td>22.49 ns</td><td>0.062 ns</td><td>0.055 ns</td><td>22.51 ns</td><td>22.55 ns</td><td>22.37 ns</td><td>22.55 ns</td><td>-</td>
+</tr><tr><td>IsEnabled_NoRules_AOT</td><td>17.34 ns</td><td>0.031 ns</td><td>0.026 ns</td><td>17.34 ns</td><td>17.39 ns</td><td>17.29 ns</td><td>17.38 ns</td><td>-</td>
+</tr><tr><td>IsEnabled_WithRules_Dictionary</td><td>33.72 ns</td><td>0.125 ns</td><td>0.117 ns</td><td>33.71 ns</td><td>33.89 ns</td><td>33.48 ns</td><td>33.86 ns</td><td>-</td>
+</tr><tr><td>IsEnabled_Complex_Typed</td><td>113.15 ns</td><td>0.208 ns</td><td>0.174 ns</td><td>113.14 ns</td><td>113.40 ns</td><td>112.81 ns</td><td>113.39 ns</td><td>-</td>
+</tr><tr><td>IsEnabled_Complex_AOT</td><td>81.44 ns</td><td>0.191 ns</td><td>0.160 ns</td><td>81.43 ns</td><td>81.82 ns</td><td>81.28 ns</td><td>81.74 ns</td><td>-</td>
+</tr><tr><td>IsEnabled_Complex_Dictionary</td><td>104.29 ns</td><td>1.968 ns</td><td>2.021 ns</td><td>103.69 ns</td><td>108.44 ns</td><td>102.25 ns</td><td>107.44 ns</td><td>-</td>
+</tr><tr><td>Track_Event</td><td>41.58 ns</td><td>0.085 ns</td><td>0.071 ns</td><td>41.58 ns</td><td>41.69 ns</td><td>41.49 ns</td><td>41.69 ns</td><td>-</td>
+</tr><tr><td>IsEnabled_With10Rules_AOT</td><td>127.14 ns</td><td>0.710 ns</td><td>0.664 ns</td><td>127.22 ns</td><td>128.12 ns</td><td>125.73 ns</td><td>127.93 ns</td><td>-</td>
+</tr><tr><td>Track_Event_With10Rules_AOT</td><td>52.31 ns</td><td>0.047 ns</td><td>0.039 ns</td><td>52.31 ns</td><td>52.36 ns</td><td>52.24 ns</td><td>52.36 ns</td><td>-</td>
 </tr></tbody></table>
 </body>
 </html>

@@ -1,4 +1,4 @@
-using System.IdentityModel.Tokens.Jwt;
+using Microsoft.IdentityModel.JsonWebTokens;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -39,7 +39,7 @@ public class RefreshEndpoint : ToggleEndpoint<RefreshRequest, LoginResponse>
 
     public override async Task HandleAsync(RefreshRequest req, CancellationToken ct)
     {
-        var principal = GetPrincipalFromExpiredToken(req.Token);
+        var principal = await GetPrincipalFromExpiredTokenAsync(req.Token);
         if (principal == null)
         {
             ThrowError("Invalid access token or refresh token");
@@ -94,7 +94,7 @@ public class RefreshEndpoint : ToggleEndpoint<RefreshRequest, LoginResponse>
         }, ct);
     }
 
-    private ClaimsPrincipal? GetPrincipalFromExpiredToken(string token)
+    private async Task<ClaimsPrincipal?> GetPrincipalFromExpiredTokenAsync(string token)
     {
         var jwtSettings = _configuration.GetSection("Jwt");
         var tokenValidationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters
@@ -108,15 +108,18 @@ public class RefreshEndpoint : ToggleEndpoint<RefreshRequest, LoginResponse>
             ValidateLifetime = false
         };
 
-        var tokenHandler = new JwtSecurityTokenHandler();
+        var tokenHandler = new JsonWebTokenHandler();
         try
         {
-            var principal = tokenHandler.ValidateToken(token, tokenValidationParameters, out var securityToken);
-            if (securityToken is not JwtSecurityToken jwtSecurityToken || 
-                !jwtSecurityToken.Header.Alg.Equals(Microsoft.IdentityModel.Tokens.SecurityAlgorithms.RsaSha256, StringComparison.InvariantCultureIgnoreCase))
+            var result = await tokenHandler.ValidateTokenAsync(token, tokenValidationParameters);
+            if (!result.IsValid)
                 return null;
 
-            return principal;
+            if (result.SecurityToken is not JsonWebToken jwtSecurityToken || 
+                !jwtSecurityToken.Alg.Equals(Microsoft.IdentityModel.Tokens.SecurityAlgorithms.RsaSha256, StringComparison.InvariantCultureIgnoreCase))
+                return null;
+
+            return new ClaimsPrincipal(result.ClaimsIdentity);
         }
         catch
         {

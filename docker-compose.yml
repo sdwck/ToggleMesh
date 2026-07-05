@@ -1,0 +1,104 @@
+services:
+  db:
+    image: postgres:17
+    container_name: togglemesh-db
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-togglemesh}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    restart: unless-stopped
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      
+  redis:
+    image: redis:7-alpine
+    container_name: togglemesh-redis
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: src/ToggleMesh.API/Dockerfile
+    container_name: togglemesh-api
+    ports:
+      - "${API_PORT:-5264}:8080"
+    environment:
+      # Core Settings
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__DefaultConnection: Host=${TM_DB_HOST:-db};Port=${TM_DB_PORT:-5432};Database=${POSTGRES_DB:-togglemesh};Username=${POSTGRES_USER:-postgres};Password=${POSTGRES_PASSWORD:-changeme}
+      ConnectionStrings__Redis: ${TM_REDIS:-redis:6379}
+      RUN_MIGRATIONS_ON_STARTUP: ${TM_RUN_MIGRATIONS_ON_STARTUP:-true}
+      
+      # Admin Account
+      DEFAULT_ADMIN_EMAIL: ${TM_DEFAULT_ADMIN_EMAIL:-admin@togglemesh.local}
+      DEFAULT_ADMIN_PASSWORD: ${TM_DEFAULT_ADMIN_PASSWORD:-Admin123!}
+      
+      # Security & JWT
+      Security__ApiKeyPepper: ${TM_API_KEY_PEPPER:-YourVeryLongAndRandomPepperStringHere_12345!}
+      Webhooks__MasterKey: ${TM_WEBHOOK_MASTER_KEY:-dG9nZ2xlbWVzaHNhbXBsZXRvZ2dsZW1lc2hzYW1wbGU=}
+      Jwt__Issuer: ${TM_JWT_ISSUER:-ToggleMesh}
+      Jwt__Audience: ${TM_JWT_AUDIENCE:-ToggleMeshClient}
+      Jwt__PrivateKeyPem: ${TM_JWT_PRIVATE_KEY_PEM:-}
+      
+      # Auth & Registration
+      Auth__FrontendUrl: ${TM_FRONTEND_URL:-http://localhost:5173}
+      Auth__AllowOpenRegistration: ${TM_ALLOW_OPEN_REGISTRATION:-false}
+      Auth__AllowUserOrganizationCreation: ${TM_ALLOW_ORG_CREATION:-false}
+      Auth__RefreshTokenLifetimeDays: ${TM_REFRESH_TOKEN_LIFETIME_DAYS:-7}
+      
+      # OIDC (SSO)
+      OIDC__Authority: ${TM_OIDC_AUTHORITY:-}
+      OIDC__ClientId: ${TM_OIDC_CLIENT_ID:-}
+      OIDC__ClientSecret: ${TM_OIDC_CLIENT_SECRET:-}
+      
+      # Rate Limits
+      RateLimits__Auth: ${TM_RATELIMIT_AUTH:-10}
+      RateLimits__Sdk: ${TM_RATELIMIT_SDK:-1000}
+      
+      # Performance & Ingestion
+      Metrics__MaxMetrics: ${TM_METRICS_MAX_LIMIT:-10000}
+      Ingestion__MaxBatchSize: ${TM_INGESTION_MAX_BATCH_SIZE:-10000}
+      Ingestion__MaxPayloadSizeBytes: ${TM_INGESTION_MAX_PAYLOAD_BYTES:-5242880}
+      
+      # SMTP Email
+      Email__EnableEmails: ${TM_ENABLE_EMAILS:-false}
+      Email__Smtp__Host: ${TM_SMTP_HOST:-}
+      Email__Smtp__Port: ${TM_SMTP_PORT:-587}
+      Email__Smtp__Username: ${TM_SMTP_USERNAME:-}
+      Email__Smtp__Password: ${TM_SMTP_PASSWORD:-}
+      Email__Smtp__FromEmail: ${TM_SMTP_FROM:-noreply@togglemesh.com}
+      Email__Smtp__EnableSsl: ${TM_SMTP_ENABLE_SSL:-true}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  admin-ui:
+    build:
+      context: ./src/ToggleMesh.AdminUI
+      dockerfile: Dockerfile
+    container_name: togglemesh-ui
+    ports:
+      - "${UI_PORT:-5173}:80"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

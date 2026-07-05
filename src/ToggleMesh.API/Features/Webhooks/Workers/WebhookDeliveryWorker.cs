@@ -153,7 +153,7 @@ public class WebhookDeliveryWorker : BackgroundService
                     Delivery = delivery, 
                     Success = false, 
                     Aborted = false, 
-                    Error = $"HTTP {(int)resp.StatusCode} {resp.ReasonPhrase}", 
+                    Error = (string?)$"HTTP {(int)resp.StatusCode} {resp.ReasonPhrase}", 
                     StatusCode = (int?)resp.StatusCode
                 };
             }

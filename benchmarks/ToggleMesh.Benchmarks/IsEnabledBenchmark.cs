@@ -1,5 +1,7 @@
 using System.Reflection;
 using BenchmarkDotNet.Attributes;
+using BenchmarkDotNet.Configs;
+using BenchmarkDotNet.Columns;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
@@ -12,10 +14,21 @@ using ToggleMesh.SDK.Options;
 
 namespace ToggleMesh.Benchmarks;
 
+public class BenchmarkConfig : ManualConfig
+{
+    public BenchmarkConfig()
+    {
+        AddColumn(StatisticColumn.P95);
+        AddColumn(StatisticColumn.Max);
+        AddColumn(StatisticColumn.Min);
+    }
+}
+
 public class TypedUserContext
 {
     public string Email { get; set; } = "test@gmail.com";
     public int Age { get; set; } = 25;
+    public string AppVersion { get; set; } = "2.1.0";
 }
 
 [ToggleMeshContext]
@@ -23,6 +36,7 @@ public partial struct AotUserContext
 {
     public string Email { get; set; }
     public int Age { get; set; }
+    public string AppVersion { get; set; }
 }
 
 
@@ -32,18 +46,24 @@ public struct PurchaseProps
     public int ItemsCount { get; set; }
 }
 
+[Config(typeof(BenchmarkConfig))]
 [MemoryDiagnoser]
 public class IsEnabledBenchmark
 {
     private ToggleMeshClient _client = null!;
     private readonly TypedUserContext _userContextTyped = new();
-    private AotUserContext _userContextAot = new() { Email = "test@gmail.com", Age = 25 };
-    private readonly Dictionary<string, string> _userContextDictionary = new() { { "Email", "test@gmail.com" }, { "Age", "25" } };
+    private AotUserContext _userContextAot = new() { Email = "test@gmail.com", Age = 25, AppVersion = "2.1.0" };
+    private readonly Dictionary<string, string> _userContextDictionary = new() { { "Email", "test@gmail.com" }, { "Age", "25" }, { "AppVersion", "2.1.0" } };
 
     [GlobalSetup]
     public void Setup()
     {
-        var operators = new IRuleOperator[] { new EqualsOperator(), new EndsWithOperator() };
+        var operators = new IRuleOperator[] { 
+            new EqualsOperator(), new EndsWithOperator(), new StartsWithOperator(), 
+            new ContainsOperator(), new GreaterThanOperator(), new LessThanOperator(), 
+            new SemVerEqualOperator(), new SemVerGreaterThanOperator(), 
+            new SemVerLessThanOperator(), new NotEqualsOperator() 
+        };
         var engine = new RuleEngine(operators);
         var httpClientFactory = new Mock<IHttpClientFactory>();
         var options = Options.Create(new ToggleMeshOptions { ApiKey = "bench", BaseUrl = "http://localhost" });
@@ -98,6 +118,47 @@ public class IsEnabledBenchmark
             new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
         cacheFlagMethod.Invoke(_client, [complexDto!]);
+
+        var flag10RulesData = new
+        {
+            Key = "bench-flag-10rules",
+            IsEnabled = true,
+            Rules = new[] { 
+                new { GroupId = 1, Attribute = "Email", Operator = "EndsWith", Value = "@gmail.com" },
+                new { GroupId = 1, Attribute = "Age", Operator = "GreaterThan", Value = "10" },
+                new { GroupId = 1, Attribute = "AppVersion", Operator = "SemVerGreaterThan", Value = "1.0.0" },
+                new { GroupId = 1, Attribute = "Email", Operator = "Equals", Value = "admin@gmail.com" },
+                new { GroupId = 2, Attribute = "Email", Operator = "Contains", Value = "test" },
+                new { GroupId = 2, Attribute = "AppVersion", Operator = "SemVerLessThan", Value = "3.0.0" },
+                new { GroupId = 2, Attribute = "Age", Operator = "LessThan", Value = "20" },
+                new { GroupId = 3, Attribute = "Email", Operator = "StartsWith", Value = "t" },
+                new { GroupId = 3, Attribute = "Age", Operator = "Equals", Value = "25" },
+                new { GroupId = 3, Attribute = "AppVersion", Operator = "SemVerEqual", Value = "2.1.0" }
+            },
+            RolloutPercentage = (int?)null
+        };
+
+        var dto10Rules = System.Text.Json.JsonSerializer.Deserialize(
+            System.Text.Json.JsonSerializer.Serialize(flag10RulesData),
+            dtoType,
+            new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+        cacheFlagMethod.Invoke(_client, [dto10Rules!]);
+
+        var flagNoRulesData = new
+        {
+            Key = "bench-flag-norules",
+            IsEnabled = true,
+            Rules = Array.Empty<object>(),
+            RolloutPercentage = (int?)null
+        };
+
+        var dtoNoRules = System.Text.Json.JsonSerializer.Deserialize(
+            System.Text.Json.JsonSerializer.Serialize(flagNoRulesData),
+            dtoType,
+            new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+        cacheFlagMethod.Invoke(_client, [dtoNoRules!]);
     }
 
     [Benchmark]
@@ -110,6 +171,12 @@ public class IsEnabledBenchmark
     public bool IsEnabled_WithRules_AOT()
     {
         return _client.IsEnabled("bench-flag", ref _userContextAot);
+    }
+
+    [Benchmark]
+    public bool IsEnabled_NoRules_AOT()
+    {
+        return _client.IsEnabled("bench-flag-norules", ref _userContextAot);
     }
 
     [Benchmark]
@@ -142,5 +209,17 @@ public class IsEnabledBenchmark
     public void Track_Event()
     {
         _client.Track("purchase", "user-123", _purchaseProps, value: 99.99);
+    }
+
+    [Benchmark]
+    public bool IsEnabled_With10Rules_AOT()
+    {
+        return _client.IsEnabled("bench-flag-10rules", ref _userContextAot);
+    }
+
+    [Benchmark]
+    public void Track_Event_With10Rules_AOT()
+    {
+        _client.Track("purchase", _userContextAot, _purchaseProps, value: 99.99);
     }
 }

@@ -1,159 +1,193 @@
 <div align="center">
-  <h1>🚀 ToggleMesh</h1>
-  <p><b>Enterprise-Grade, Zero-Allocation Feature Flag & Configuration Engine</b></p>
-  <p>A self-hosted, blazing-fast alternative to LaunchDarkly, natively built for the .NET ecosystem.</p>
+  <img src="src/ToggleMesh.AdminUI/src/assets/icon.png" alt="ToggleMesh Logo" width="120" />
+  <h1>ToggleMesh</h1>
+  <p><b>Enterprise Feature Flag & Contextual Experimentation Engine</b></p>
+  <p>A high-performance, data-private, self-hosted alternative to LaunchDarkly and Statsig. Purpose-built for the .NET ecosystem.</p>
 </div>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/.NET-10-purple" />
-  <img src="https://img.shields.io/badge/Latency-37.7ns-success" />
-  <img src="https://img.shields.io/badge/Allocations-0B-blue" />
-  <img src="https://img.shields.io/badge/License-MIT-green" />
+  <img src="https://img.shields.io/badge/Status-v1.0.0--rc-success" alt="Status" />
+  <a href="https://github.com/sdwck/ToggleMesh/actions/workflows/publish_sdk.yml"><img src="https://github.com/sdwck/ToggleMesh/actions/workflows/publish_sdk.yml/badge.svg" alt="Build Status" /></a>
+  <img src="https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet" alt=".NET 10" />
+  <img src="https://img.shields.io/badge/Latency-%3C25ns-success" alt="<25ns Latency" />
+  <img src="https://img.shields.io/badge/Allocations-0B-blue" alt="0 Bytes Allocated" />
+  <img src="https://img.shields.io/badge/License-MIT-green" alt="MIT License" />
 </p>
 
----
-
-## 📚 Navigation
-
-- [⚡ The 37-Nanosecond Engine](#-the-37-nanosecond-engine)
-- [🏗️ Architecture](#️-architecture-control-plane-vs-data-plane)
-- [✨ Key Features](#-key-features)
-  - [🛡️ Unbreakable Resilience](#️-unbreakable-resilience)
-  - [🎯 Advanced Targeting Engine](#-advanced-targeting-engine)
-  - [📊 High-Throughput Metrics Ingestion](#-high-throughput-metrics-ingestion)
-  - [🔐 Enterprise Security & Multi-Tenancy](#-enterprise-security--multi-tenancy)
-- [👨‍💻 Type-Safe CLI Generator](#-type-safe-cli-generator)
-- [🚀 Quick Start](#-quick-start-sdk-integration)
-- [💻 Tech Stack](#-tech-stack)
+<!-- TODO: Add dashboard screenshot (docs/assets/dashboard-preview.png) -->
+> *![ToggleMesh Admin Dashboard](docs/assets/dashboard-preview.png)*  
+> *Manage environments, targeting rules, and A/B tests from a unified, modern interface.*
 
 ---
 
-## ⚡ The 37-Nanosecond Engine
-ToggleMesh is built for extreme high-load environments where feature flags are evaluated in hot paths. The C# SDK evaluates targeting rules locally in memory, requiring **zero HTTP network calls** during execution.
+## 📖 What is ToggleMesh?
 
-By leveraging compiled Expression Trees, pre-computed rule groups, and `readonly ref struct` contexts, the ToggleMesh SDK achieves **Absolute Zero Heap Allocations**.
+ToggleMesh is a self-hosted feature management and experimentation platform designed for teams that require strict data privacy, enterprise-grade RBAC, and ultra-low latency. 
 
-### 📊 BenchmarkDotNet Results
-| Method              | Mean     | Error   | StdDev  | Gen0   | Allocated |
-|-------------------- |---------:|--------:|--------:|-------:|----------:|
-| IsEnabled_WithRules | **37.7 ns** | 1.54 ns | 1.44 ns | 0.0000 |   **-**   |
+Unlike SaaS providers that charge by MAU or require your application to make network calls for flag evaluation, ToggleMesh pushes configurations directly to your servers. Your SDKs evaluate rules **locally in memory**, ensuring zero network overhead and keeping 100% of your user context within your private infrastructure.
 
-*(1 millisecond = 1,000,000 nanoseconds. Your servers will not even notice ToggleMesh is running, and the Garbage Collector remains completely unbothered).*
+### How it compares
 
-**Benchmark environment:** Intel Core i7-14700K, .NET 10, Windows 11 x64, Release build, BenchmarkDotNet.
+| Feature | ToggleMesh | LaunchDarkly | Statsig | Unleash |
+|---|:---:|:---:|:---:|:---:|
+| **Full Self-Hosting** | ✅ | ❌ *(Relay only)* | ❌ | ✅ |
+| **Data Privacy (No PII leaves network)** | ✅ | ❌ | ❌ | ✅ |
+| **Zero-Allocation Eval (.NET)**| ✅ | ❌ | ❌ | ❌ |
+| **Built-in MAB A/B Tests** | ✅ | ❌ | ✅ | ❌ |
+| **Real-Time Push** | ✅ *(SSE)* | ✅ | ✅ | ⚠️ *(Polling)* |
+| **Pricing** | **Free (MIT)** | Per-seat | Per-MAU | Freemium |
 
----
-
-## 🏗️ Architecture: Control Plane vs. Data Plane
-
-ToggleMesh isolates management from execution to guarantee 100% uptime for your application.
-
-1. **Control Plane (Management API & UI):** Built with .NET 10, FastEndpoints, and PostgreSQL. Features a sleek Vercel-style React/Tailwind Admin Dashboard. Managers can toggle flags, clone environments, and define complex targeting rules.
-2. **Data Plane (SDK & SignalR):** When a flag changes, the API broadcasts the update via **SignalR** (backed by a Redis backplane). Connected SDKs instantly update their local `ConcurrentDictionary` cache.
+<!-- TODO: Add architecture diagram (docs/assets/architecture-diagram.png) or embed a Mermaid diagram directly here -->
+> *![ToggleMesh Architecture](docs/assets/architecture-diagram.png)*  
+> *Control Plane mutates state -> Interceptor triggers Redis Pub/Sub -> API fans out SSE to connected SDKs.*
 
 ---
 
-## ✨ Key Features
+## 👨‍💻 Quick Start
 
-### 🛡️ Unbreakable Resilience
-The SDK is designed to survive network partitions and API outages:
-* **Circuit Breakers & Exponential Backoff:** Automatic retries and circuit breaking (powered by Polly) prevent self-DDoS.
-* **Offline Fallback:** The SDK saves flag states to a local `.json` fallback file. If your application restarts while the ToggleMesh API is down, it boots seamlessly using the last known state.
+> **Prerequisite:** A running ToggleMesh server instance. See [Self-Hosting & Deployment](#-self-hosting--deployment) to spin one up locally in under a minute.
 
-### 🎯 Advanced Targeting Engine
-Evaluate users against nested **AND/OR** rule groups using built-in operators:
-* `Equals`, `Contains`, `StartsWith`, `EndsWith`, `Regex`, `InList`.
-* `SemVerGreaterThan`, `SemVerLessThan` (Perfect for mobile app version targeting).
-* **Incremental Rollouts (A/B Testing):** Deterministic percentage-based rollouts using FNV-1a hashing ensures a user consistently receives the same flag state.
-
-### 📊 High-Throughput Metrics Ingestion
-The SDK automatically batches feature evaluations (True/False exposure counts) and flushes them to the server every 10 seconds. The API ingests these batches via `System.Threading.Channels` and background workers process them into SQL via `ExecuteSqlAsync` with `unnest` arrays, easily handling **tens of thousands of RPS** without bottlenecking the database or risking deadlocks.
-
-### 🔐 Enterprise Security & Multi-Tenancy
-* **RBAC:** Built-in Identity with Owner, Admin, Editor, and Viewer roles scoped per project.
-* **Hashed API Keys:** Environment SDK keys are hashed (SHA-256) before entering the database.
-* **Audit Logs:** EF Core `SaveChangesInterceptors` automatically track every mutation (Who, What, When, and JSON diffs) for compliance.
-
----
-
-## 👨‍💻 Type-Safe CLI Generator
-
-Tired of typing magic strings like `_client.IsEnabled("new_checkout")`? 
-ToggleMesh includes a built-in CLI tool that connects to your environment and generates strongly-typed constants for your codebase. 
-
-Supported outputs: **C#, TypeScript, JavaScript, Python, Go**.
-
+### Step 0: Install the Tools
+Install the C# SDK and the Global CLI tool:
 ```bash
-$ togglemesh sync --lang typescript --out ./src/flags.ts
-Fetching flags from Control Plane...
-✔  Success! Generated 12 flags to flags.ts
+dotnet add package ToggleMesh.SDK
+dotnet tool install --global ToggleMesh.CLI
 ```
 
-```typescript
-// Use generated constants in your code
-import { Flags } from './flags';
+### Step 1: Zero-Config Context Injection
+Register the SDK in your DI container. ToggleMesh can automatically hook into your ambient `HttpContext` to extract user identity, emails, and roles without manual context passing.
 
-if (client.isEnabled(Flags.NewCheckoutFlow)) {
-    // ...
-}
-```
-
----
-
-## 🚀 Quick Start (SDK Integration)
-
-### 1. Register the Client in your DI Container
 ```csharp
 // Program.cs
 builder.Services.AddToggleMeshClient(options => 
 {
-    options.BaseUrl = "https://api.togglemesh.dev";
-    options.ApiKey = "tm_your_environment_api_key_here";
-});
-
-// Optional: Automatically inject user context from HttpContext/JWT
-builder.Services.AddToggleMeshHttpContext();
+    options.EndpointUrl = "https://api.togglemesh.dev"; // Your self-hosted Control Plane
+    options.ApiKey = "tm_server_xxxxxxxx";
+}).AddToggleMeshHttpContext(); 
 ```
 
-### 2. Evaluate in your Business Logic
+### Step 2: Sync Constants & Evaluate
+Sync your flags to generate type-safe constants, then evaluate them in your business logic.
+
+```bash
+$ togglemesh config
+$ togglemesh sync
+✔ Success! Auto-detected C# project. Generated ToggleMeshFlags.g.cs
+```
+
 ```csharp
-public class CheckoutService(IToggleMeshClient _toggleMesh)
+// CheckoutService.cs
+public void ProcessOrder(IToggleMeshClient toggleMesh) 
 {
-    public void ProcessOrder()
+    // Evaluates instantly from in-memory cache. Zero HTTP requests made.
+    if (toggleMesh.IsEnabled(Flags.NewCheckoutFlow)) 
     {
-        // Evaluated in ~37ns. No HTTP request made.
-        if (_toggleMesh.IsEnabled("next-gen-payment-gateway")) 
-        {
-            ExecuteNewGateway();
-        }
+        ExecuteNextGenGateway();
     }
 }
 ```
 
-### 3. Evaluate with Custom Context
-```csharp
-var userContext = new { Email = "user@company.com", Plan = "Premium" };
+---
 
-if (_toggleMesh.IsEnabled("beta-feature", contextObject: userContext))
-{
-    // ...
-}
+## ⚡ The Sub-25ns Evaluation Engine (Performance Proof)
+
+ToggleMesh is engineered for ultra-low-latency microservices where Garbage Collection (GC) pauses are unacceptable.
+
+By leveraging compiled Expression Trees, pre-computed rule groups, C# Source Generators, and `readonly ref struct` contexts, the ToggleMesh SDK achieves **zero-allocation evaluation**.
+
+### BenchmarkDotNet Results
+*We benchmarked various scenarios: from a simple global toggle to a worst-case scenario evaluating 10 nested AND/OR targeting rules.*
+
+| Method | Mean | StdDev | Max | P95 | Allocated |
+|---|---:|---:|---:|---:|---:|
+| **IsEnabled_NoRules_AOT** *(Baseline)* | **17.34 ns** | 0.026 ns | 17.39 ns | 17.38 ns | **-** |
+| **IsEnabled_With1Rule_AOT** *(Typical)*| **22.49 ns** | 0.055 ns | 22.55 ns | 22.55 ns | **-** |
+| **IsEnabled_Complex_AOT** *(MAB/Rollout)*| **81.44 ns** | 0.160 ns | 81.82 ns | 81.74 ns | **-** |
+| **IsEnabled_With10Rules_AOT** *(Worst-case)* | **127.14 ns** | 0.664 ns | 128.12 ns | 127.93 ns | **-** |
+| **Track_Event** *(Metrics Buffer)* | **41.58 ns** | 0.071 ns | 41.69 ns | 41.69 ns | **-** |
+
+> **Hardware Specs:** Intel Core i7-14700K, 20 Physical Cores, Windows 11 x64, .NET 10.0 Release Build.
+
+### Extreme High-Throughput (Load Testing)
+
+ToggleMesh decouples heavy I/O operations from the HTTP request-response cycle using **bounded in-memory channels** (`System.Threading.Channels`) with `DropOldest` backpressure. 
+
+Local load testing via [k6](https://k6.io/) on a single developer workstation demonstrates the massive throughput capabilities of the Data Plane API. 
+
+| Endpoint | Type | Target VUs | Max RPS | p(99) Tail Latency | Error Rate |
+|---|---|---:|---:|---:|---:|
+| `POST /api/v1/sdk/metrics` | **Fire & Forget** (Channel) | 2,000 | **115,248/s** | 18.59 ms | 0.00% |
+| `POST /api/v1/sdk/evaluate` | **Synchronous** (Compute) | 2,000 | **112,503/s** | 19.22 ms | 0.00% |
+| `POST /api/v1/sdk/events` | **Buffered + Livetail** (SSE) | 2,000 | **68,301/s** | 34.58 ms | 0.00% |
+| `GET /api/v1/sdk/flags` | **Synchronous** (I/O Cache) | 2,000 | **68,463/s** | 36.06 ms | 0.00% |
+
+> **Test Environment:** Intel Core i7-14700K, `k6` running locally against Kestrel (Release mode, HTTP). All tests maintained a flawless 0.00% failure rate under sustained load. Data payload bandwidth maxed out at ~179 MB/s during sync.
+
+---
+
+## 💻 Ecosystem & Supported SDKs
+
+ToggleMesh provides native SDKs and tooling for your entire microservice fleet.
+
+| Language / Platform | SDK Type | Real-Time Sync | Targeting Evaluation | Maturity |
+| :--- | :--- | :---: | :---: | :---: |
+| **.NET (C#)** | Server | ✅ (SSE) | Local (Zero-Alloc) | Stable |
+| **Node.js** | Server | ✅ (SSE) | Local | Beta |
+| **Browser JS / React** | Client | ✅ (SSE) | Remote (Secure) | Beta |
+| **Python** | Server | ✅ (SSE) | Local | Beta |
+| **Go** | Server | ✅ (SSE) | Local | MVP |
+| **Unreal Engine (C++)** | Game Client | 🔄 (Polling) | Remote | MVP |
+
+---
+
+## 🏢 Enterprise-Grade Features
+
+- 📡 **Push, Not Pull (SSE + Redis):** Real-time cache invalidation using Server-Sent Events. No wasteful HTTP polling.
+- 🧠 **Contextual Multi-Armed Bandits (MAB):** Built-in Bayesian inference engine (Monte Carlo simulations via Beta distributions). Autonomously shifts traffic toward winning variants based on conversion or revenue metrics.
+- 📈 **High-Throughput Analytics Ingestion:** SDKs buffer metrics client-side. The API ingests telemetry into bounded `System.Threading.Channels` with `DropOldest` backpressure, flushing to PostgreSQL or horizontally scalable **Kafka + ClickHouse** clusters.
+- 🔐 **Multi-Tenancy & RBAC:** Organization and Project-level isolation with strict Role-Based Access Control.
+- 🔑 **Personal Access Tokens (PATs):** SHA-256 hashed PATs for secure CI/CD and CLI integrations.
+- 🛡️ **SSRF-Protected Webhooks:** Secure outbound webhook dispatcher with Polly-powered exponential backoff and Dead-Letter Queues (DLQ).
+- 📜 **Immutable Audit Logs:** EF Core `SaveChangesInterceptors` capture deep JSON diffs of every mutation.
+- 💾 **Offline Resilience:** SDKs persist the latest synchronized state to a local JSON fallback file, ensuring safe boot-ups during complete network partitions.
+
+---
+
+## 🐳 Self-Hosting & Deployment
+
+### Quick Start (PostgreSQL + Redis)
+
+Deploying the core ToggleMesh stack takes under a minute.
+
+```bash
+git clone https://github.com/sdwck/ToggleMesh.git
+cd ToggleMesh
+cp .env.example .env    # Review and customize your secrets here
+docker compose up -d
+```
+
+* **Admin UI:** `http://localhost:5173`
+* **API:** `http://localhost:5264`
+* **API Docs (Scalar):** `http://localhost:5264/docs`
+
+### Enterprise Stack (+ Kafka & ClickHouse)
+
+For production deployments requiring high-throughput analytics and horizontal OLAP scaling, boot the stack using the enterprise override:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.enterprise.yml up -d
 ```
 
 ---
 
-## 💻 Tech Stack
-* **Backend:** C#, .NET 10, FastEndpoints, EF Core, SignalR
-* **Infrastructure:** PostgreSQL, Redis, Docker Compose
-* **Frontend:** React, Vite, TypeScript, Tailwind CSS, Shadcn UI
-* **Quality Assurance:** `Testcontainers` for Integration Testing, `FakeTimeProvider` for deterministic async testing, `k6` for load testing.
-}
-```
+## 🤝 Contributing & License
+ToggleMesh is released under the [MIT License](LICENSE).  
+Contributions are welcome — please read our [Contributing Guidelines](CONTRIBUTING.md) before opening a PR.
 
 ---
 
-## 💻 Tech Stack
-* **Backend:** C#, .NET 10, FastEndpoints, EF Core, SignalR
-* **Infrastructure:** PostgreSQL, Redis, Docker Compose
-* **Frontend:** React, Vite, TypeScript, Tailwind CSS, Shadcn UI
-* **Quality Assurance:** `Testcontainers` for Integration Testing, `FakeTimeProvider` for deterministic async testing, `k6` for load testing.
+<p align="center">
+  <b>⭐ If ToggleMesh looks useful, star this repo — it helps others discover it.</b><br/>
+  <a href="https://github.com/sdwck/ToggleMesh/issues">Report a Bug</a> · 
+  <a href="https://github.com/sdwck/ToggleMesh/discussions">Request a Feature</a>
+</p>

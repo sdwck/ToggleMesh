@@ -33,7 +33,7 @@ public class SdkEvaluatorService : ISdkEvaluatorService
         _config = config;
     }
 
-    private static readonly List<string> DefaultIdentityKeys 
+    private static readonly string[] DefaultIdentityKeys 
         = ["UserId", "sub", "Email", "SessionId", "DeviceId", "Id"];
     
     public async Task<List<CompiledFlagState>> GetCompiledFlagsAsync(Guid envId, CancellationToken ct)
@@ -123,23 +123,13 @@ public class SdkEvaluatorService : ISdkEvaluatorService
         {
             try
             {
-                var dict = new Dictionary<string, string>();
+                var dict = new Dictionary<string, string?>();
                 foreach (var key in state.ContextPartitionKeys)
-                {
-                    if (context.TryGetValue(key, out var val))
-                    {
-                        dict[key] = val;
-                    }
-                    else
-                    {
-                        dict[key] = "null";
-                    }
-                }
+                    dict[key] = context.TryGetValue(key, out var val) ? val : null;
+                
                 var sliceString = JsonSerializer.Serialize(dict);
                 if (state.ContextualRollouts.TryGetValue(sliceString, out var contextualRollout))
-                {
                     activeRolloutPercentage = contextualRollout;
-                }
             }
             catch
             {

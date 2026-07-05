@@ -26,7 +26,7 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService, ISegmentProvi
     private readonly IRuleEngine _ruleEngine;
     private readonly string? _fallbackFilePath;
     private readonly IToggleMeshContextProvider[] _contextProviders;
-    private readonly List<string> _identityKeys = ["UserId", "sub", "Email", "SessionId", "DeviceId", "Id"];
+    private readonly string[] _identityKeys = ["UserId", "sub", "Email", "SessionId", "DeviceId", "Id"];
     private readonly ConcurrentDictionary<string, FlagMetrics> _metricsBuffer = new();
     private readonly Channel<AnalyticsEvent> _eventsChannel;
     private readonly bool _isMetricsEnabled;
@@ -53,7 +53,7 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService, ISegmentProvi
         _metricsBufferCapacity = options.Value.MetricsBufferCapacity > 0 ? options.Value.MetricsBufferCapacity : 10000;
         _maxBatchSize = options.Value.MaxBatchSize > 0 ? options.Value.MaxBatchSize : 2000;
         if (options.Value.IdentityKeys.Any())
-            _identityKeys = options.Value.IdentityKeys.ToList();
+            _identityKeys = options.Value.IdentityKeys.ToArray();
         _client = httpClientFactory.CreateClient("ToggleMesh");
         
         var capacity = options.Value.AnalyticsChannelCapacity > 0 ? options.Value.AnalyticsChannelCapacity : 10000;
@@ -175,8 +175,15 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService, ISegmentProvi
             result = false;
         else
         {
-            var actualIdentity = evalContext.GetIdentity(identity);
-            result = RolloutEvaluator.Evaluate(activeRolloutPercentage, flagKey, actualIdentity);
+            if (!activeRolloutPercentage.HasValue || activeRolloutPercentage.Value >= 100)
+                result = true;
+            else if (activeRolloutPercentage.Value <= 0)
+                result = false;
+            else
+            {
+                var actualIdentity = evalContext.GetIdentity(identity);
+                result = RolloutEvaluator.Evaluate(activeRolloutPercentage, flagKey, actualIdentity);
+            }
         }
 
         UpdateMetrics(flagKey, result);
@@ -242,8 +249,15 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService, ISegmentProvi
             result = false;
         else
         {
-            var actualIdentity = evalContext.GetIdentity(identity);
-            result = RolloutEvaluator.Evaluate(activeRolloutPercentage, flagKey, actualIdentity);
+            if (!activeRolloutPercentage.HasValue || activeRolloutPercentage.Value >= 100)
+                result = true;
+            else if (activeRolloutPercentage.Value <= 0)
+                result = false;
+            else
+            {
+                var actualIdentity = evalContext.GetIdentity(identity);
+                result = RolloutEvaluator.Evaluate(activeRolloutPercentage, flagKey, actualIdentity);
+            }
         }
 
         UpdateMetrics(flagKey, result);

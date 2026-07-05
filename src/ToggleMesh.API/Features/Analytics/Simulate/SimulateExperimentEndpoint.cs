@@ -44,7 +44,8 @@ public class SimulateExperimentEndpoint : ToggleEndpoint<SimulateExperimentReque
             return;
         }
 
-        var storage = _config["Analytics:Storage"] ?? "PostgreSQL";
+        var clickHouseConn = _config["Analytics:ClickHouse:ConnectionString"];
+        var storage = string.IsNullOrWhiteSpace(clickHouseConn) ? "PostgreSQL" : "ClickHouse";
 
         await GenerateVariantDataAsync(environmentId, flagKey, req.EventName, 0, req.ParticipantsCount, req.ControlConversionRate, req.ControlValue, storage, ct);
         await GenerateVariantDataAsync(environmentId, flagKey, req.EventName, 1, req.ParticipantsCount, req.TreatmentConversionRate, req.TreatmentValue, storage, ct);

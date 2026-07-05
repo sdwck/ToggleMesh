@@ -5,12 +5,14 @@ public readonly struct CompiledRule : IEquatable<CompiledRule>
     public string Attribute { get; }
     public IRuleOperator Operator { get; }
     public object? CompiledValue { get; }
+    public bool IsSegmentRule { get; }
 
-    public CompiledRule(string attribute, IRuleOperator op, object? compiledValue)
+    public CompiledRule(string attribute, IRuleOperator op, object? compiledValue, bool isSegmentRule = false)
     {
         Attribute = attribute;
         Operator = op;
         CompiledValue = compiledValue;
+        IsSegmentRule = isSegmentRule;
     }
 
     public bool Equals(CompiledRule other)

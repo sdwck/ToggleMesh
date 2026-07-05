@@ -1,4 +1,5 @@
-using System.IdentityModel.Tokens.Jwt;
+
+using Microsoft.IdentityModel.JsonWebTokens;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using Microsoft.AspNetCore.Identity;
@@ -31,23 +32,18 @@ public static class TokenGenerator
         var creds = new SigningCredentials(key, SecurityAlgorithms.RsaSha256);
 
         var now = timeProvider.GetUtcNow().UtcDateTime;
-        var token = new JwtSecurityToken(
-            issuer: jwtSettings["Issuer"],
-            audience: jwtSettings["Audience"],
-            claims: claims,
-            notBefore: now,
-            expires: now.AddMinutes(15),
-            signingCredentials: creds
-        )
+        var tokenDescriptor = new SecurityTokenDescriptor
         {
-            Payload =
-            {
-                ["iat"] = new DateTimeOffset(now).ToUnixTimeSeconds()
-            }
+            Issuer = jwtSettings["Issuer"],
+            Audience = jwtSettings["Audience"],
+            Subject = new ClaimsIdentity(claims),
+            NotBefore = now,
+            Expires = now.AddMinutes(15),
+            SigningCredentials = creds
         };
 
-        var tokenHandler = new JwtSecurityTokenHandler();
-        var accessToken = tokenHandler.WriteToken(token);
+        var tokenHandler = new JsonWebTokenHandler();
+        var accessToken = tokenHandler.CreateToken(tokenDescriptor);
 
         var randomNumber = new byte[32];
         using var rng = RandomNumberGenerator.Create();

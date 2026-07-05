@@ -22,7 +22,7 @@ public class SmtpEmailSender : IEmailSender, IDisposable
         var username = _configuration["Email:Smtp:Username"];
         var password = _configuration["Email:Smtp:Password"];
         var enableSsl = !bool.TryParse(_configuration["Email:Smtp:EnableSsl"], out var s) || s;
-        _fromEmail = _configuration["Email:Smtp:FromEmail"] ?? "noreply@togglemesh.com";
+        _fromEmail = _configuration["Email:Smtp:FromEmail"] ?? "noreply@togglemesh.dev";
 
         if (!string.IsNullOrEmpty(host))
             _smtpClient = new SmtpClient(host, port)
@@ -35,9 +35,16 @@ public class SmtpEmailSender : IEmailSender, IDisposable
 
     public async Task SendEmailAsync(string to, string subject, string htmlBody, CancellationToken ct = default)
     {
+        var enableEmails = _configuration.GetValue("Email:EnableEmails", false);
+        if (!enableEmails)
+        {
+            _logger.LogInformation("Emails are disabled via config (Email:EnableEmails=false). Skipping email to {To} with subject '{Subject}'.", to, subject);
+            return;
+        }
+
         if (string.IsNullOrEmpty(_configuration["Email:Smtp:Host"]))
         {
-            _logger.LogWarning("SMTP Host is not configured. Email to {To} with subject '{Subject}' was not sent.", to, subject);
+            _logger.LogWarning("Email sending is ENABLED, but SMTP Host is missing. Email to {To} with subject '{Subject}' was not sent.", to, subject);
             _logger.LogInformation("Email Body: {Body}", htmlBody);
             return;
         }

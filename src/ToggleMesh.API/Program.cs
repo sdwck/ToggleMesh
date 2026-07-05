@@ -37,7 +37,7 @@ using ToggleMesh.Common.Rules;
 using ToggleMesh.Common.Rules.Operators;
 using ToggleMesh.API.Features.Flags.Experiments.Stop;
 
-JwtSecurityTokenHandler.DefaultInboundClaimTypeMap.Clear();
+
 var builder = WebApplication.CreateBuilder(args);
 ApiKeyHasher.Pepper = builder.Configuration["Security:ApiKeyPepper"] ?? "DefaultToggleMeshPepperSecret123!";
 builder.Services.AddOpenApi();
@@ -80,7 +80,10 @@ builder.Services.AddSingleton<SoftDeletableInterceptor>();
 builder.Services.AddSingleton<UpdateAuditableInterceptor>();
 builder.Services.AddSingleton<AuditInterceptor>();
 builder.Services.AddSingleton<RealTimeInvalidationInterceptor>();
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")!;
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+if (string.IsNullOrWhiteSpace(connectionString))
+    throw new InvalidOperationException("Database connection string is missing.");
+
 var npgsqlDataSourceBuilder = new Npgsql.NpgsqlDataSourceBuilder(connectionString);
 npgsqlDataSourceBuilder.EnableDynamicJson();
 var npgsqlDataSource = npgsqlDataSourceBuilder.Build();
@@ -199,6 +202,9 @@ builder.Services.AddRateLimiter(options =>
     options.AddPolicy("auth", context =>
     {
         var ip = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        if (authLimit <= 0) 
+        return RateLimitPartition.GetNoLimiter(ip);
+        
         return RateLimitPartition.GetFixedWindowLimiter(ip, _ => new FixedWindowRateLimiterOptions
         {
             PermitLimit = authLimit,
@@ -210,9 +216,12 @@ builder.Services.AddRateLimiter(options =>
     options.AddPolicy("sdk", context =>
     {
         var apiKey = context.Request.Headers["x-api-key"].ToString();
-        var partitionKey = string.IsNullOrEmpty(apiKey) ? context.Connection.RemoteIpAddress?.ToString() : apiKey;
+        var partitionKey = string.IsNullOrEmpty(apiKey) ? context.Connection.RemoteIpAddress?.ToString() ?? "unknown" : apiKey;
 
-        return RateLimitPartition.GetSlidingWindowLimiter(partitionKey ?? "unknown", _ => new SlidingWindowRateLimiterOptions
+        if (sdkLimit <= 0) 
+            return RateLimitPartition.GetNoLimiter(partitionKey);
+
+        return RateLimitPartition.GetSlidingWindowLimiter(partitionKey, _ => new SlidingWindowRateLimiterOptions
         {
             PermitLimit = sdkLimit,
             Window = TimeSpan.FromMinutes(1),
@@ -294,10 +303,10 @@ builder.Services.AddHostedService<WebhookDispatcherService>();
 builder.Services.AddHostedService<WebhookDeliveryWorker>();
 builder.Services.AddHostedService<RollupWorker>();
 
-var publisherType = builder.Configuration["Analytics:Publisher"] ?? "InMemory";
-var storageType = builder.Configuration["Analytics:Storage"] ?? "PostgreSQL";
+var kafkaServers = builder.Configuration["Analytics:Kafka:BootstrapServers"];
+var clickHouseConn = builder.Configuration["Analytics:ClickHouse:ConnectionString"];
 
-if (publisherType.Equals("Kafka", StringComparison.OrdinalIgnoreCase))
+if (!string.IsNullOrWhiteSpace(kafkaServers))
 {
     builder.Services.AddSingleton<IAnalyticsEventPublisher, KafkaAnalyticsPublisher>();
     builder.Services.AddHostedService<KafkaAnalyticsConsumerWorker>();
@@ -309,7 +318,7 @@ else
     builder.Services.AddHostedService<AnalyticsWorker>();
 }
 
-if (storageType.Equals("ClickHouse", StringComparison.OrdinalIgnoreCase))
+if (!string.IsNullOrWhiteSpace(clickHouseConn))
 {
     builder.Services.AddSingleton<IAnalyticsStorageSink, ClickHouseAnalyticsSink>();
     builder.Services.AddScoped<IAnalyticsQueryEngine, ClickHouseQueryEngine>();

@@ -21,9 +21,29 @@ public static class RsaKeyProvider
                 return key;
 
             var pemKey = configuration["Jwt:PrivateKeyPem"];
+            
             if (string.IsNullOrWhiteSpace(pemKey))
-                throw new InvalidOperationException(
-                    "CRITICAL: Jwt__PrivateKeyPem is missing.");
+            {
+                var keysDir = Path.Combine(AppContext.BaseDirectory, "keys");
+                var keyPath = Path.Combine(keysDir, "jwt_private.pem");
+
+                if (File.Exists(keyPath))
+                {
+                    pemKey = File.ReadAllText(keyPath);
+                    Console.WriteLine($"[RsaKeyProvider] Loaded JWT private key from {keyPath}");
+                }
+                else
+                {
+                    if (!Directory.Exists(keysDir))
+                        Directory.CreateDirectory(keysDir);
+
+                    using var rsaGen = RSA.Create(2048);
+                    pemKey = rsaGen.ExportRSAPrivateKeyPem();
+                    
+                    File.WriteAllText(keyPath, pemKey);
+                    Console.WriteLine($"[RsaKeyProvider] Generated new JWT key at {keyPath}");
+                }
+            }
 
             try
             {
@@ -41,7 +61,7 @@ public static class RsaKeyProvider
             catch (Exception ex) when (ex is not InvalidOperationException)
             {
                 throw new InvalidOperationException(
-                    "CRITICAL: Failed to parse JWT__PrivateKeyPem.");
+                    "CRITICAL: Failed to parse JWT private key.");
             }
         }
     }

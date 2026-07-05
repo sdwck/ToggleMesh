@@ -51,8 +51,8 @@ public class TestWebApplicationFactory : WebApplicationFactory<Program>, IAsyncL
                 ["RateLimits:Auth"] = "10000",
                 ["RateLimits:Sdk"] = "10000",
                 ["ConnectionStrings:DefaultConnection"] = _db.GetConnectionString(),
-                ["Analytics:Storage"] = "PostgreSQL",
-                ["Analytics:Publisher"] = "InMemory"
+                ["Analytics:ClickHouse:ConnectionString"] = "",
+                ["Analytics:Kafka:BootstrapServers"] = ""
             });
         });
 

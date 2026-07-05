@@ -36,7 +36,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Building2, Users, UserPlus, Crown, User, ShieldCheck, Trash2 } from 'lucide-react';
+import { Building2, Users, UserPlus, Crown, User, ShieldCheck, Trash2, Link } from 'lucide-react';
 import { toast } from 'sonner';
 import { jwtDecode } from 'jwt-decode';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -519,12 +519,26 @@ export function OrganizationSettingsPage() {
                                                             <RoleBadge role={invite.role} />
                                                             <Button
                                                                 variant="ghost"
-                                                                size="sm"
-                                                                className="h-7 text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors px-2 ml-1"
+                                                                size="icon"
+                                                                title="Copy invite link"
+                                                                className="h-7 w-7 ml-1 text-muted-foreground hover:text-foreground"
+                                                                onClick={() => {
+                                                                    const inviteUrl = `${window.location.origin}/invites/${invite.token}`;
+                                                                    navigator.clipboard.writeText(inviteUrl);
+                                                                    toast.success('Invite link copied to clipboard');
+                                                                }}
+                                                            >
+                                                                <Link className="h-4 w-4" />
+                                                            </Button>
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                title="Revoke invite"
+                                                                className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors ml-1"
                                                                 onClick={() => handleRevokeInvite(invite.id)}
                                                                 disabled={revokeInvitation.isPending}
                                                             >
-                                                                Revoke
+                                                                <Trash2 className="h-4 w-4" />
                                                             </Button>
                                                         </div>
                                                     </div>

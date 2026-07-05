@@ -17,8 +17,8 @@ public class AnalyticsWorkerTests : IClassFixture<TestWebApplicationFactory>
     {
         _factory = factory.WithWebHostBuilder(builder =>
         {
-            builder.UseSetting("Analytics:Publisher", "InMemory");
-            builder.UseSetting("Analytics:Storage", "PostgreSQL");
+            builder.UseSetting("Analytics:Kafka:BootstrapServers", "");
+            builder.UseSetting("Analytics:ClickHouse:ConnectionString", "");
         });
     }
 

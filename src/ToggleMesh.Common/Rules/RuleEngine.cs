@@ -23,16 +23,13 @@ public class RuleEngine : IRuleEngine
         if (groups.Length == 0)
             return true;
 
-        for (var i = 0; i < groups.Length; i++)
+        foreach (ref readonly var group in groups.AsSpan())
         {
-            var rules = groups[i].Rules;
             var groupPassed = true;
 
-            for (var j = 0; j < rules.Length; j++)
+            foreach (ref readonly var rule in group.Rules.AsSpan())
             {
-                var rule = rules[j];
-
-                if (rule.Operator is InSegmentOperator)
+                if (rule.IsSegmentRule)
                 {
                     if (rule.CompiledValue is string segmentId && _segmentProvider != null)
                     {
@@ -71,9 +68,11 @@ public class RuleEngine : IRuleEngine
                 g.Select(r =>
                 {
                     IRuleOperator op;
+                    var isSegment = false;
                     if (string.Equals(r.Operator, "InSegment", StringComparison.OrdinalIgnoreCase))
                     {
                         op = InSegmentOperator.Instance;
+                        isSegment = true;
                     }
                     else
                     {
@@ -83,7 +82,8 @@ public class RuleEngine : IRuleEngine
                     return new CompiledRule(
                         r.Attribute,
                         op,
-                        op.Compile(r.Value));
+                        op.Compile(r.Value),
+                        isSegment);
                 }).ToArray())
             ).ToArray();
     }

@@ -33,7 +33,8 @@ export function InvitePage() {
 
     const handleAccept = async () => {
         if (!localStorage.getItem('accessToken')) {
-            navigate(`/register?inviteToken=${token}&email=${encodeURIComponent(invite?.email || '')}`);
+            localStorage.setItem('pendingInviteToken', token || '');
+            navigate(`/login?inviteToken=${token}`);
             return;
         }
 
@@ -48,12 +49,15 @@ export function InvitePage() {
             setTimeout(() => navigate('/projects'), 2000);
         } catch (error: any) {
             if (error.response?.status === 401) {
-                navigate(`/register?inviteToken=${token}&email=${encodeURIComponent(invite?.email || '')}`);
+                localStorage.setItem('pendingInviteToken', token || '');
+                navigate(`/login?inviteToken=${token}`);
             } else {
                 toast.error(error.response?.data?.message || 'Failed to accept invitation');
             }
         }
     };
+
+    const isAuthenticated = !!localStorage.getItem('accessToken');
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-background p-4">
@@ -83,12 +87,31 @@ export function InvitePage() {
                 <CardContent>
                     {status === 'pending' && (
                         <div className="space-y-3">
-                            <Button className="w-full" onClick={handleAccept}>
-                                Accept Invitation
-                            </Button>
-                            <Button className="w-full" variant="outline" onClick={() => navigate('/projects')}>
-                                Cancel
-                            </Button>
+                            {isAuthenticated ? (
+                                <>
+                                    <Button className="w-full" onClick={handleAccept}>
+                                        Accept Invitation
+                                    </Button>
+                                    <Button className="w-full" variant="outline" onClick={() => navigate('/projects')}>
+                                        Cancel
+                                    </Button>
+                                </>
+                            ) : (
+                                <>
+                                    <Button className="w-full" onClick={() => {
+                                        localStorage.setItem('pendingInviteToken', token || '');
+                                        navigate(`/register?inviteToken=${token}&email=${encodeURIComponent(invite?.email || '')}`);
+                                    }}>
+                                        Create Account to Join
+                                    </Button>
+                                    <Button className="w-full" variant="outline" onClick={() => {
+                                        localStorage.setItem('pendingInviteToken', token || '');
+                                        navigate(`/login?inviteToken=${token}`);
+                                    }}>
+                                        Log in to Existing Account
+                                    </Button>
+                                </>
+                            )}
                         </div>
                     )}
                     {status === 'error' && (
