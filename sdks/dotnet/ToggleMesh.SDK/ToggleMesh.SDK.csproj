@@ -6,7 +6,7 @@
         <Nullable>enable</Nullable>
         <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
         <PackageId>ToggleMesh.SDK</PackageId>
-        <Version>0.2.2</Version>
+        <Version>0.2.3</Version>
         <Authors>sdwck</Authors>
         <Company>ToggleMesh</Company>
         <Description>Official high-performance, zero-allocation real-time C# Client SDK for ToggleMesh Feature Flag Engine.</Description>
@@ -22,8 +22,8 @@
     <ItemGroup>
       <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.8" />
       <PackageReference Include="NuGet.Versioning" Version="7.6.0" />
-      <PackageReference Include="Polly" Version="8.6.6" />
-      <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.0.1" />
+      <PackageReference Include="Polly" Version="8.7.0" />
+      <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.19.1" />
     </ItemGroup>
 
     <ItemGroup>
@@ -44,13 +44,13 @@
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\..\..\src\ToggleMesh.Common\ToggleMesh.Common.csproj" />
+      <ProjectReference Include="..\..\..\src\ToggleMesh.Common\ToggleMesh.Common.csproj" PrivateAssets="all" />
       <ProjectReference Include="..\ToggleMesh.SDK.Generators\ToggleMesh.SDK.Generators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
     </ItemGroup>
 
     <Target Name="CopyProjectReferencesToPackage" DependsOnTargets="ResolveReferences">
         <ItemGroup>
-            <BuildOutputInPackage Include="@(ReferenceCopyLocalPaths->WithMetadataValue('ReferenceSourceTarget', 'ProjectReference'))" />
+            <BuildOutputInPackage Include="@(ReferenceCopyLocalPaths-&gt;WithMetadataValue('ReferenceSourceTarget', 'ProjectReference'))" />
         </ItemGroup>
     </Target>
 
