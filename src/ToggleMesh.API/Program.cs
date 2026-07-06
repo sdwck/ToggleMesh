@@ -203,7 +203,7 @@ builder.Services.AddRateLimiter(options =>
     {
         var ip = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
         if (authLimit <= 0) 
-        return RateLimitPartition.GetNoLimiter(ip);
+            return RateLimitPartition.GetNoLimiter(ip);
         
         return RateLimitPartition.GetFixedWindowLimiter(ip, _ => new FixedWindowRateLimiterOptions
         {

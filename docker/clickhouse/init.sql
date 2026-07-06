@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS default.AnalyticsExposures
     FlagKey String,
     Identity String,
     Variant Bool,
+    Properties String,
     Timestamp DateTime64(3, 'UTC')
 )
 ENGINE = MergeTree()

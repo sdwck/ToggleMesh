@@ -170,12 +170,20 @@ public class ClickHouseQueryEngine : IAnalyticsQueryEngine
             var exposures = new List<AnalyticsExposure>();
             var tracks = new List<AnalyticsTrack>();
 
-            var exposureQuery = $"SELECT Id, EnvironmentId, FlagKey, Identity, Variant, Timestamp FROM AnalyticsExposures WHERE EnvironmentId = '{state.EnvironmentId}' AND FlagKey = '{state.FeatureFlag.Key}'";
+            var exposureQuery = $"SELECT Id, EnvironmentId, FlagKey, Identity, Variant, Timestamp, Properties FROM AnalyticsExposures WHERE EnvironmentId = '{state.EnvironmentId}' AND FlagKey = '{state.FeatureFlag.Key}'";
             await using var expCommand = connection.CreateCommand();
             expCommand.CommandText = exposureQuery;
             await using var expReader = await expCommand.ExecuteReaderAsync(ct);
             while (await expReader.ReadAsync(ct))
             {
+                var propsStr = expReader.GetString(6);
+                JsonDocument? propsDoc = null;
+                if (!string.IsNullOrEmpty(propsStr))
+                {
+                    try { propsDoc = JsonDocument.Parse(propsStr); }
+                    catch { /* ignore */ }
+                }
+
                 exposures.Add(new AnalyticsExposure
                 {
                     Id = expReader.GetGuid(0),
@@ -184,7 +192,7 @@ public class ClickHouseQueryEngine : IAnalyticsQueryEngine
                     Identity = expReader.GetString(3),
                     Variant = expReader.GetBoolean(4),
                     Timestamp = expReader.GetDateTime(5),
-                    Properties = null
+                    Properties = propsDoc
                 });
             }
 

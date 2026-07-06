@@ -38,6 +38,7 @@ public class ClickHouseAnalyticsSink : IAnalyticsStorageSink
                 e.FlagKey,
                 e.Identity,
                 e.Variant,
+                e.Properties?.RootElement.ToString() ?? (object)string.Empty,
                 e.Timestamp.UtcDateTime
             }).ToArray();
 

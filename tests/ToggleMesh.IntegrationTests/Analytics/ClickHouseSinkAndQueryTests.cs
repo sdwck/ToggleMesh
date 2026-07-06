@@ -47,6 +47,7 @@ public class ClickHouseSinkAndQueryTests : IAsyncLifetime
                 FlagKey String,
                 Identity String,
                 Variant UInt8,
+                Properties String,
                 Timestamp DateTime
             ) ENGINE = MergeTree()
             ORDER BY (EnvironmentId, FlagKey, Timestamp)";

@@ -2,7 +2,7 @@
   <img src="src/ToggleMesh.AdminUI/src/assets/icon.png" alt="ToggleMesh Logo" width="120" />
   <h1>ToggleMesh</h1>
   <p><b>Enterprise Feature Flag & Contextual Experimentation Engine</b></p>
-  <p>A high-performance, data-private, self-hosted alternative to LaunchDarkly and Statsig. Purpose-built for the .NET ecosystem.</p>
+  <p>A high-performance, data-private, self-hosted alternative to LaunchDarkly and Statsig. Powered by .NET Core, featuring native SDKs for C#, Python, Go, Node.js, and C++.</p>
 </div>
 
 <p align="center">
@@ -14,9 +14,8 @@
   <img src="https://img.shields.io/badge/License-MIT-green" alt="MIT License" />
 </p>
 
-<!-- TODO: Add dashboard screenshot (docs/assets/dashboard-preview.png) -->
-> *![ToggleMesh Admin Dashboard](docs/assets/dashboard-preview.png)*  
-> *Manage environments, targeting rules, and A/B tests from a unified, modern interface.*
+*![ToggleMesh Admin Dashboard](docs/assets/dashboard-preview.png)*  
+*Manage environments, targeting rules, and A/B tests from a unified, modern interface.*
 
 ---
 
@@ -37,9 +36,37 @@ Unlike SaaS providers that charge by MAU or require your application to make net
 | **Real-Time Push** | ✅ *(SSE)* | ✅ | ✅ | ⚠️ *(Polling)* |
 | **Pricing** | **Free (MIT)** | Per-seat | Per-MAU | Freemium |
 
-<!-- TODO: Add architecture diagram (docs/assets/architecture-diagram.png) or embed a Mermaid diagram directly here -->
-> *![ToggleMesh Architecture](docs/assets/architecture-diagram.png)*  
-> *Control Plane mutates state -> Interceptor triggers Redis Pub/Sub -> API fans out SSE to connected SDKs.*
+## 🏗️ Architecture
+
+```mermaid
+flowchart TD
+    classDef ui fill:#18181b,stroke:#3f3f46,stroke-width:2px,color:#f4f4f5;
+    classDef api fill:#0f172a,stroke:#6366f1,stroke-width:2px,color:#f4f4f5;
+    classDef db fill:#312e81,stroke:#818cf8,stroke-width:2px,color:#f4f4f5;
+    classDef cache fill:#7f1d1d,stroke:#f87171,stroke-width:2px,color:#f4f4f5;
+    classDef sdk fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#f4f4f5;
+    classDef worker fill:#4c1d95,stroke:#a5b4fc,stroke-width:2px,color:#f4f4f5;
+
+    UI[React Admin UI]:::ui -- REST / JWT --> API["ToggleMesh.API<br/>(Management & SSE)"]:::api
+    
+    API -- Read / Write --> PG[(PostgreSQL)]:::db
+    API -- EF Interceptor Publish --> REDIS[(Redis Pub/Sub)]:::cache
+    REDIS -. Fan-out Invalidate .-> API
+    
+    API == SSE Push ==> SDK["Client & Server SDKs<br/>(Zero-Alloc Eval)"]:::sdk
+
+    SDK -- Async Batch Events --> INGEST["ToggleMesh.API<br/>(Ingest Endpoint)"]:::api
+
+    subgraph Analytics Pipeline
+        direction LR
+        INGEST -- Stream --> KAFKA[(Kafka / Channels)]:::db
+        KAFKA -- Consume --> CH[(ClickHouse OLAP)]:::db
+        CH -- Bayesian Query --> WORKER[MAB Rollup Worker]:::worker
+    end
+
+    WORKER -. Auto-adjust traffic .-> PG
+```
+*Control Plane mutates state -> Interceptor triggers Redis Pub/Sub -> API fans out SSE to connected SDKs.*
 
 ---
 
@@ -61,7 +88,7 @@ Register the SDK in your DI container. ToggleMesh can automatically hook into yo
 // Program.cs
 builder.Services.AddToggleMeshClient(options => 
 {
-    options.EndpointUrl = "https://api.togglemesh.dev"; // Your self-hosted Control Plane
+    options.BaseUrl = "https://api.togglemesh.dev"; // Your self-hosted Control Plane
     options.ApiKey = "tm_server_xxxxxxxx";
 }).AddToggleMeshHttpContext(); 
 ```

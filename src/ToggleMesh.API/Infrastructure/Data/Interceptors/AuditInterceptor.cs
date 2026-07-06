@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using ToggleMesh.API.Extensions;
+using ToggleMesh.API.Features.Analytics.Domain;
 using ToggleMesh.API.Features.Audit.Domain;
 using ToggleMesh.API.Features.Flags.Domain;
 using ToggleMesh.API.Features.Webhooks.Domain;
@@ -98,7 +99,11 @@ public class AuditInterceptor : SaveChangesInterceptor
         
         var modifiedEntries = context.ChangeTracker.Entries()
             .Where(e => 
-                e.Entity is not AuditLog and not WebhookDelivery and not RefreshToken
+                e.Entity is not AuditLog 
+                and not WebhookDelivery 
+                and not RefreshToken
+                and not ExperimentMetric
+                and not ContextualExperimentMetric
                 && e.State is not 
                     (EntityState.Detached or EntityState.Unchanged))
             .ToList();

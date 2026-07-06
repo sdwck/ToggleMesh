@@ -511,9 +511,9 @@ export function ExperimentResults({ projectId, envId, flagKey, mabGoalEvent, hig
                                 {isMabEnabled ? 'MAB' : 'A/B Test'}
                             </div>
                         </div>
-                        <div>
+                        <div className="min-w-0">
                             <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Goal Event</div>
-                            <div className="text-xs font-medium">{mabGoalEvent || 'Any'}</div>
+                            <div className="text-xs font-medium truncate" title={mabGoalEvent || 'Any'}>{mabGoalEvent || 'Any'}</div>
                         </div>
                         <div>
                             <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Optimization</div>
