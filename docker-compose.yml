@@ -73,6 +73,7 @@ services:
       Metrics__MaxMetrics: ${TM_METRICS_MAX_LIMIT:-10000}
       Ingestion__MaxBatchSize: ${TM_INGESTION_MAX_BATCH_SIZE:-10000}
       Ingestion__MaxPayloadSizeBytes: ${TM_INGESTION_MAX_PAYLOAD_BYTES:-5242880}
+      Analytics__RollupInterval: ${TM_ANALYTICS_ROLLUP_INTERVAL:-00:15:00}
       
       # SMTP Email
       Email__EnableEmails: ${TM_ENABLE_EMAILS:-false}

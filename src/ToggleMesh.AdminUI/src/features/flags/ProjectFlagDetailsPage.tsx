@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Box, Tag, Edit, Activity } from 'lucide-react';
+import { ArrowLeft, Box, Tag, Edit } from 'lucide-react';
 import { useProjectFlags, useToggleFeatureFlag, useProjectDetails, useUpdateFlagMetadata, useFlagStats } from '@/api/queries';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';

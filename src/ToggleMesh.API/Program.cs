@@ -99,7 +99,8 @@ builder.Services.AddDbContext<AppDbContext>((serviceProvider, options) =>
 });
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
-builder.Services.AddSingleton(Channel.CreateBounded<MetricQueueItem>(new BoundedChannelOptions(100000)
+var metricCapacity = builder.Configuration.GetValue<int>("Ingestion:MetricQueueCapacity", 100000);
+builder.Services.AddSingleton(Channel.CreateBounded<MetricQueueItem>(new BoundedChannelOptions(metricCapacity)
 {
     FullMode = BoundedChannelFullMode.DropOldest
 }));
@@ -285,8 +286,9 @@ builder.Services.AddHttpClient("WebhookClient", client =>
     };
 });
 
+var webhookCapacity = builder.Configuration.GetValue<int>("Webhooks:QueueCapacity", 10000);
 builder.Services.AddSingleton(Channel.CreateBounded<WebhookEvent>(
-    new BoundedChannelOptions(100_000)
+    new BoundedChannelOptions(webhookCapacity)
     {
         FullMode = BoundedChannelFullMode.DropOldest
     }));

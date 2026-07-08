@@ -1,4 +1,5 @@
 using System.Threading.Channels;
+using Microsoft.Extensions.Configuration;
 
 namespace ToggleMesh.API.Features.Analytics.Ingest;
 
@@ -6,9 +7,11 @@ public class InMemoryAnalyticsQueue : IAnalyticsEventPublisher
 {
     private readonly Channel<AnalyticsBatchMessage> _channel;
 
-    public InMemoryAnalyticsQueue()
+    public InMemoryAnalyticsQueue(IConfiguration configuration)
     {
-        _channel = Channel.CreateBounded<AnalyticsBatchMessage>(new BoundedChannelOptions(10_000)
+        var capacity = configuration.GetValue<int>("Ingestion:AnalyticsQueueCapacity", 1000);
+        
+        _channel = Channel.CreateBounded<AnalyticsBatchMessage>(new BoundedChannelOptions(capacity)
         {
             FullMode = BoundedChannelFullMode.DropOldest,
             SingleReader = true,
