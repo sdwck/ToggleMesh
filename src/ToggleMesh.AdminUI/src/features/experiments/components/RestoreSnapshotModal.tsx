@@ -111,7 +111,7 @@ export function RestoreSnapshotModal({
                         </div>
                     </div>
                     <div className="ml-8 mt-1">
-                        <Input 
+                        <Input
                             value={confirmText}
                             onChange={(e) => setConfirmText(e.target.value)}
                             placeholder="Confirm"
@@ -124,8 +124,8 @@ export function RestoreSnapshotModal({
                     <Button variant="ghost" onClick={() => { onOpenChange(false); setConfirmText(''); }} disabled={restoreMutation.isPending} className="text-zinc-400 hover:text-zinc-100">
                         Cancel
                     </Button>
-                    <Button 
-                        onClick={handleRestore} 
+                    <Button
+                        onClick={handleRestore}
                         disabled={restoreMutation.isPending || confirmText !== 'Confirm'}
                         className="bg-emerald-800 hover:bg-emerald-700 text-emerald-50 border border-emerald-700/50"
                     >

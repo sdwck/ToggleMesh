@@ -109,7 +109,7 @@ export function Register() {
 
           toast.success('Account created and invitation accepted!');
           navigate('/projects');
-        } catch (error) {
+        } catch {
           navigate(`/invites/${inviteToken}`);
         }
       } else {
