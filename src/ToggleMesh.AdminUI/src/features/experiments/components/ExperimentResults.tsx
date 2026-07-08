@@ -157,9 +157,9 @@ export function ExperimentResults({ projectId, envId, flagKey, mabGoalEvent, hig
             </div>
 
             {historicalSnapshot && (
-                <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-4 flex items-center justify-between mb-6 print:hidden">
+                <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 print:hidden">
                     <div className="flex items-center gap-3">
-                        <History className="h-5 w-5 text-amber-500" />
+                        <History className="h-5 w-5 text-amber-500 shrink-0" />
                         <div>
                             <h4 className="text-amber-500 font-medium text-sm">Viewing Historical Report</h4>
                             <p className="text-xs text-amber-500/80">
@@ -167,7 +167,7 @@ export function ExperimentResults({ projectId, envId, flagKey, mabGoalEvent, hig
                             </p>
                         </div>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                         {!isHistoricalView && (
                             <Button
                                 variant="outline"
@@ -213,7 +213,7 @@ export function ExperimentResults({ projectId, envId, flagKey, mabGoalEvent, hig
                                     : "Inactive. Exposures and conversions are not being tracked for this flag."}
                         </p>
                     </div>
-                    <div className="flex items-center gap-3">
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-3 sm:mt-0 w-full sm:w-auto">
                         <Button
                             variant="outline"
                             size="sm"

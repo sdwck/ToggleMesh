@@ -10,12 +10,12 @@ export function MetricCard({ exp, isPrimary }: { exp: any, isPrimary?: boolean }
 
     return (
         <Card id={`track-${exp.eventName}`} className={`border-border/40 overflow-hidden transition-all duration-1000 print:break-inside-avoid print:shadow-none print:border-zinc-300 ${isPrimary ? 'bg-primary/5 border-primary/20 print:bg-transparent' : 'bg-zinc-950/50 print:bg-transparent'}`}>
-            <div className="px-4 py-3 bg-muted/20 border-b border-border/40 print:border-zinc-300 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                    <Activity className={`h-4 w-4 ${isPrimary ? 'text-primary print:text-black' : 'text-muted-foreground print:text-zinc-600'}`} />
-                    <span className={`font-semibold text-sm ${isPrimary ? 'text-primary print:text-black' : 'print:text-zinc-800'}`}>{exp.eventName || exp.EventName} {isPrimary && '(Optimization Goal)'}</span>
+            <div className="px-4 py-3 bg-muted/20 border-b border-border/40 print:border-zinc-300 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                <div className="flex flex-wrap items-center gap-2 min-w-0">
+                    <Activity className={`h-4 w-4 shrink-0 ${isPrimary ? 'text-primary print:text-black' : 'text-muted-foreground print:text-zinc-600'}`} />
+                    <span className={`font-semibold text-sm break-all ${isPrimary ? 'text-primary print:text-black' : 'print:text-zinc-800'}`}>{exp.eventName || exp.EventName} {isPrimary && '(Optimization Goal)'}</span>
                 </div>
-                <span className="text-xs text-muted-foreground print:text-zinc-500">
+                <span className="text-xs text-muted-foreground print:text-zinc-500 whitespace-nowrap shrink-0">
                     Updated {(() => {
                         const raw = exp.lastCalculatedAt ?? exp.LastCalculatedAt;
                         if (!raw) return 'N/A';

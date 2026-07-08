@@ -52,27 +52,27 @@ export function EnvironmentApiKeysTab({ projectId, environmentId }: EnvironmentA
     return (
         <div className="space-y-4">
             <Card className="border-border/40 bg-zinc-950/20">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+                <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between space-y-4 sm:space-y-0 pb-4 border-b border-border/40">
                     <div>
-                        <CardTitle className="flex items-center gap-2 text-lg">
-                            <Key className="h-5 w-5 text-primary" />
+                        <CardTitle className="text-base font-semibold flex items-center gap-2">
+                            <Key className="h-4 w-4 text-primary" />
                             Environment API Keys
                         </CardTitle>
-                        <CardDescription className="mt-1.5">
+                        <CardDescription className="mt-1">
                             Use Server keys in backend environments, and Client keys in frontend SDKs.
                         </CardDescription>
                     </div>
-                    <div className="flex items-center gap-2">
-                        <Button variant="outline" size="sm" onClick={() => setIsCliSetupOpen(true)} className="cursor-pointer text-xs h-8">
+                    <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+                        <Button variant="outline" size="sm" onClick={() => setIsCliSetupOpen(true)} className="cursor-pointer text-xs h-8 flex-1 sm:flex-none">
                             <Terminal className="mr-2 h-3.5 w-3.5" />
-                            CLI Setup
+                            CLI
                         </Button>
-                        <Button variant="outline" size="sm" onClick={() => setIsSdkSetupOpen(true)} className="cursor-pointer text-xs h-8">
+                        <Button variant="outline" size="sm" onClick={() => setIsSdkSetupOpen(true)} className="cursor-pointer text-xs h-8 flex-1 sm:flex-none">
                             <Code className="mr-2 h-3.5 w-3.5" />
-                            SDK Setup
+                            SDK
                         </Button>
-                        <Button size="sm" onClick={() => setIsCreateOpen(true)} className="cursor-pointer h-8">
-                            <Plus className="mr-2 h-3.5 w-3.5" />
+                        <Button size="sm" onClick={() => setIsCreateOpen(true)} className="cursor-pointer h-8 flex-1 sm:flex-none">
+                            <Plus className="mr-2 h-3.5 w-3.5 hidden sm:inline" />
                             Create Key
                         </Button>
                     </div>
@@ -83,9 +83,9 @@ export function EnvironmentApiKeysTab({ projectId, environmentId }: EnvironmentA
                             <TableRow className="border-border/40">
                                 <TableHead>Name</TableHead>
                                 <TableHead>Type</TableHead>
-                                <TableHead>Preview</TableHead>
-                                <TableHead>Created At</TableHead>
-                                <TableHead>Last Used</TableHead>
+                                <TableHead className="hidden md:table-cell">Preview</TableHead>
+                                <TableHead className="hidden md:table-cell">Created At</TableHead>
+                                <TableHead className="hidden md:table-cell">Last Used</TableHead>
                                 <TableHead className="text-right w-[80px]">Actions</TableHead>
                             </TableRow>
                         </TableHeader>
@@ -95,9 +95,9 @@ export function EnvironmentApiKeysTab({ projectId, environmentId }: EnvironmentA
                                     <TableRow key={i} className="h-[53px] border-border/40">
                                         <TableCell><Skeleton className="h-5 w-[150px] rounded" /></TableCell>
                                         <TableCell><Skeleton className="h-5 w-16 rounded" /></TableCell>
-                                        <TableCell><Skeleton className="h-5 w-32 rounded font-mono" /></TableCell>
-                                        <TableCell><Skeleton className="h-5 w-24 rounded" /></TableCell>
-                                        <TableCell><Skeleton className="h-5 w-24 rounded" /></TableCell>
+                                        <TableCell className="hidden md:table-cell"><Skeleton className="h-5 w-32 rounded font-mono" /></TableCell>
+                                        <TableCell className="hidden md:table-cell"><Skeleton className="h-5 w-24 rounded" /></TableCell>
+                                        <TableCell className="hidden md:table-cell"><Skeleton className="h-5 w-24 rounded" /></TableCell>
                                         <TableCell className="text-right">
                                             <MoreHorizontal className="h-4 w-4 text-zinc-800 ml-auto animate-pulse" />
                                         </TableCell>
@@ -112,11 +112,11 @@ export function EnvironmentApiKeysTab({ projectId, environmentId }: EnvironmentA
                                                 {key.keyType === KeyType.Server ? 'Server' : 'Client'}
                                             </Badge>
                                         </TableCell>
-                                        <TableCell className="font-mono text-xs text-muted-foreground">{key.keyPreview}</TableCell>
-                                        <TableCell className="text-muted-foreground text-xs font-mono">
+                                        <TableCell className="font-mono text-xs text-muted-foreground hidden md:table-cell">{key.keyPreview}</TableCell>
+                                        <TableCell className="text-muted-foreground text-xs font-mono hidden md:table-cell">
                                             {formatDate(key.createdOn)}
                                         </TableCell>
-                                        <TableCell className="text-muted-foreground text-xs font-mono">
+                                        <TableCell className="text-muted-foreground text-xs font-mono hidden md:table-cell">
                                             {key.expireOn ? formatDate(key.expireOn) : (key.lastUsedAt ? formatDate(key.lastUsedAt) : 'Never')}
                                         </TableCell>
                                         <TableCell className="text-right">

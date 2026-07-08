@@ -223,18 +223,18 @@ export function ProjectEnvironmentsTab({ project, isLoading }: { project?: Proje
                                     navigate(`/projects/${project?.id}/environments/${env.id}`);
                                 }}
                             >
-                                <CardContent className="p-5 flex items-center justify-between">
-                                    <div className="flex items-center gap-4">
+                                <CardContent className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                    <div className="flex flex-col sm:flex-row sm:items-center gap-4">
                                         {canManageProject && localEnvs.length > 1 && (
                                             <div
-                                                className="flex items-center text-muted-foreground/30 group-hover:text-muted-foreground/60 transition-colors pr-2 border-r border-border/10 shrink-0">
+                                                className="hidden sm:flex items-center text-muted-foreground/30 group-hover:text-muted-foreground/60 transition-colors sm:pb-0 sm:pr-2 sm:border-r border-border/10 shrink-0">
                                                 <GripVertical className="h-5 w-5" />
                                             </div>
                                         )}
 
-                                        <div className="space-y-1.5">
-                                            <div className="flex items-center gap-2.5">
-                                                <Box className="h-5 w-5 text-muted-foreground" />
+                                        <div className="space-y-2 sm:space-y-1.5">
+                                            <div className="flex flex-wrap items-center gap-2.5">
+                                                <Box className="h-5 w-5 text-muted-foreground shrink-0" />
                                                 <span
                                                     className="font-semibold text-lg tracking-tight group-hover:text-primary transition-colors">{env.name}</span>
                                                 <Badge variant="outline"
@@ -252,11 +252,11 @@ export function ProjectEnvironmentsTab({ project, isLoading }: { project?: Proje
                                         </div>
                                     </div>
 
-                                    <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                                    <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 mt-2 sm:mt-0" onClick={(e) => e.stopPropagation()}>
                                         {env.userRole < 3 && (
                                             <Button variant="outline" size="sm" onClick={() => setAuditEnvId(env.id)}
-                                                className="h-9 px-3 text-xs font-medium cursor-pointer">
-                                                <FileClock className="mr-1.5 h-3.5 w-3.5" />
+                                                className="flex-1 sm:flex-none h-9 px-3 text-xs font-medium cursor-pointer">
+                                                <FileClock className="mr-1.5 h-3.5 w-3.5 shrink-0" />
                                                 Logs
                                             </Button>
                                         )}
@@ -264,23 +264,23 @@ export function ProjectEnvironmentsTab({ project, isLoading }: { project?: Proje
                                             <Button variant="outline" size="sm" onClick={() => {
                                                 setEnvToSync(env.id);
                                                 syncForm.reset({ sourceEnvId: '' });
-                                            }} className="h-9 px-3 text-xs font-medium cursor-pointer">
-                                                <ArrowRightLeft className="mr-1.5 h-3.5 w-3.5" />
+                                            }} className="flex-1 sm:flex-none h-9 px-3 text-xs font-medium cursor-pointer">
+                                                <ArrowRightLeft className="mr-1.5 h-3.5 w-3.5 shrink-0" />
                                                 Sync
                                             </Button>
                                         )}
                                         {canManageEnv ? (
                                             <Button variant="default" size="sm"
                                                 onClick={() => navigate(`/projects/${project?.id}/environments/${env.id}`)}
-                                                className="h-9 px-3 text-xs font-medium cursor-pointer">
-                                                <Settings className="mr-1.5 h-3.5 w-3.5" />
+                                                className="flex-1 sm:flex-none h-9 px-3 text-xs font-medium cursor-pointer">
+                                                <Settings className="mr-1.5 h-3.5 w-3.5 shrink-0" />
                                                 Configure
                                             </Button>
                                         ) : (
                                             <Button variant="default" size="sm"
                                                 onClick={() => navigate(`/projects/${project?.id}/environments/${env.id}`)}
-                                                className="h-9 px-3 text-xs font-medium cursor-pointer">
-                                                <Settings className="mr-1.5 h-3.5 w-3.5" />
+                                                className="flex-1 sm:flex-none h-9 px-3 text-xs font-medium cursor-pointer">
+                                                <Settings className="mr-1.5 h-3.5 w-3.5 shrink-0" />
                                                 View
                                             </Button>
                                         )}
@@ -306,7 +306,7 @@ export function ProjectEnvironmentsTab({ project, isLoading }: { project?: Proje
                                 environmentId={auditEnvId}
                                 pageSize={6}
                                 className="h-full flex flex-col justify-between space-y-4"
-                                tableContainerClassName="rounded-md border border-border/40 overflow-hidden flex-grow min-h-0 bg-zinc-950/20"
+                                tableContainerClassName="rounded-md border border-border/40 overflow-y-auto flex-grow min-h-0 bg-zinc-950/20"
                             />
                         )}
                     </div>

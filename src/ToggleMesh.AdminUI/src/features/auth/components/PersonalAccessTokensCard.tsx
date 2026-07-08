@@ -77,7 +77,7 @@ export function PersonalAccessTokensCard() {
     return (
         <>
             <Card className="border-border/40 bg-zinc-950/20">
-                <CardHeader className="flex flex-row items-center justify-between">
+                <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                     <div className="space-y-1.5">
                         <CardTitle className="text-lg flex items-center gap-2">
                             <KeyRound className="h-5 w-5 text-muted-foreground" /> Personal Access Tokens
@@ -177,11 +177,11 @@ export function PersonalAccessTokensCard() {
                     <Table>
                         <TableHeader>
                             <TableRow>
-                                <TableHead>Token Name</TableHead>
-                                <TableHead>Preview</TableHead>
-                                <TableHead>Created</TableHead>
-                                <TableHead>Expires</TableHead>
-                                <TableHead>Last Used</TableHead>
+                                <TableHead className="whitespace-nowrap">Token Name</TableHead>
+                                <TableHead className="whitespace-nowrap">Preview</TableHead>
+                                <TableHead className="hidden md:table-cell whitespace-nowrap">Created</TableHead>
+                                <TableHead className="hidden sm:table-cell whitespace-nowrap">Expires</TableHead>
+                                <TableHead className="hidden sm:table-cell whitespace-nowrap">Last Used</TableHead>
                                 <TableHead className="text-right w-[80px]">Actions</TableHead>
                             </TableRow>
                         </TableHeader>
@@ -203,15 +203,15 @@ export function PersonalAccessTokensCard() {
                             ) : (
                                 tokens?.map((token) => (
                                     <TableRow key={token.id} className="hover:bg-muted/10 text-sm">
-                                        <TableCell className="font-medium">{token.name}</TableCell>
+                                        <TableCell className="font-medium whitespace-nowrap">{token.name}</TableCell>
                                         <TableCell className="font-mono text-xs text-muted-foreground">{token.preview}</TableCell>
-                                        <TableCell className="text-xs text-muted-foreground font-mono">
+                                        <TableCell className="text-xs text-muted-foreground font-mono hidden md:table-cell">
                                             {new Date(token.createdAt).toLocaleDateString()}
                                         </TableCell>
-                                        <TableCell className="text-xs text-muted-foreground font-mono">
+                                        <TableCell className="text-xs text-muted-foreground font-mono hidden sm:table-cell">
                                             {token.expiresAt ? new Date(token.expiresAt).toLocaleDateString() : 'Never'}
                                         </TableCell>
-                                        <TableCell className="text-xs text-muted-foreground font-mono">
+                                        <TableCell className="text-xs text-muted-foreground font-mono hidden sm:table-cell">
                                             {token.lastUsedAt ? new Date(token.lastUsedAt).toLocaleString() : 'Never'}
                                         </TableCell>
                                         <TableCell className="text-right">

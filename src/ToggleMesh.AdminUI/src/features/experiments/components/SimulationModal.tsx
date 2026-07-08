@@ -213,7 +213,7 @@ export function SimulationModal({ open, onOpenChange, projectId, envId, flagKey,
                         <DialogFooter>
                             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isLoading}>Cancel</Button>
                             <Button type="submit" disabled={isLoading} className="bg-emerald-600 hover:bg-emerald-700 text-white">
-                                {isLoading ? "Injecting..." : "⚡ Blast Traffic"}
+                                {isLoading ? "Injecting..." : "Blast Traffic"}
                             </Button>
                         </DialogFooter>
                     </form>

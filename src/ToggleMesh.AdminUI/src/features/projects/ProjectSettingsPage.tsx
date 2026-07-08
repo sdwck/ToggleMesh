@@ -32,9 +32,9 @@ export function ProjectSettingsPage() {
         <div className="space-y-5 pb-10">
             <div>
                 <h2 className="text-2xl font-bold tracking-tight">Project Settings</h2>
-                <div className="text-muted-foreground flex items-center gap-1 mt-1">
-                    Manage {isProjectLoading ? <Skeleton className="h-4 w-24" /> : <span className="font-semibold text-zinc-300">{project?.name}</span>} configuration, webhooks and integrations.
-                </div>
+                <p className="text-muted-foreground mt-1">
+                    Manage {isProjectLoading ? <Skeleton className="h-4 w-24 inline-block align-middle" /> : <span className="font-semibold text-zinc-300">{project?.name}</span>} configuration, webhooks and integrations.
+                </p>
             </div>
 
             <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-5">
@@ -53,7 +53,7 @@ export function ProjectSettingsPage() {
                 </TabsList>
 
                 <TabsContent value="general" className="m-0">
-                    <ProjectSettingsGeneralTab 
+                    <ProjectSettingsGeneralTab
                         project={project}
                         isProjectLoading={isProjectLoading}
                         flagsCount={flags?.length || 0}

@@ -132,7 +132,7 @@ export function FeatureFlagEditor({ flag, projectId, envId, open, onOpenChange, 
                     </div>
                     {import.meta.env.DEV && (
                         <Button variant="outline" size="sm" className="gap-2 border-emerald-500/30 text-emerald-500 hover:bg-emerald-500/10 mt-0 self-end" onClick={() => setSimOpen(true)}>
-                            🧪 Simulate Traffic
+                            Simulate Traffic
                         </Button>
                     )}
                 </SheetHeader>
@@ -176,76 +176,76 @@ export function FeatureFlagEditor({ flag, projectId, envId, open, onOpenChange, 
                                     />
                                 </div>
 
-                            <div className="space-y-4 px-2">
-                                <div className="flex items-center gap-2">
-                                    <Switch
-                                        checked={form.watch('isRolloutEnabled')}
-                                        onCheckedChange={(val) => {
-                                            form.setValue('isRolloutEnabled', val);
-                                        }}
-                                        disabled={flag.isExperimentActive || !canEditEnv}
-                                    />
-                                    <Label>Incremental Rollout</Label>
+                                <div className="space-y-4 px-2">
+                                    <div className="flex items-center gap-2">
+                                        <Switch
+                                            checked={form.watch('isRolloutEnabled')}
+                                            onCheckedChange={(val) => {
+                                                form.setValue('isRolloutEnabled', val);
+                                            }}
+                                            disabled={flag.isExperimentActive || !canEditEnv}
+                                        />
+                                        <Label>Incremental Rollout</Label>
+                                    </div>
+
+                                    {form.watch('isRolloutEnabled') && (
+                                        <div className="pl-12 pr-4 space-y-4">
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-sm text-muted-foreground">Percentage</span>
+                                                <div className="flex items-center text-sm font-medium">
+                                                    <input
+                                                        type="number"
+                                                        {...form.register('rolloutPercentage', { valueAsNumber: true })}
+                                                        disabled={flag.isExperimentActive || !canEditEnv}
+                                                        className={`w-[4ch] bg-transparent outline-none border-b border-dashed border-primary/40 hover:border-primary/80 focus:border-primary transition-colors text-center appearance-none [&::-webkit-inner-spin-button]:appearance-none ${flag.isExperimentActive || !canEditEnv ? 'cursor-not-allowed opacity-50' : 'cursor-text'}`}
+                                                        onBlur={(e) => {
+                                                            let val = parseInt(e.target.value || '0', 10);
+                                                            if (isNaN(val)) val = 0;
+                                                            val = Math.max(0, Math.min(100, val));
+                                                            form.setValue('rolloutPercentage', val);
+                                                        }}
+                                                        onKeyDown={(e) => {
+                                                            if (e.key === 'Enter') {
+                                                                e.preventDefault();
+                                                                e.currentTarget.blur();
+                                                            }
+                                                        }}
+                                                    />
+                                                    <span>%</span>
+                                                </div>
+                                            </div>
+                                            <Slider
+                                                value={[form.watch('rolloutPercentage') || 0]}
+                                                max={100}
+                                                step={1}
+                                                disabled={flag.isExperimentActive || !canEditEnv}
+                                                onValueChange={(val) => form.setValue('rolloutPercentage', val[0])}
+                                            />
+                                        </div>
+                                    )}
                                 </div>
 
-                                {form.watch('isRolloutEnabled') && (
-                                    <div className="pl-12 pr-4 space-y-4">
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-sm text-muted-foreground">Percentage</span>
-                                            <div className="flex items-center text-sm font-medium">
-                                                <input
-                                                    type="number"
-                                                    {...form.register('rolloutPercentage', { valueAsNumber: true })}
-                                                    disabled={flag.isExperimentActive || !canEditEnv}
-                                                    className={`w-[4ch] bg-transparent outline-none border-b border-dashed border-primary/40 hover:border-primary/80 focus:border-primary transition-colors text-center appearance-none [&::-webkit-inner-spin-button]:appearance-none ${flag.isExperimentActive || !canEditEnv ? 'cursor-not-allowed opacity-50' : 'cursor-text'}`}
-                                                    onBlur={(e) => {
-                                                        let val = parseInt(e.target.value || '0', 10);
-                                                        if (isNaN(val)) val = 0;
-                                                        val = Math.max(0, Math.min(100, val));
-                                                        form.setValue('rolloutPercentage', val);
-                                                    }}
-                                                    onKeyDown={(e) => {
-                                                        if (e.key === 'Enter') {
-                                                            e.preventDefault();
-                                                            e.currentTarget.blur();
-                                                        }
-                                                    }}
-                                                />
-                                                <span>%</span>
-                                            </div>
-                                        </div>
-                                        <Slider
-                                            value={[form.watch('rolloutPercentage') || 0]}
-                                            max={100}
-                                            step={1}
-                                            disabled={flag.isExperimentActive || !canEditEnv}
-                                            onValueChange={(val) => form.setValue('rolloutPercentage', val[0])}
-                                        />
-                                    </div>
-                                )}
-                            </div>
+                                <Separator className="bg-border/40" />
 
-                            <Separator className="bg-border/40" />
+                                <div className="space-y-4 px-2">
+                                    <RulesConfigList
+                                        form={form}
+                                        control={form.control as any}
+                                        operators={operators}
+                                        isLoadingOperators={isLoadingOperators}
+                                        canEditEnv={canEditEnv && !flag.isExperimentActive}
+                                        disabled={flag.isExperimentActive}
+                                        emptyMessage="No targeting rules defined. The flag will be served based on the rollout percentage."
+                                        showInSegmentSpecialHandling={true}
+                                    />
+                                </div>
 
-                            <div className="space-y-4 px-2">
-                                <RulesConfigList
-                                    form={form}
-                                    control={form.control as any}
-                                    operators={operators}
-                                    isLoadingOperators={isLoadingOperators}
-                                    canEditEnv={canEditEnv && !flag.isExperimentActive}
-                                    disabled={flag.isExperimentActive}
-                                    emptyMessage="No targeting rules defined. The flag will be served based on the rollout percentage."
-                                    showInSegmentSpecialHandling={true}
-                                />
-                            </div>
-
-                            <SheetFooter className="mt-8 pt-4 border-t border-border/40">
-                                <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-                                <Button type="submit" disabled={updateFlag.isPending || flag.isExperimentActive || !canEditEnv}>
-                                    {updateFlag.isPending ? 'Saving...' : 'Save Changes'}
-                                </Button>
-                            </SheetFooter>
+                                <SheetFooter className="mt-8 pt-4 border-t border-border/40">
+                                    <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+                                    <Button type="submit" disabled={updateFlag.isPending || flag.isExperimentActive || !canEditEnv}>
+                                        {updateFlag.isPending ? 'Saving...' : 'Save Changes'}
+                                    </Button>
+                                </SheetFooter>
                             </form>
                         </Form>
                     </TabsContent>

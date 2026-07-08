@@ -129,7 +129,7 @@ export function OrganizationMembersTab({ activeOrganizationId, activeOrgName, us
         <div className="outline-none">
             <Card className="border-border/40 bg-zinc-950/20">
                 <CardHeader>
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                         <div className="flex items-center gap-2">
                             <Users className="h-4 w-4 text-muted-foreground" />
                             <CardTitle className="text-base">Members</CardTitle>
@@ -169,9 +169,9 @@ export function OrganizationMembersTab({ activeOrganizationId, activeOrgName, us
                                 return (
                                     <div
                                         key={member.userId}
-                                        className="flex items-center justify-between px-3 py-2.5 rounded-lg border border-border/20 hover:border-border/40 transition-colors"
+                                        className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 sm:px-4 sm:py-3 rounded-lg border border-border/20 hover:border-border/40 transition-colors gap-3 sm:gap-2"
                                     >
-                                        <div className="flex items-center gap-3 min-w-0">
+                                        <div className="flex items-center gap-3 w-full sm:w-auto min-w-0">
                                             <Avatar className="h-8 w-8 shrink-0">
                                                 <AvatarFallback className="bg-zinc-800 text-xs font-medium">
                                                     {member.email.charAt(0).toUpperCase()}
@@ -186,7 +186,7 @@ export function OrganizationMembersTab({ activeOrganizationId, activeOrgName, us
                                                 )}
                                             </span>
                                         </div>
-                                        <div className="flex items-center gap-2">
+                                        <div className="flex items-center gap-2 w-full sm:w-auto justify-end sm:justify-start">
                                             {!isSelf ? (
                                                 <div className="flex items-center gap-2">
                                                     <Select
@@ -250,22 +250,22 @@ export function OrganizationMembersTab({ activeOrganizationId, activeOrgName, us
                                     {invitations.map((invite) => (
                                         <div
                                             key={invite.id}
-                                            className="flex items-center justify-between px-3 py-2.5 rounded-lg border border-border/20 hover:border-border/40 transition-colors opacity-80"
+                                            className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 sm:px-4 sm:py-3 rounded-lg border border-border/20 hover:border-border/40 transition-colors opacity-80 gap-3 sm:gap-2"
                                         >
-                                            <div className="flex items-center gap-3 min-w-0">
+                                            <div className="flex items-center gap-3 w-full sm:w-auto min-w-0">
                                                 <Avatar className="h-8 w-8 shrink-0 border border-dashed border-zinc-600">
                                                     <AvatarFallback className="bg-zinc-900/50 text-xs font-medium text-muted-foreground">
                                                         {invite.email.charAt(0).toUpperCase()}
                                                     </AvatarFallback>
                                                 </Avatar>
-                                                <div className="flex flex-col">
+                                                <div className="flex flex-col min-w-0 w-full">
                                                     <span className="text-sm truncate">{invite.email}</span>
                                                     <span className="text-[10px] text-muted-foreground">
                                                         Invited on {new Date(invite.invitedAt).toLocaleDateString()}
                                                     </span>
                                                 </div>
                                             </div>
-                                            <div className="flex items-center gap-2">
+                                            <div className="flex items-center gap-2 w-full sm:w-auto justify-end sm:justify-start">
                                                 <RoleBadge role={invite.role} />
                                                 <Button
                                                     variant="ghost"

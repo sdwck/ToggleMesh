@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { Check, ChevronsUpDown } from 'lucide-react';
+import { Check, ChevronsUpDown, FolderGit2 } from 'lucide-react';
 import { useProjects } from '@/api/queries';
 import { useOrganizationStore } from '@/stores/useOrganizationStore';
 import { Button } from '@/components/ui/button';
@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Skeleton } from '@/components/ui/skeleton';
 
-export function ProjectSwitcher() {
+export function ProjectSwitcher({ variant = 'header' }: { variant?: 'header' | 'sidebar' }) {
     const { projectId } = useParams();
     const navigate = useNavigate();
     const location = useLocation();
@@ -41,11 +41,18 @@ export function ProjectSwitcher() {
         setDropdownOpen(false);
     };
 
+    const buttonClasses = variant === 'sidebar'
+        ? "w-full flex items-center justify-between h-11 px-3 border border-border/40 bg-zinc-950/50 hover:bg-zinc-900 rounded-md text-sm font-medium transition-colors shadow-sm"
+        : "h-9 px-2 text-lg font-bold tracking-tight hover:bg-zinc-900/50 flex items-center gap-1.5 focus-visible:ring-0";
+
     return (
         <DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen}>
             <DropdownMenuTrigger asChild>
-                <Button variant="ghost" role="combobox" className="h-9 px-2 text-lg font-bold tracking-tight hover:bg-zinc-900/50 flex items-center gap-1.5 focus-visible:ring-0">
-                    <span className="truncate">{activeProject?.name || 'Select Project...'}</span>
+                <Button variant="ghost" role="combobox" className={buttonClasses}>
+                    <div className="flex items-center gap-2 truncate">
+                        {variant === 'sidebar' && <FolderGit2 className="h-4 w-4 text-blue-500/70 shrink-0" />}
+                        <span className="truncate">{activeProject?.name || 'Select Project...'}</span>
+                    </div>
                     <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
                 </Button>
             </DropdownMenuTrigger>

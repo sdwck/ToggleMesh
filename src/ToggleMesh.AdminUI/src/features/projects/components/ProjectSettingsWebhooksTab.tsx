@@ -102,7 +102,7 @@ export function ProjectSettingsWebhooksTab({ projectId }: { projectId: string })
 
     return (
         <div className="space-y-6">
-            <div className="flex justify-between items-center">
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
                 <div>
                     <h3 className="text-lg font-medium">Outgoing Webhooks</h3>
                     <p className="text-sm text-muted-foreground">Deliver real-time payloads upon environment and flag changes.</p>
@@ -112,7 +112,7 @@ export function ProjectSettingsWebhooksTab({ projectId }: { projectId: string })
                     if (!open) setRevealedSecret(null);
                 }}>
                     <DialogTrigger asChild>
-                        <Button size="sm">
+                        <Button size="sm" className="self-start sm:self-auto">
                             <Plus className="mr-2 h-4 w-4" /> Add Webhook
                         </Button>
                     </DialogTrigger>
@@ -252,7 +252,8 @@ export function ProjectSettingsWebhooksTab({ projectId }: { projectId: string })
                         <TableRow>
                             <TableHead>Name / URL</TableHead>
                             <TableHead>Events</TableHead>
-                            <TableHead>Triggered</TableHead>
+                            <TableHead className="hidden md:table-cell">Triggered</TableHead>
+                            <TableHead className="hidden md:table-cell">Status</TableHead>
                             <TableHead className="text-right w-[80px]">Actions</TableHead>
                         </TableRow>
                     </TableHeader>
@@ -297,10 +298,10 @@ export function ProjectSettingsWebhooksTab({ projectId }: { projectId: string })
                                             </div>
                                         )}
                                     </TableCell>
-                                    <TableCell className="text-xs text-muted-foreground font-mono">
+                                    <TableCell className="hidden md:table-cell text-xs text-muted-foreground font-mono">
                                         {hook.lastTriggeredAt ? new Date(hook.lastTriggeredAt).toLocaleString() : 'Never'}
                                     </TableCell>
-                                    <TableCell>
+                                    <TableCell className="hidden md:table-cell">
                                         <div className="flex gap-2">
                                             {hook.status === WebhookStatus.Active && (
                                                 <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 text-[10px]">Active</Badge>

@@ -84,7 +84,7 @@ export function EnvironmentSegmentsTab({ projectId, environmentId, canManage }: 
 
     return (
         <Card className="border-border/40 bg-zinc-950/20">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0">
+            <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between space-y-4 sm:space-y-0">
                 <div>
                     <CardTitle className="flex items-center gap-2 text-lg">
                         <Users className="h-5 w-5 text-primary" />
@@ -95,7 +95,7 @@ export function EnvironmentSegmentsTab({ projectId, environmentId, canManage }: 
                     </CardDescription>
                 </div>
                 {canManage && (
-                    <Button onClick={() => setIsCreateOpen(true)} size="sm">
+                    <Button onClick={() => setIsCreateOpen(true)} size="sm" className="w-full sm:w-auto">
                         <Plus className="mr-2 h-4 w-4" />
                         Create Segment
                     </Button>
@@ -106,8 +106,8 @@ export function EnvironmentSegmentsTab({ projectId, environmentId, canManage }: 
                     <TableHeader>
                         <TableRow className="border-border/40">
                             <TableHead>Name</TableHead>
-                            <TableHead>Description</TableHead>
-                            <TableHead>Rules</TableHead>
+                            <TableHead className="hidden md:table-cell">Description</TableHead>
+                            <TableHead className="hidden sm:table-cell">Rules</TableHead>
                             {canManage && <TableHead className="text-right w-[80px]">Actions</TableHead>}
                         </TableRow>
                     </TableHeader>
@@ -116,8 +116,8 @@ export function EnvironmentSegmentsTab({ projectId, environmentId, canManage }: 
                             Array.from({ length: 3 }).map((_, i) => (
                                 <TableRow key={i} className="h-[53px] border-border/40">
                                     <TableCell><Skeleton className="h-5 w-[150px] rounded" /></TableCell>
-                                    <TableCell><Skeleton className="h-5 w-[250px] rounded" /></TableCell>
-                                    <TableCell><Skeleton className="h-5 w-16 rounded" /></TableCell>
+                                    <TableCell className="hidden md:table-cell"><Skeleton className="h-5 w-[250px] rounded" /></TableCell>
+                                    <TableCell className="hidden sm:table-cell"><Skeleton className="h-5 w-16 rounded" /></TableCell>
                                     {canManage && (
                                         <TableCell className="text-right">
                                             <MoreHorizontal className="h-4 w-4 text-zinc-800 ml-auto animate-pulse" />
@@ -139,8 +139,8 @@ export function EnvironmentSegmentsTab({ projectId, environmentId, canManage }: 
                                     }}
                                 >
                                     <TableCell className="font-medium text-primary">{segment.name}</TableCell>
-                                    <TableCell className="text-muted-foreground text-sm">{segment.description || 'No description'}</TableCell>
-                                    <TableCell className="text-muted-foreground text-xs font-mono">{segment.rules.length} rule(s)</TableCell>
+                                    <TableCell className="text-muted-foreground text-sm hidden md:table-cell">{segment.description || 'No description'}</TableCell>
+                                    <TableCell className="text-muted-foreground text-xs font-mono hidden sm:table-cell">{segment.rules.length} rule(s)</TableCell>
                                     {canManage && (
                                         <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                                             <DropdownMenu>

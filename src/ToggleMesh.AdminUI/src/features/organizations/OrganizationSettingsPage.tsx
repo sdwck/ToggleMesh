@@ -21,7 +21,7 @@ export function OrganizationSettingsPage() {
     const isAdmin = activeOrg?.role === OrganizationRole.Admin;
 
     const { data: members, isLoading } = useOrganizationMembers(isAdmin ? activeOrganizationId : null);
-    
+
     const [searchParams, setSearchParams] = useSearchParams();
     let currentTab = searchParams.get('tab') || 'general';
 
@@ -53,7 +53,7 @@ export function OrganizationSettingsPage() {
 
     return (
         <div className="space-y-8 animate-in fade-in duration-300">
-            <div className="flex items-center justify-between">
+            <div>
                 <div className="flex items-center gap-3">
                     <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
                         <Building2 className="h-5 w-5 text-primary" />
@@ -95,7 +95,7 @@ export function OrganizationSettingsPage() {
                 </TabsList>
 
                 <TabsContent value="general" className="space-y-6 outline-none">
-                    <OrganizationGeneralTab 
+                    <OrganizationGeneralTab
                         activeOrganizationId={activeOrganizationId}
                         activeOrgName={activeOrg?.name || ''}
                         isAdmin={isAdmin}
@@ -106,7 +106,7 @@ export function OrganizationSettingsPage() {
 
                 {isAdmin && (
                     <TabsContent value="members" className="outline-none">
-                        <OrganizationMembersTab 
+                        <OrganizationMembersTab
                             activeOrganizationId={activeOrganizationId}
                             activeOrgName={activeOrg?.name || ''}
                             userEmail={userEmail}

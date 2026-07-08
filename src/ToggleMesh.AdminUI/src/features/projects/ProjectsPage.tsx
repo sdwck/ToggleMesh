@@ -8,6 +8,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { CreateProjectDialog } from './components/CreateProjectDialog';
 import { ProjectCard } from './components/ProjectCard';
 
+import { OrganizationSwitcher } from '@/components/layout/OrganizationSwitcher';
+
 export function ProjectsPage() {
     const { activeOrganizationId } = useOrganizationStore();
     const { data: projects, isLoading } = useProjects(activeOrganizationId);
@@ -15,11 +17,15 @@ export function ProjectsPage() {
     const [isCreateProjectOpen, setIsCreateProjectOpen] = useState(false);
 
     return (
-        <div className="p-8 max-w-[1400px] mx-auto w-full">
-            <div className="flex items-center justify-between mb-8">
+        <div className="p-4 sm:p-8 max-w-[1400px] mx-auto w-full">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
                 <div>
-                    <h1 className="text-2xl font-bold tracking-tight">Projects</h1>
-                    <p className="text-muted-foreground text-sm mt-1">Manage your workspace projects and environments.</p>
+                    <div className="flex items-center gap-3">
+                        <h1 className="text-2xl font-bold tracking-tight">Projects</h1>
+                        <div className="h-6 border-l border-border/40 mx-1"></div>
+                        <OrganizationSwitcher />
+                    </div>
+                    <p className="text-muted-foreground text-sm mt-2">Manage your workspace projects and environments.</p>
                 </div>
 
                 <CreateProjectDialog 

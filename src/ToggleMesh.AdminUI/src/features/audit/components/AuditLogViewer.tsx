@@ -43,8 +43,8 @@ export function AuditLogViewer({
     environmentId, 
     pageSize = 10, 
     hideExport = false,
-    className = "space-y-4 pb-2",
-    tableContainerClassName = "overflow-auto pr-0.5 min-h-[32rem]"
+    className = "space-y-4 pb-2 h-full flex flex-col",
+    tableContainerClassName = "overflow-auto flex-1 min-h-0"
 }: AuditLogViewerProps) {
     const [filterAction, setFilterAction] = useState<string>('all');
     const [filterEntity, setFilterEntity] = useState<string>('all');

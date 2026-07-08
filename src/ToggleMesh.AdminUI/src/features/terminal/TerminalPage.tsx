@@ -126,25 +126,47 @@ export function TerminalPage() {
 
     return (
         <div className="flex flex-col h-full bg-zinc-950 border border-border/40 rounded-xl overflow-hidden shadow-2xl">
-            <div className="flex items-center justify-between p-3 border-b border-border/40 bg-zinc-900/50">
-                <div className="flex items-center gap-4">
-                    <div className="flex items-center gap-2 text-zinc-400">
-                        <Terminal className="w-4 h-4 text-primary" />
-                        <span className="text-sm font-semibold tracking-wider uppercase">Live Tail</span>
+            <div className="flex flex-col xl:flex-row items-start xl:items-center justify-between p-3 border-b border-border/40 bg-zinc-900/50 gap-4">
+                <div className="flex flex-col lg:flex-row items-start lg:items-center gap-4 w-full xl:w-auto">
+                    <div className="flex items-center justify-between w-full lg:w-auto">
+                        <div className="flex items-center gap-2 text-zinc-400">
+                            <Terminal className="w-4 h-4 text-primary shrink-0" />
+                            <span className="text-sm font-semibold tracking-wider uppercase shrink-0">Live Tail</span>
+                        </div>
+                        <div className="lg:hidden flex items-center gap-2 shrink-0">
+                            <Button
+                                variant={isPaused ? "default" : "secondary"}
+                                size="sm"
+                                className="h-8 px-2 sm:px-3 text-xs gap-1.5"
+                                onClick={() => setIsPaused(!isPaused)}
+                            >
+                                {isPaused ? <Play className="w-3.5 h-3.5" /> : <Pause className="w-3.5 h-3.5" />}
+                                <span className="hidden sm:inline">{isPaused ? 'Resume' : 'Pause'}</span>
+                            </Button>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 px-2 sm:px-3 text-xs gap-1.5 text-zinc-400 hover:text-red-400 hover:bg-red-500/10"
+                                onClick={handleClear}
+                            >
+                                <Trash2 className="w-3.5 h-3.5" />
+                                <span className="hidden sm:inline">Clear</span>
+                            </Button>
+                        </div>
                     </div>
 
-                    <div className="h-4 w-px bg-border/50 mx-2" />
+                    <div className="hidden lg:block h-4 w-px bg-border/50 mx-2 shrink-0" />
 
                     <Form {...form}>
-                        <form className="flex items-center gap-4" onSubmit={(e) => e.preventDefault()}>
+                        <form className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full" onSubmit={(e) => e.preventDefault()}>
                             <FormField
                                 control={form.control}
                                 name="environmentId"
                                 render={({ field }) => (
-                                    <FormItem className="space-y-0">
+                                    <FormItem className="space-y-0 w-full sm:w-[180px] shrink-0">
                                         <FormControl>
                                             <Select value={field.value} onValueChange={field.onChange}>
-                                                <SelectTrigger className="w-[180px] h-8 text-xs bg-zinc-950 border-zinc-800">
+                                                <SelectTrigger className="w-full h-8 text-xs bg-zinc-950 border-zinc-800">
                                                     <SelectValue placeholder="Select Environment" />
                                                 </SelectTrigger>
                                                 <SelectContent>
@@ -160,13 +182,13 @@ export function TerminalPage() {
                                 )}
                             />
 
-                            <div className="flex items-center bg-zinc-950 border border-zinc-800 rounded-md p-0.5 h-8">
+                            <div className="flex items-center bg-zinc-950 border border-zinc-800 rounded-md p-0.5 h-8 w-full sm:w-auto shrink-0">
                                 <Button
                                     type="button"
                                     variant="ghost"
                                     size="sm"
                                     onClick={() => setShowEval(!showEval)}
-                                    className={`h-6 px-2 text-[11px] font-mono rounded-sm rounded-r-none transition-all ${showEval ? 'bg-blue-500/20 text-blue-300' : 'text-zinc-600 hover:text-zinc-400'
+                                    className={`flex-1 sm:flex-none h-6 px-2 text-[11px] font-mono rounded-sm rounded-r-none transition-all ${showEval ? 'bg-blue-500/20 text-blue-300' : 'text-zinc-600 hover:text-zinc-400'
                                         }`}
                                 >
                                     EVAL
@@ -176,7 +198,7 @@ export function TerminalPage() {
                                     variant="ghost"
                                     size="sm"
                                     onClick={() => setShowTrack(!showTrack)}
-                                    className={`h-6 px-2 text-[11px] font-mono rounded-sm rounded-l-none transition-all ${showTrack ? 'bg-purple-500/20 text-purple-300' : 'text-zinc-600 hover:text-zinc-400'
+                                    className={`flex-1 sm:flex-none h-6 px-2 text-[11px] font-mono rounded-sm rounded-l-none transition-all ${showTrack ? 'bg-purple-500/20 text-purple-300' : 'text-zinc-600 hover:text-zinc-400'
                                         }`}
                                 >
                                     TRACK
@@ -187,13 +209,13 @@ export function TerminalPage() {
                                 control={form.control}
                                 name="filterKey"
                                 render={({ field }) => (
-                                    <FormItem className="space-y-0">
+                                    <FormItem className="space-y-0 w-full sm:w-[200px]">
                                         <FormControl>
                                             <div className="relative">
                                                 <Filter className="absolute left-2.5 top-2 h-3.5 w-3.5 text-zinc-500" />
                                                 <Input
                                                     placeholder="Filter by flag or event..."
-                                                    className="h-8 w-[200px] pl-8 text-xs bg-zinc-950 border-zinc-800 focus-visible:ring-primary/50"
+                                                    className="h-8 w-full pl-8 text-xs bg-zinc-950 border-zinc-800 focus-visible:ring-primary/50"
                                                     {...field}
                                                     value={field.value || ''}
                                                 />
@@ -206,7 +228,7 @@ export function TerminalPage() {
                     </Form>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="hidden lg:flex items-center gap-2 shrink-0">
                     <Button
                         variant={isPaused ? "default" : "secondary"}
                         size="sm"

@@ -82,13 +82,13 @@ export function RulesConfigList({
                                                 AND
                                             </div>
                                         )}
-                                        <div className="flex items-start gap-3">
+                                        <div className="flex flex-col sm:flex-row sm:items-start gap-3 relative pr-8 sm:pr-0">
                                             {showInSegmentSpecialHandling && form.watch(`${name}.${field.index}.operator`) === 'InSegment' ? (
-                                                <div className="flex-1 flex items-center h-9 px-3 border border-border/40 rounded-md bg-muted/30 text-sm text-muted-foreground shadow-sm">
+                                                <div className="flex-1 w-full flex items-center h-9 px-3 border border-border/40 rounded-md bg-muted/30 text-sm text-muted-foreground shadow-sm">
                                                     User Context
                                                 </div>
                                             ) : (
-                                                <div className="flex-1 space-y-2">
+                                                <div className="flex-1 w-full space-y-2">
                                                     <FormField
                                                         control={control}
                                                         name={`${name}.${field.index}.attribute`}
@@ -110,7 +110,7 @@ export function RulesConfigList({
                                                 </div>
                                             )}
 
-                                            <div className="w-[180px]">
+                                            <div className="w-full sm:w-[180px]">
                                                 <FormField
                                                     control={control}
                                                     name={`${name}.${field.index}.operator`}
@@ -139,7 +139,7 @@ export function RulesConfigList({
                                                 />
                                             </div>
 
-                                            <div className="flex-1 space-y-2">
+                                            <div className="flex-1 w-full space-y-2">
                                                 <FormField
                                                     control={control}
                                                     name={`${name}.${field.index}.value`}
@@ -165,7 +165,7 @@ export function RulesConfigList({
                                                     type="button"
                                                     variant="ghost"
                                                     size="icon"
-                                                    className="text-muted-foreground hover:text-destructive shrink-0"
+                                                    className="text-muted-foreground hover:text-destructive shrink-0 absolute right-0 top-0 sm:static"
                                                     onClick={() => remove(field.index)}
                                                 >
                                                     <Trash2 className="h-4 w-4" />

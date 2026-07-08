@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useProjectDashboard } from '@/api/queries';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Activity, AlertTriangle, Network, Flag, TrendingUp, ArrowRight, Sparkles } from 'lucide-react';
+import { Activity, AlertTriangle, Network, Flag, TrendingUp, ArrowRight, Sparkles, BarChart2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { Badge } from '@/components/ui/badge';
@@ -64,7 +64,7 @@ export function ProjectDashboardPage() {
 
     return (
         <div className="space-y-4 -mt-2 animate-in fade-in-50 duration-500">
-            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
                 <Card className="bg-zinc-950/50 border-border/40 hover:bg-zinc-900/50 transition-colors">
                     <CardHeader className="flex flex-row items-center justify-between pb-2">
                         <CardTitle className="text-sm font-medium text-muted-foreground">Active Flags</CardTitle>
@@ -152,8 +152,15 @@ export function ProjectDashboardPage() {
                     </CardHeader>
                     <CardContent className="px-2 sm:px-6">
                         <div className="h-[350px] w-full mt-4">
-                            <ResponsiveContainer width="100%" height="100%" minHeight={1}>
-                                <AreaChart data={chartData} margin={CHART_MARGIN}>
+                            {totalEvaluations === 0 ? (
+                                <div className="h-full w-full flex flex-col items-center justify-center text-muted-foreground bg-zinc-950/20 rounded-xl border border-dashed border-border/40">
+                                    <BarChart2 className="h-10 w-10 text-muted-foreground/30 mb-3" />
+                                    <p className="text-sm font-medium text-zinc-300">No Evaluation Data</p>
+                                    <p className="text-xs text-zinc-500 max-w-[250px] text-center mt-1">There have been no SDK flag evaluations in the last 24 hours.</p>
+                                </div>
+                            ) : (
+                                <ResponsiveContainer width="100%" height="100%" minHeight={1}>
+                                    <AreaChart data={chartData} margin={CHART_MARGIN}>
                                     <defs>
                                         <linearGradient id="colorCount" x1="0" y1="0" x2="0" y2="1">
                                             <stop offset="5%" stopColor="#2563eb" stopOpacity={0.3} />
@@ -195,6 +202,7 @@ export function ProjectDashboardPage() {
                                     />
                                 </AreaChart>
                             </ResponsiveContainer>
+                            )}
                         </div>
                     </CardContent>
                 </Card>

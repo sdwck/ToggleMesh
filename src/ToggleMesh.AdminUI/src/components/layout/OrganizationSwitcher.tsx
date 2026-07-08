@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Check, ChevronsUpDown, Plus } from 'lucide-react';
+import { Check, ChevronsUpDown, Plus, Building2 } from 'lucide-react';
 import { useOrganizations, useCreateOrganization, useSystemConfig } from '@/api/queries';
 import { useOrganizationStore } from '@/stores/useOrganizationStore';
 import { Button } from '@/components/ui/button';
@@ -24,7 +24,7 @@ import {
 } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 
-export function OrganizationSwitcher() {
+export function OrganizationSwitcher({ variant = 'header' }: { variant?: 'header' | 'sidebar' }) {
     const navigate = useNavigate();
     const { data: organizations, isLoading } = useOrganizations();
     const createOrganization = useCreateOrganization();
@@ -70,12 +70,19 @@ export function OrganizationSwitcher() {
         }
     };
 
+    const buttonClasses = variant === 'sidebar'
+        ? "w-full flex items-center justify-between h-11 px-3 border border-border/40 bg-zinc-950/50 hover:bg-zinc-900 rounded-md text-sm font-medium transition-colors shadow-sm"
+        : "h-9 px-2 text-lg font-bold tracking-tight hover:bg-zinc-900/50 flex items-center gap-1.5 focus-visible:ring-0";
+
     return (
         <>
             <DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen}>
                 <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" role="combobox" className="h-9 px-2 text-lg font-bold tracking-tight hover:bg-zinc-900/50 flex items-center gap-1.5 focus-visible:ring-0">
-                        <span className="truncate">{activeOrg?.name || 'Select Organization...'}</span>
+                    <Button variant="ghost" role="combobox" className={buttonClasses}>
+                        <div className="flex items-center gap-2 truncate">
+                            {variant === 'sidebar' && <Building2 className="h-4 w-4 text-emerald-500/70 shrink-0" />}
+                            <span className="truncate">{activeOrg?.name || 'Select Organization...'}</span>
+                        </div>
                         <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
                     </Button>
                 </DropdownMenuTrigger>

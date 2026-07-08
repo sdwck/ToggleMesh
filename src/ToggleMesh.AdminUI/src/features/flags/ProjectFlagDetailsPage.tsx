@@ -119,20 +119,15 @@ export function ProjectFlagDetailsPage() {
                     <ArrowLeft className="mr-2 h-4 w-4" />
                     Back to Flags
                 </Button>
-                <div className="h-4 w-px bg-border/40 mx-1"></div>
-                <Button variant="ghost" size="sm" className="text-muted-foreground cursor-pointer" onClick={() => navigate(`/projects/${projectId}`)}>
-                    <Activity className="mr-2 h-4 w-4" />
-                    Dashboard
-                </Button>
             </div>
 
             <Card className="border-border/40 bg-zinc-950/20">
-                <CardContent className="p-6 flex items-start justify-between">
-                    <div className="space-y-3 flex-1">
-                        <div className="flex items-center gap-2">
-                            <h2 className="text-2xl font-bold tracking-tight font-mono">{flag.key}</h2>
+                <CardContent className="p-4 sm:p-6 flex items-start justify-between gap-4">
+                    <div className="space-y-3 flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                            <h2 className="text-xl sm:text-2xl font-bold tracking-tight font-mono break-all">{flag.key}</h2>
                             {flag.isClientSideExposed && (
-                                <Badge variant="secondary" className="bg-primary/10 text-primary text-[10px]">Client Side</Badge>
+                                <Badge variant="secondary" className="bg-primary/10 text-primary text-[10px] shrink-0">Client Side</Badge>
                             )}
                         </div>
                         {flag.name && <h4 className="font-semibold text-sm">{flag.name}</h4>}

@@ -137,14 +137,14 @@ enabled := client.IsEnabled("new-feature", false, "user_123", context)`;
                     <TabsContent value="csharp" className="space-y-4">
                         <div className="space-y-1">
                             <h4 className="text-xs font-semibold text-muted-foreground uppercase">1. Install Package</h4>
-                            <pre className="bg-zinc-900/60 p-3 rounded-md font-mono text-xs border border-border/10 text-emerald-400">
+                            <pre className="bg-zinc-900/60 p-3 pr-10 overflow-x-auto whitespace-pre rounded-md font-mono text-xs border border-border/10 text-emerald-400">
                                 dotnet add package ToggleMesh.SDK
                             </pre>
                         </div>
                         <div className="space-y-1">
                             <h4 className="text-xs font-semibold text-muted-foreground uppercase">2. Register Client</h4>
                             <div className="relative">
-                                <pre className="bg-zinc-900/60 p-4 rounded-md font-mono text-xs overflow-auto border border-border/10 text-emerald-400">
+                                <pre className="bg-zinc-900/60 p-4 pr-10 overflow-x-auto whitespace-pre rounded-md font-mono text-xs border border-border/10 text-emerald-400">
                                     {csharpRegisterCode}
                                 </pre>
                                 <Button variant="ghost" size="icon" onClick={() => copyText(csharpRegisterCode)} className="absolute top-2 right-2 h-7 w-7 text-muted-foreground hover:text-foreground">
@@ -154,7 +154,7 @@ enabled := client.IsEnabled("new-feature", false, "user_123", context)`;
                             <div className="space-y-1 mt-4">
                                 <h4 className="text-xs font-semibold text-muted-foreground uppercase">3. Use Client</h4>
                                 <div className="relative">
-                                    <pre className="bg-zinc-900/60 p-4 rounded-md font-mono text-xs overflow-auto border border-border/10 text-emerald-400">
+                                    <pre className="bg-zinc-900/60 p-4 pr-10 overflow-x-auto whitespace-pre rounded-md font-mono text-xs border border-border/10 text-emerald-400">
                                         {csharpUsageCode}
                                     </pre>
                                     <Button variant="ghost" size="icon" onClick={() => copyText(csharpUsageCode)} className="absolute top-2 right-2 h-7 w-7 text-muted-foreground hover:text-foreground">
@@ -175,7 +175,7 @@ enabled := client.IsEnabled("new-feature", false, "user_123", context)`;
                         <div className="space-y-1">
                             <h4 className="text-xs font-semibold text-muted-foreground uppercase">2. Initialize Client</h4>
                             <div className="relative">
-                                <pre className="bg-zinc-900/60 p-4 rounded-md font-mono text-xs overflow-auto border border-border/10 text-emerald-400">
+                                <pre className="bg-zinc-900/60 p-4 pr-10 overflow-x-auto whitespace-pre rounded-md font-mono text-xs border border-border/10 text-emerald-400">
                                     {typescriptRegisterCode}
                                 </pre>
                                 <Button variant="ghost" size="icon" onClick={() => copyText(typescriptRegisterCode)} className="absolute top-2 right-2 h-7 w-7 text-muted-foreground hover:text-foreground">
@@ -186,7 +186,7 @@ enabled := client.IsEnabled("new-feature", false, "user_123", context)`;
                         <div className="space-y-1 mt-4">
                             <h4 className="text-xs font-semibold text-muted-foreground uppercase">3. Use Client</h4>
                             <div className="relative">
-                                <pre className="bg-zinc-900/60 p-4 rounded-md font-mono text-xs overflow-auto border border-border/10 text-emerald-400">
+                                <pre className="bg-zinc-900/60 p-4 pr-10 overflow-x-auto whitespace-pre rounded-md font-mono text-xs border border-border/10 text-emerald-400">
                                     {typescriptUsageCode}
                                 </pre>
                                 <Button variant="ghost" size="icon" onClick={() => copyText(typescriptUsageCode)} className="absolute top-2 right-2 h-7 w-7 text-muted-foreground hover:text-foreground">
@@ -206,7 +206,7 @@ enabled := client.IsEnabled("new-feature", false, "user_123", context)`;
                         <div className="space-y-1">
                             <h4 className="text-xs font-semibold text-muted-foreground uppercase">2. Use Client</h4>
                             <div className="relative">
-                                <pre className="bg-zinc-900/60 p-4 rounded-md font-mono text-xs overflow-auto border border-border/10 text-emerald-400">
+                                <pre className="bg-zinc-900/60 p-4 pr-10 overflow-x-auto whitespace-pre rounded-md font-mono text-xs border border-border/10 text-emerald-400">
                                     {nodeRegisterCode}
                                 </pre>
                                 <Button variant="ghost" size="icon" onClick={() => copyText(nodeRegisterCode)} className="absolute top-2 right-2 h-7 w-7 text-muted-foreground hover:text-foreground">
@@ -226,7 +226,7 @@ enabled := client.IsEnabled("new-feature", false, "user_123", context)`;
                         <div className="space-y-1">
                             <h4 className="text-xs font-semibold text-muted-foreground uppercase">2. Use Client</h4>
                             <div className="relative">
-                                <pre className="bg-zinc-900/60 p-4 rounded-md font-mono text-xs overflow-auto border border-border/10 text-emerald-400">
+                                <pre className="bg-zinc-900/60 p-4 pr-10 overflow-x-auto whitespace-pre rounded-md font-mono text-xs border border-border/10 text-emerald-400">
                                     {pythonRegisterCode}
                                 </pre>
                                 <Button variant="ghost" size="icon" onClick={() => copyText(pythonRegisterCode)} className="absolute top-2 right-2 h-7 w-7 text-muted-foreground hover:text-foreground">
@@ -246,7 +246,7 @@ enabled := client.IsEnabled("new-feature", false, "user_123", context)`;
                         <div className="space-y-1">
                             <h4 className="text-xs font-semibold text-muted-foreground uppercase">2. Use Client</h4>
                             <div className="relative">
-                                <pre className="bg-zinc-900/60 p-4 rounded-md font-mono text-xs overflow-auto border border-border/10 text-emerald-400">
+                                <pre className="bg-zinc-900/60 p-4 pr-10 overflow-x-auto whitespace-pre rounded-md font-mono text-xs border border-border/10 text-emerald-400">
                                     {goRegisterCode}
                                 </pre>
                                 <Button variant="ghost" size="icon" onClick={() => copyText(goRegisterCode)} className="absolute top-2 right-2 h-7 w-7 text-muted-foreground hover:text-foreground">
@@ -260,7 +260,7 @@ enabled := client.IsEnabled("new-feature", false, "user_123", context)`;
                         <div className="space-y-1">
                             <h4 className="text-xs font-semibold text-muted-foreground uppercase">Configuration</h4>
                             <div className="relative">
-                                <pre className="bg-zinc-900/60 p-4 rounded-md font-mono text-xs overflow-auto border border-border/10 text-emerald-400">
+                                <pre className="bg-zinc-900/60 p-4 pr-10 overflow-x-auto whitespace-pre rounded-md font-mono text-xs border border-border/10 text-emerald-400">
                                     {unrealRegisterCode}
                                 </pre>
                                 <Button variant="ghost" size="icon" onClick={() => copyText(unrealRegisterCode)} className="absolute top-2 right-2 h-7 w-7 text-muted-foreground hover:text-foreground">
