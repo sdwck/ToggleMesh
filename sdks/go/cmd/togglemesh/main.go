@@ -171,7 +171,7 @@ func handleSync(args []string) {
 	} else {
 		req.Header.Set("x-api-key", finalKey)
 	}
-	req.Header.Set("x-sdk-version", "go-cli-0.2.4")
+	req.Header.Set("x-sdk-version", "go-cli-0.3.0")
 
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)

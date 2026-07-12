@@ -4,6 +4,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"golang.org/x/mod/semver"
 )
 
 type RuleOperator interface {
@@ -21,6 +23,10 @@ var operatorMap = map[string]RuleOperator{
 	"startswith":             &StartsWithOperator{},
 	"endswith":               &EndsWithOperator{},
 	"regex":                  &RegexOperator{},
+	"inlist":                 &InOperator{},
+	"semverequal":            &SemverEqualsOperator{},
+	"semvergreaterthan":      &SemverGreaterThanOperator{},
+	"semverlessthan":         &SemverLessThanOperator{},
 }
 
 func getOperator(name string) RuleOperator {
@@ -111,4 +117,54 @@ type InSegmentOperator struct {
 }
 func (o *InSegmentOperator) Evaluate(ctx string, val any) bool {
 	return false
+}
+
+type InOperator struct{}
+func (o *InOperator) Evaluate(ctx string, val any) bool {
+	listStr, ok := val.(string)
+	if !ok {
+		return false
+	}
+	parts := strings.Split(listStr, ",")
+	for _, p := range parts {
+		if strings.TrimSpace(p) == ctx {
+			return true
+		}
+	}
+	return false
+}
+
+func normalizeSemver(v string) string {
+	v = strings.TrimSpace(v)
+	if !strings.HasPrefix(v, "v") {
+		return "v" + v
+	}
+	return v
+}
+
+type SemverEqualsOperator struct{}
+func (o *SemverEqualsOperator) Evaluate(ctx string, val any) bool {
+	valStr, ok := val.(string)
+	if !ok {
+		return false
+	}
+	return semver.Compare(normalizeSemver(ctx), normalizeSemver(valStr)) == 0
+}
+
+type SemverGreaterThanOperator struct{}
+func (o *SemverGreaterThanOperator) Evaluate(ctx string, val any) bool {
+	valStr, ok := val.(string)
+	if !ok {
+		return false
+	}
+	return semver.Compare(normalizeSemver(ctx), normalizeSemver(valStr)) > 0
+}
+
+type SemverLessThanOperator struct{}
+func (o *SemverLessThanOperator) Evaluate(ctx string, val any) bool {
+	valStr, ok := val.(string)
+	if !ok {
+		return false
+	}
+	return semver.Compare(normalizeSemver(ctx), normalizeSemver(valStr)) < 0
 }

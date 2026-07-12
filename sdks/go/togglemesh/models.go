@@ -20,21 +20,31 @@ type ToggleMeshOptions struct {
 	HTTPClient               *http.Client
 }
 
+type VariationWeight struct {
+	VariationID string `json:"variationId"`
+	Weight      int    `json:"weight"`
+}
+
 type RuleDto struct {
-	GroupID   int    `json:"groupId"`
-	Attribute string `json:"attribute"`
-	Operator  string `json:"operator"`
-	Value     string `json:"value"`
+	Priority  int               `json:"priority"`
+	GroupID   int               `json:"groupId"`
+	Attribute string            `json:"attribute"`
+	Operator  string            `json:"operator"`
+	Value     string            `json:"value"`
+	Rollout   []VariationWeight `json:"rollout"`
 }
 
 type FeatureFlagDto struct {
-	Key                  string         `json:"key"`
-	IsEnabled            bool           `json:"isEnabled"`
-	IsExperimentActive   bool           `json:"isExperimentActive"`
-	RolloutPercentage    *int           `json:"rolloutPercentage"`
-	ContextPartitionKeys []string       `json:"contextPartitionKeys"`
-	ContextualRollouts   map[string]int `json:"contextualRollouts"`
-	Rules                []RuleDto      `json:"rules"`
+	Key                  string                       `json:"key"`
+	IsEnabled            bool                         `json:"isEnabled"`
+	IsExperimentActive   bool                         `json:"isExperimentActive"`
+	Rules                []RuleDto                    `json:"rules"`
+	OffVariationID       *string                      `json:"offVariationId"`
+	FallthroughRollout   []VariationWeight            `json:"fallthroughRollout"`
+	Variations           map[string]string            `json:"variations"`
+	ContextualRollouts   map[string][]VariationWeight `json:"contextualRollouts"`
+	ContextPartitionKeys []string                     `json:"contextPartitionKeys"`
+	IndividualTargets    map[string]string            `json:"individualTargets"`
 }
 
 type SegmentDto struct {

@@ -12,7 +12,7 @@ This SDK is designed for **Server-Side environments**, leveraging secure **Local
 *   **Real-time SSE Synchronization:** Flag updates are instantly pushed from the server to your Go application.
 *   **Analytics Event Tracking:** Send custom telemetry and experiment conversions seamlessly:
     ```go
-    client.TrackEvent("video_played", 1.0, "user_123", context)
+    client.Track("video_played", togglemesh.WithIdentity("user_123"), togglemesh.WithEventValue(1.0))
     ```
 *   **Native Go Code Generation CLI:** Generate strongly-typed Go constants from your server flags directly via `go generate`.
 
@@ -69,19 +69,14 @@ package main
 import (
 	"fmt"
 	"time"
-
 	"github.com/sdwck/ToggleMesh/sdks/go/togglemesh"
 )
 
 func main() {
-	options := &togglemesh.ToggleMeshOptions{
-		BaseURL: "https://api.togglemesh.dev",
-		APIKey:  "tm_server_your_api_key_here", // Requires Server Key
-		// Optional logger
-		// Logger: slog.Default(), 
-	}
-
-	client, err := togglemesh.NewClient(options)
+	client, err := togglemesh.NewClient(
+		togglemesh.WithAPIKey("tm_server_your_api_key_here"),
+		togglemesh.WithBaseURL("https://api.togglemesh.dev"),
+	)
 	if err != nil {
 		panic(fmt.Errorf("failed to initialize ToggleMesh client: %v", err))
 	}
@@ -106,7 +101,10 @@ Evaluate flags in memory instantly using `IsEnabled`. You can pass user context 
     }
 
     // IsEnabled evaluates instantly in memory
-    enabled := client.IsEnabled(flagKey, false, uid, context)
+    enabled := client.IsEnabled(flagKey, false, 
+        togglemesh.WithIdentity(uid),
+        togglemesh.WithContext(context),
+    )
     
     if enabled {
         fmt.Println("New Feature Enabled!")
@@ -123,7 +121,11 @@ To track metrics, goal conversions, or Multi-Armed Bandit experiment outcomes, u
 
 ```go
 // Track that a user completed a specific action (e.g., played a video)
-client.TrackEvent("video_played", 1.0, uid, context)
+client.Track("video_played", 
+    togglemesh.WithIdentity(uid),
+    togglemesh.WithEventValue(1.0),
+    togglemesh.WithContext(context),
+)
 ```
 
 ---

@@ -29,7 +29,7 @@ func (c *ToggleMeshClient) syncState() error {
 	}
 
 	req.Header.Set("x-api-key", c.options.APIKey)
-	req.Header.Set("x-sdk-version", "go-0.2.4")
+	req.Header.Set("x-sdk-version", "go-0.3.0")
 
 	resp, err := c.options.HTTPClient.Do(req)
 	if err != nil {
@@ -49,7 +49,7 @@ func (c *ToggleMeshClient) syncState() error {
 	c.mu.Lock()
 	c.flagsCache = make(map[string]CachedFlag)
 	for _, f := range data.Flags {
-		parsed := make(map[string]int)
+		parsed := make(map[string][]VariationWeight)
 		if len(f.ContextPartitionKeys) > 0 && f.ContextualRollouts != nil {
 			for k, v := range f.ContextualRollouts {
 				var d map[string]any
@@ -70,7 +70,6 @@ func (c *ToggleMeshClient) syncState() error {
 		c.flagsCache[f.Key] = CachedFlag{
 			Key:                      f.Key,
 			IsEnabled:                f.IsEnabled,
-			RolloutPercentage:        f.RolloutPercentage,
 			ContextualRollouts:       f.ContextualRollouts,
 			ParsedContextualRollouts: parsed,
 			IsExperimentActive:       f.IsExperimentActive,
@@ -133,13 +132,32 @@ func (c *ToggleMeshClient) LoadFallback() {
 	c.mu.Lock()
 	c.flagsCache = make(map[string]CachedFlag)
 	for _, f := range data.Flags {
+		parsed := make(map[string][]VariationWeight)
+		if len(f.ContextPartitionKeys) > 0 && f.ContextualRollouts != nil {
+			for k, v := range f.ContextualRollouts {
+				var d map[string]any
+				if err := json.Unmarshal([]byte(k), &d); err == nil {
+					var parts []string
+					for _, key := range f.ContextPartitionKeys {
+						if val, ok := d[key]; ok {
+							parts = append(parts, fmt.Sprintf("%v", val))
+						} else {
+							parts = append(parts, "null")
+						}
+					}
+					parsed[strings.Join(parts, "|")] = v
+				}
+			}
+		}
+		
 		c.flagsCache[f.Key] = CachedFlag{
-			Key:                f.Key,
-			IsEnabled:          f.IsEnabled,
-			RolloutPercentage:  f.RolloutPercentage,
-			IsExperimentActive: f.IsExperimentActive,
-			Groups:             c.ruleEngine.CompileRules(f.Rules),
-			OriginalDto:        f,
+			Key:                      f.Key,
+			IsEnabled:                f.IsEnabled,
+			ContextualRollouts:       f.ContextualRollouts,
+			ParsedContextualRollouts: parsed,
+			IsExperimentActive:       f.IsExperimentActive,
+			Groups:                   c.ruleEngine.CompileRules(f.Rules),
+			OriginalDto:              f,
 		}
 	}
 	c.segmentsCache = make(map[string]CachedSegment)

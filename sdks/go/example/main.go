@@ -2,14 +2,21 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"time"
 	"github.com/sdwck/ToggleMesh/sdks/go/togglemesh"
 )
 
 func main() {
+	apiKey := os.Getenv("TOGGLEMESH_API_KEY")
+	if apiKey == "" {
+		fmt.Println("TOGGLEMESH_API_KEY environment variable is required.")
+		os.Exit(1)
+	}
+
 	options := &togglemesh.ToggleMeshOptions{
-		BaseURL:   "http://localhost:5264",
-		APIKey: "tm_server_w9pYCQFCJj3DdXuzsQfWvZNSIjE1x0zrMSv5PHvrW8",
+		BaseURL: "http://localhost:5264",
+		APIKey:  apiKey,
 	}
 
 	client, err := togglemesh.NewClient(options)
@@ -17,24 +24,28 @@ func main() {
 		panic(err)
 	}
 
-	fmt.Println("Starting flag evaluation loop (press Ctrl+C to exit)...")
+	fmt.Println("Go SDK started. Simulating traffic...")
 	for {
-		email := "nirawolker@gmail.com"
-		uid := "123456"
+		uid := "user_go_1"
 		context := map[string]any{
-			"Email":  email,
-			"UserId": uid,
+			"Browser": "Safari",
 		}
 
-		enabled := client.IsEnabled(Gmail20percent, false, uid, context)
-		
-		if enabled {
-			client.Track("go_gmail_checked", 1.0, uid, context)
-			fmt.Printf("[Gmail 20%%] %s -> ENABLED!\n", email)
-		} else {
-			fmt.Printf("[Gmail 20%%] %s -> DISABLED.\n", email)
+		variation := client.GetStringVariation("mab-string-test", "default-variant", 
+			togglemesh.WithIdentity(uid), 
+			togglemesh.WithContext(context),
+		)
+		fmt.Printf("[Go SDK] Evaluated mab-string-test for %s: %s\n", uid, variation)
+
+		if time.Now().UnixNano()%3 == 0 {
+			client.Track("purchase", 
+				togglemesh.WithIdentity(uid), 
+				togglemesh.WithContext(map[string]any{"sdk": "go"}),
+				togglemesh.WithEventValue(15.0),
+			)
+			fmt.Printf("[Go SDK] Tracked 'purchase' for %s\n", uid)
 		}
 
-		time.Sleep(3 * time.Second)
+		time.Sleep(1500 * time.Millisecond)
 	}
 }

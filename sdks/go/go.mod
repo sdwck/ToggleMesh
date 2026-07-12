@@ -1,3 +1,8 @@
 module github.com/sdwck/ToggleMesh/sdks/go
 
-go 1.22.4
+go 1.25.0
+
+require (
+	github.com/google/uuid v1.6.0
+	golang.org/x/mod v0.38.0
+)

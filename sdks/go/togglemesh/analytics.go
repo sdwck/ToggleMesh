@@ -10,8 +10,7 @@ import (
 )
 
 type FlagMetrics struct {
-	TrueCount  int64
-	FalseCount int64
+	VariationsCount map[string]int
 }
 
 type EventDto struct {
@@ -22,6 +21,7 @@ type EventDto struct {
 	Result     *bool          `json:"Result,omitempty"`
 	EventName  *string        `json:"EventName,omitempty"`
 	Value      *float64       `json:"Value,omitempty"`
+	VariationId *string       `json:"VariationId,omitempty"`
 	Properties map[string]any `json:"Properties,omitempty"`
 }
 
@@ -43,7 +43,7 @@ func newAnalyticsQueue(client *ToggleMeshClient) *analyticsQueue {
 	return q
 }
 
-func (q *analyticsQueue) updateMetrics(flagKey string, result bool) {
+func (q *analyticsQueue) updateMetrics(flagKey string, variationId string) {
 	if q.client.options.IsMetricsEnabled != nil && !*q.client.options.IsMetricsEnabled {
 		return
 	}
@@ -55,17 +55,13 @@ func (q *analyticsQueue) updateMetrics(flagKey string, result bool) {
 		if len(q.metricsBuffer) >= q.client.options.MetricsBufferCapacity {
 			return
 		}
-		m = &FlagMetrics{}
+		m = &FlagMetrics{VariationsCount: make(map[string]int)}
 		q.metricsBuffer[flagKey] = m
 	}
-	if result {
-		m.TrueCount++
-	} else {
-		m.FalseCount++
-	}
+	m.VariationsCount[variationId]++
 }
 
-func (q *analyticsQueue) queueEvent(eventType int, identity string, flagKey string, result *bool, eventName string, properties map[string]any, value *float64) {
+func (q *analyticsQueue) queueEvent(eventType int, identity string, flagKey string, result *bool, eventName string, properties map[string]any, value *float64, variationId *string) {
 	if q.client.options.IsMetricsEnabled != nil && !*q.client.options.IsMetricsEnabled {
 		return
 	}
@@ -86,6 +82,9 @@ func (q *analyticsQueue) queueEvent(eventType int, identity string, flagKey stri
 	}
 	if value != nil {
 		evt.Value = value
+	}
+	if variationId != nil {
+		evt.VariationId = variationId
 	}
 
 	select {
@@ -124,14 +123,16 @@ func (q *analyticsQueue) flushMetrics() {
 
 	payload := make([]map[string]any, 0, len(q.metricsBuffer))
 	for key, m := range q.metricsBuffer {
-		if m.TrueCount > 0 || m.FalseCount > 0 {
+		if len(m.VariationsCount) > 0 {
+			vCountCopy := make(map[string]int)
+			for k, v := range m.VariationsCount {
+				vCountCopy[k] = v
+			}
 			payload = append(payload, map[string]any{
-				"Key":        key,
-				"TrueCount":  m.TrueCount,
-				"FalseCount": m.FalseCount,
+				"Key":             key,
+				"VariationsCount": vCountCopy,
 			})
-			m.TrueCount = 0
-			m.FalseCount = 0
+			m.VariationsCount = make(map[string]int)
 		}
 	}
 	q.metricsMu.Unlock()

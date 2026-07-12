@@ -13,15 +13,16 @@ type CompiledRule struct {
 }
 
 type CompiledRuleGroup struct {
-	Rules []CompiledRule
+	Rules    []CompiledRule
+	Priority int
+	Rollout  []VariationWeight
 }
 
 type CachedFlag struct {
 	Key                      string
 	IsEnabled                bool
-	RolloutPercentage        *int
-	ContextualRollouts       map[string]int
-	ParsedContextualRollouts map[string]int
+	ContextualRollouts       map[string][]VariationWeight
+	ParsedContextualRollouts map[string][]VariationWeight
 	IsExperimentActive       bool
 	Groups                   []CompiledRuleGroup
 	OriginalDto              FeatureFlagDto
@@ -70,15 +71,27 @@ func (e *RuleEngine) CompileRules(rules []RuleDto) []CompiledRuleGroup {
 				IsSegment:    isSegment,
 			})
 		}
-		compiledGroups = append(compiledGroups, CompiledRuleGroup{Rules: compiledRules})
+		compiledGroups = append(compiledGroups, CompiledRuleGroup{
+			Rules:    compiledRules,
+			Priority: gRules[0].Priority,
+			Rollout:  gRules[0].Rollout,
+		})
+	}
+
+	for i := 0; i < len(compiledGroups); i++ {
+		for j := i + 1; j < len(compiledGroups); j++ {
+			if compiledGroups[i].Priority > compiledGroups[j].Priority {
+				compiledGroups[i], compiledGroups[j] = compiledGroups[j], compiledGroups[i]
+			}
+		}
 	}
 
 	return compiledGroups
 }
 
-func (e *RuleEngine) Evaluate(groups []CompiledRuleGroup, context map[string]any) bool {
+func (e *RuleEngine) Evaluate(groups []CompiledRuleGroup, context map[string]any) *CompiledRuleGroup {
 	if len(groups) == 0 {
-		return true
+		return nil
 	}
 
 	for _, group := range groups {
@@ -87,7 +100,7 @@ func (e *RuleEngine) Evaluate(groups []CompiledRuleGroup, context map[string]any
 			if rule.IsSegment {
 				segmentID := rule.CompiledValue.(string)
 				segmentRules := e.client.getSegmentRules(segmentID)
-				if segmentRules == nil || !e.Evaluate(segmentRules, context) {
+				if segmentRules == nil || e.Evaluate(segmentRules, context) == nil {
 					groupMatched = false
 					break
 				}
@@ -103,18 +116,21 @@ func (e *RuleEngine) Evaluate(groups []CompiledRuleGroup, context map[string]any
 					b, _ := json.Marshal(v)
 					ctxValue = string(b)
 				}
-			}
-
-			if !rule.Operator.Evaluate(ctxValue, rule.CompiledValue) {
+				
+				if !rule.Operator.Evaluate(ctxValue, rule.CompiledValue) {
+					groupMatched = false
+					break
+				}
+			} else {
 				groupMatched = false
 				break
 			}
 		}
 
 		if groupMatched {
-			return true
+			return &group
 		}
 	}
 
-	return false
+	return nil
 }

@@ -2,6 +2,7 @@ package togglemesh
 
 import (
 	"crypto/tls"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -82,7 +83,7 @@ func (c *ToggleMeshClient) getSegmentRules(segmentID string) []CompiledRuleGroup
 	return nil
 }
 
-func (c *ToggleMeshClient) IsEnabled(flagKey string, defaultValue bool, identity string, context map[string]any) bool {
+func (c *ToggleMeshClient) getVariationInternal(flagKey string, identity string, context map[string]any, defaultValue string) string {
 	c.mu.RLock()
 	flag, exists := c.flagsCache[flagKey]
 	c.mu.RUnlock()
@@ -95,44 +96,90 @@ func (c *ToggleMeshClient) IsEnabled(flagKey string, defaultValue bool, identity
 		context = make(map[string]any)
 	}
 
-	activeRolloutPercentage := flag.RolloutPercentage
-	if len(flag.ParsedContextualRollouts) > 0 && len(flag.OriginalDto.ContextPartitionKeys) > 0 {
-		var parts []string
-		for _, key := range flag.OriginalDto.ContextPartitionKeys {
-			if val, ok := context[key]; ok {
-				parts = append(parts, fmt.Sprintf("%v", val))
-			} else {
-				parts = append(parts, "null")
+	var variationId *string
+
+	if !flag.IsEnabled {
+		if flag.OriginalDto.OffVariationID != nil {
+			variationId = flag.OriginalDto.OffVariationID
+		}
+	} else {
+		if flag.OriginalDto.IndividualTargets != nil && identity != "" {
+			if v, ok := flag.OriginalDto.IndividualTargets[identity]; ok {
+				variationId = &v
 			}
 		}
-		sliceKey := strings.Join(parts, "|")
-		if overridePct, ok := flag.ParsedContextualRollouts[sliceKey]; ok {
-			activeRolloutPercentage = &overridePct
+
+		if variationId == nil {
+			activeRollout := flag.OriginalDto.FallthroughRollout
+			if len(flag.ParsedContextualRollouts) > 0 && len(flag.OriginalDto.ContextPartitionKeys) > 0 {
+				var parts []string
+				for _, key := range flag.OriginalDto.ContextPartitionKeys {
+					if val, ok := context[key]; ok {
+						parts = append(parts, fmt.Sprintf("%v", val))
+					} else {
+						parts = append(parts, "null")
+					}
+				}
+				sliceKey := strings.Join(parts, "|")
+				if overrideRollout, ok := flag.ParsedContextualRollouts[sliceKey]; ok {
+					activeRollout = overrideRollout
+				}
+			}
+
+			if len(flag.Groups) == 0 {
+				variationId = evaluateRollout(activeRollout, flagKey, identity)
+			} else {
+				matchedGroup := c.ruleEngine.Evaluate(flag.Groups, context)
+				if matchedGroup != nil {
+					variationId = evaluateRollout(matchedGroup.Rollout, flagKey, identity)
+				} else {
+					variationId = evaluateRollout(activeRollout, flagKey, identity)
+				}
+			}
 		}
 	}
 
-	result := true
-	if !flag.IsEnabled || (len(flag.Groups) > 0 && !c.ruleEngine.Evaluate(flag.Groups, context)) {
-		result = false
-	} else {
-		result = evaluateRollout(activeRolloutPercentage, flagKey, identity)
+	if variationId != nil {
+		c.analytics.updateMetrics(flagKey, *variationId)
+		if identity != "" && flag.IsExperimentActive {
+			c.analytics.queueEvent(0, identity, flagKey, nil, "", context, nil, variationId)
+		}
+		if val, ok := flag.OriginalDto.Variations[*variationId]; ok {
+			return val
+		}
 	}
 
-	c.analytics.updateMetrics(flagKey, result)
-	if identity != "" && flag.IsExperimentActive {
-		c.analytics.queueEvent(0, identity, flagKey, &result, "", context, nil)
-	}
-
-	return result
+	return defaultValue
 }
 
-func (c *ToggleMeshClient) Track(eventName string, value float64, identity string, context map[string]any) {
-	if identity == "" || eventName == "" {
+func (c *ToggleMeshClient) GetStringVariation(flagKey string, defaultValue string, opts ...EvalOption) string {
+	options := applyOptions(opts)
+	return c.getVariationInternal(flagKey, options.Identity, options.Context, defaultValue)
+}
+
+func (c *ToggleMeshClient) IsEnabled(flagKey string, defaultValue bool, opts ...EvalOption) bool {
+	dvStr := "false"
+	if defaultValue {
+		dvStr = "true"
+	}
+	options := applyOptions(opts)
+	val := c.getVariationInternal(flagKey, options.Identity, options.Context, dvStr)
+	return strings.ToLower(val) == "true"
+}
+
+func (c *ToggleMeshClient) GetJsonVariation(flagKey string, target any, opts ...EvalOption) error {
+	options := applyOptions(opts)
+	val := c.getVariationInternal(flagKey, options.Identity, options.Context, "")
+	if val == "" {
+		return errors.New("flag not found or off variation is empty")
+	}
+	return json.Unmarshal([]byte(val), target)
+}
+
+func (c *ToggleMeshClient) Track(eventName string, opts ...EvalOption) {
+	options := applyOptions(opts)
+	if options.Identity == "" || eventName == "" {
 		return
 	}
-	if context == nil {
-		context = make(map[string]any)
-	}
-	
-	c.analytics.queueEvent(1, identity, "", nil, eventName, context, &value)
+	c.analytics.queueEvent(1, options.Identity, "", nil, eventName, options.Context, options.Value, nil)
 }
