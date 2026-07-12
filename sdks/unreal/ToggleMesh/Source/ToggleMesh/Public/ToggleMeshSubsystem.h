@@ -16,8 +16,7 @@ struct FToggleMeshMetricCounts
 {
 	GENERATED_BODY()
 
-	int32 TrueCount = 0;
-	int32 FalseCount = 0;
+	TMap<FString, int32> VariationCounts;
 };
 
 USTRUCT()
@@ -25,7 +24,8 @@ struct FToggleMeshFlagState
 {
 	GENERATED_BODY()
 
-	bool bIsEnabled = false;
+	FString VariationId = TEXT("");
+	FString VariationValue = TEXT("");
 	bool bIsExperimentActive = false;
 };
 
@@ -49,6 +49,12 @@ public:
 	UFUNCTION(BlueprintPure, Category="ToggleMesh")
 	bool GetBoolFlag(const FString& FlagKey, bool bDefaultValue = false) const;
 
+	UFUNCTION(BlueprintPure, Category="ToggleMesh")
+	FString GetStringFlag(const FString& FlagKey, const FString& DefaultValue = TEXT("")) const;
+
+	UFUNCTION(BlueprintPure, Category="ToggleMesh")
+	FString GetJsonFlag(const FString& FlagKey, const FString& DefaultValue = TEXT("{}")) const;
+
 	UFUNCTION(BlueprintCallable, Category="ToggleMesh")
 	void FlushEvents();
 
@@ -63,6 +69,9 @@ private:
 	void OnFlagsResponse(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bConnectedSuccessfully);
 	void OnTrackResponse(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bConnectedSuccessfully);
 	void OnMetricsResponse(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bConnectedSuccessfully);
+
+	void TrackMetric(const FString& FlagKey, const FString& VariationId) const;
+	void TrackExposureEvent(const FString& FlagKey, const FString& VariationId, bool bIsExperiment) const;
 
 	FString CurrentUserId;
 	TMap<FString, FString> CurrentContext;

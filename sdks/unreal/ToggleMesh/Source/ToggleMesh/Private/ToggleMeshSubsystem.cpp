@@ -50,45 +50,89 @@ void UToggleMeshSubsystem::Identify(const FString& InUserId, const TMap<FString,
 bool UToggleMeshSubsystem::GetBoolFlag(const FString& FlagKey, bool bDefaultValue) const
 {
 	bool bResult = bDefaultValue;
+	FString VariationId = TEXT("");
 	bool bIsExperiment = false;
 
 	if (const FToggleMeshFlagState* Found = FlagsCache.Find(FlagKey))
 	{
-		bResult = Found->bIsEnabled;
+		bResult = Found->VariationValue.Equals(TEXT("true"), ESearchCase::IgnoreCase);
+		VariationId = Found->VariationId;
 		bIsExperiment = Found->bIsExperimentActive;
 	}
 
-	const UToggleMeshSettings* Settings = GetDefault<UToggleMeshSettings>();
-	if (Settings->bIsMetricsEnabled)
+	TrackMetric(FlagKey, VariationId);
+	TrackExposureEvent(FlagKey, VariationId, bIsExperiment);
+	return bResult;
+}
+
+FString UToggleMeshSubsystem::GetStringFlag(const FString& FlagKey, const FString& DefaultValue) const
+{
+	FString Result = DefaultValue;
+	FString VariationId = TEXT("");
+	bool bIsExperiment = false;
+
+	if (const FToggleMeshFlagState* Found = FlagsCache.Find(FlagKey))
 	{
-		if (!MetricsBuffer.Contains(FlagKey))
-		{
-			if (MetricsBuffer.Num() < Settings->MetricsBufferCapacity)
-			{
-				MetricsBuffer.Add(FlagKey, FToggleMeshMetricCounts());
-			}
-		}
-		if (MetricsBuffer.Contains(FlagKey))
-		{
-			if (bResult)
-			{
-				MetricsBuffer[FlagKey].TrueCount++;
-			}
-			else
-			{
-				MetricsBuffer[FlagKey].FalseCount++;
-			}
-		}
+		Result = Found->VariationValue;
+		VariationId = Found->VariationId;
+		bIsExperiment = Found->bIsExperimentActive;
 	}
 
-	if (bIsExperiment && !CurrentUserId.IsEmpty())
+	TrackMetric(FlagKey, VariationId);
+	TrackExposureEvent(FlagKey, VariationId, bIsExperiment);
+	return Result;
+}
+
+FString UToggleMeshSubsystem::GetJsonFlag(const FString& FlagKey, const FString& DefaultValue) const
+{
+	FString Result = DefaultValue;
+	FString VariationId = TEXT("");
+	bool bIsExperiment = false;
+
+	if (const FToggleMeshFlagState* Found = FlagsCache.Find(FlagKey))
+	{
+		Result = Found->VariationValue;
+		VariationId = Found->VariationId;
+		bIsExperiment = Found->bIsExperimentActive;
+	}
+
+	TrackMetric(FlagKey, VariationId);
+	TrackExposureEvent(FlagKey, VariationId, bIsExperiment);
+	return Result;
+}
+
+void UToggleMeshSubsystem::TrackMetric(const FString& FlagKey, const FString& VariationId) const
+{
+	const UToggleMeshSettings* Settings = GetDefault<UToggleMeshSettings>();
+	if (!Settings->bIsMetricsEnabled || VariationId.IsEmpty()) return;
+
+	if (!MetricsBuffer.Contains(FlagKey))
+	{
+		if (MetricsBuffer.Num() < Settings->MetricsBufferCapacity)
+		{
+			MetricsBuffer.Add(FlagKey, FToggleMeshMetricCounts());
+		}
+	}
+	if (MetricsBuffer.Contains(FlagKey))
+	{
+		int32& Count = MetricsBuffer[FlagKey].VariationCounts.FindOrAdd(VariationId);
+		Count++;
+	}
+}
+
+void UToggleMeshSubsystem::TrackExposureEvent(const FString& FlagKey, const FString& VariationId, bool bIsExperiment) const
+{
+	const UToggleMeshSettings* Settings = GetDefault<UToggleMeshSettings>();
+	if (!bIsExperiment || CurrentUserId.IsEmpty() || VariationId.IsEmpty()) return;
+
+	if (Settings->bIsMetricsEnabled && EventBuffer.Num() < Settings->AnalyticsChannelCapacity)
 	{
 		TSharedRef<FJsonObject> EventObj = MakeShared<FJsonObject>();
 		EventObj->SetNumberField(TEXT("Type"), 0);
 		EventObj->SetNumberField(TEXT("Timestamp"), FDateTime::UtcNow().ToUnixTimestamp() * 1000);
 		EventObj->SetStringField(TEXT("Identity"), CurrentUserId);
-		EventObj->SetStringField(TEXT("EventName"), FlagKey);
-		EventObj->SetNumberField(TEXT("Value"), bResult ? 1.0f : 0.0f);
+		EventObj->SetStringField(TEXT("FlagKey"), FlagKey);
+		EventObj->SetStringField(TEXT("VariationId"), VariationId);
 
 		TSharedRef<FJsonObject> ContextObj = MakeShared<FJsonObject>();
 		for (const TPair<FString, FString>& Pair : CurrentContext)
@@ -97,13 +141,8 @@ bool UToggleMeshSubsystem::GetBoolFlag(const FString& FlagKey, bool bDefaultValu
 		}
 		EventObj->SetObjectField(TEXT("Properties"), ContextObj);
 
-		if (Settings->bIsMetricsEnabled && EventBuffer.Num() < Settings->AnalyticsChannelCapacity)
-		{
-			EventBuffer.Add(EventObj);
-		}
+		EventBuffer.Add(EventObj);
 	}
-
-	return bResult;
 }
 
 void UToggleMeshSubsystem::FetchFlags()
@@ -165,8 +204,10 @@ void UToggleMeshSubsystem::OnFlagsResponse(FHttpRequestPtr Request, FHttpRespons
 				{
 					FString Key;
 					FToggleMeshFlagState State;
-					if (FlagObj->TryGetStringField(TEXT("key"), Key) && FlagObj->TryGetBoolField(TEXT("isEnabled"), State.bIsEnabled))
+					if (FlagObj->TryGetStringField(TEXT("key"), Key))
 					{
+						FlagObj->TryGetStringField(TEXT("variationId"), State.VariationId);
+						FlagObj->TryGetStringField(TEXT("variationValue"), State.VariationValue);
 						FlagObj->TryGetBoolField(TEXT("isExperimentActive"), State.bIsExperimentActive);
 						FlagsCache.Add(Key, State);
 					}
@@ -277,12 +318,20 @@ void UToggleMeshSubsystem::FlushMetrics()
 	TArray<TSharedPtr<FJsonValue>> PayloadArray;
 	for (const TPair<FString, FToggleMeshMetricCounts>& Pair : MetricsBuffer)
 	{
-		if (Pair.Value.TrueCount > 0 || Pair.Value.FalseCount > 0)
+		if (Pair.Value.VariationCounts.Num() > 0)
 		{
 			TSharedRef<FJsonObject> MetricObj = MakeShared<FJsonObject>();
 			MetricObj->SetStringField(TEXT("Key"), Pair.Key);
-			MetricObj->SetNumberField(TEXT("TrueCount"), Pair.Value.TrueCount);
-			MetricObj->SetNumberField(TEXT("FalseCount"), Pair.Value.FalseCount);
+
+			TArray<TSharedPtr<FJsonValue>> VariationsArray;
+			for (const TPair<FString, int32>& VarPair : Pair.Value.VariationCounts)
+			{
+				TSharedRef<FJsonObject> VarObj = MakeShared<FJsonObject>();
+				VarObj->SetStringField(TEXT("VariationId"), VarPair.Key);
+				VarObj->SetNumberField(TEXT("Count"), VarPair.Value);
+				VariationsArray.Add(MakeShared<FJsonValueObject>(VarObj));
+			}
+			MetricObj->SetArrayField(TEXT("Variations"), VariationsArray);
 			PayloadArray.Add(MakeShared<FJsonValueObject>(MetricObj));
 		}
 	}
