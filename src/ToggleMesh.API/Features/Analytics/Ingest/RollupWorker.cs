@@ -1,9 +1,8 @@
+using System.Diagnostics;
 using System.Threading.Channels;
-using Microsoft.EntityFrameworkCore;
 using StackExchange.Redis;
 using ToggleMesh.API.Features.Analytics.Services;
 using ToggleMesh.API.Features.Flags.Commands;
-using ToggleMesh.API.Features.Flags.Domain;
 using ToggleMesh.API.Features.Webhooks.Domain;
 using ToggleMesh.API.Infrastructure.Caching;
 using ToggleMesh.API.Infrastructure.Data;
@@ -39,10 +38,12 @@ public class RollupWorker : BackgroundService
                 var mabShifter = scope.ServiceProvider.GetRequiredService<IMabTrafficShifterService>();
                 scope.ServiceProvider.GetRequiredService<Channel<WebhookEvent>>();
 
+                var sw = Stopwatch.StartNew();
                 _logger.LogInformation("[RollupWorker] Running aggregation pipeline...");
                 await queryEngine.AggregateMetricsAsync(stoppingToken);
                 await queryEngine.AggregateContextualMetricsAsync(stoppingToken);
-                _logger.LogInformation("[RollupWorker] Aggregation pipeline completed.");
+                sw.Stop();
+                _logger.LogInformation("[RollupWorker] Aggregation pipeline completed in {ElapsedMilliseconds}ms.", sw.ElapsedMilliseconds);
 
                 var notifyHandler = new NotifyFlagUpdatedCommandHandler(
                     scope.ServiceProvider.GetRequiredService<IConnectionMultiplexer>(),

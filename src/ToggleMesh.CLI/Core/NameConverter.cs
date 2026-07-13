@@ -1,4 +1,4 @@
-﻿using ToggleMesh.CLI.Models;
+using ToggleMesh.CLI.Models;
 
 namespace ToggleMesh.CLI.Core;
 

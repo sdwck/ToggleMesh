@@ -7,7 +7,7 @@ import os
 import queue
 import hashlib
 import random
-from typing import Dict, Any, Callable, Set, Optional
+from typing import Dict, Any, Callable, Set, Optional, Union
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -21,13 +21,19 @@ def to_snake_case(obj):
     if isinstance(obj, list):
         return [to_snake_case(i) for i in obj]
     elif isinstance(obj, dict):
-        return { re.sub(r'(?<!^)(?=[A-Z])', '_', k).lower(): to_snake_case(v) for k, v in obj.items() }
+        res = {}
+        for k, v in obj.items():
+            new_k = re.sub(r'(?<!^)(?=[A-Z])', '_', k).lower()
+            if new_k == "contextual_rollouts" and isinstance(v, dict):
+                res[new_k] = {ck: to_snake_case(cv) for ck, cv in v.items()}
+            else:
+                res[new_k] = to_snake_case(v)
+        return res
     return obj
 
 class FlagMetrics:
     def __init__(self):
-        self.true_count = 0
-        self.false_count = 0
+        self.variations_count = {}
 
 class ToggleMeshClient:
     def __init__(self, options: ToggleMeshOptions):
@@ -81,7 +87,7 @@ class ToggleMeshClient:
         if self.options.fallback_file_path:
             return self.options.fallback_file_path
             
-        safe_key = hashlib.sha256(self.options.client_key.encode('utf-8')).hexdigest()[:12]
+        safe_key = hashlib.sha256(self.options.server_key.encode('utf-8')).hexdigest()[:12]
         base_dir = os.path.join(os.getcwd(), ".togglemesh")
         return os.path.join(base_dir, f"{safe_key}.json")
 
@@ -89,51 +95,95 @@ class ToggleMeshClient:
         segment = self._segments_cache.get(segment_id)
         return segment.groups if segment else None
 
-    def is_enabled(self, flag_key: str, default_value: bool = False, *, identity: str = None, context: Dict[str, str] = None) -> bool:
+    def get_variation(self, flag_key: str, default_value: str = "", *, identity: str = None, context: dict = None, **kwargs) -> str:
+        merged_context = context.copy() if context else {}
+        merged_context.update(kwargs)
+
         with self._lock:
             flag = self._flags_cache.get(flag_key)
-            context = context or {}
             
         if not flag:
             return default_value
             
-        active_rollout_percentage = flag.rollout_percentage
+        variation_id = flag.off_variation_id
+        active_rollout = flag.fallthrough_rollout
         
         if flag.parsed_contextual_rollouts and flag.original_dto.context_partition_keys:
             parts = []
             for key in flag.original_dto.context_partition_keys:
-                parts.append(str(context.get(key, "null")))
+                parts.append(str(merged_context.get(key, "null")))
             slice_key = "|".join(parts)
             if slice_key in flag.parsed_contextual_rollouts:
-                active_rollout_percentage = flag.parsed_contextual_rollouts[slice_key]
+                from .models import VariationWeight
+                cr_data = flag.parsed_contextual_rollouts[slice_key]
+                if isinstance(cr_data, list):
+                    active_rollout = [VariationWeight.from_dict(w) if isinstance(w, dict) else w for w in cr_data]
                 
-        if not flag.is_enabled or not self.rule_engine.evaluate(flag.groups, context):
-            result = False
+        if not flag.is_enabled:
+            variation_id = flag.off_variation_id
         else:
-            result = evaluate_rollout(active_rollout_percentage, flag_key, identity)
+            if flag.individual_targets and identity and identity in flag.individual_targets:
+                variation_id = flag.individual_targets[identity]
+            else:
+                if flag.groups:
+                    matched_group = self.rule_engine.evaluate(flag.groups, merged_context)
+                    if matched_group:
+                        active_rollout = matched_group.rollout
+                        
+                variation_id = evaluate_rollout(active_rollout, flag_key, identity)
 
-        self._update_metrics(flag_key, result)
+        if not variation_id:
+            variation_id = flag.off_variation_id
+
+        val = flag.variations.get(variation_id, default_value) if variation_id else default_value
+
+        self._update_metrics(flag_key, variation_id)
         
-        if identity and flag.is_experiment_active:
+        if identity and flag.is_experiment_active and variation_id:
             self._queue_event(
                 evt_type=0,
                 identity=identity,
                 flag_key=flag_key,
-                result=result,
-                properties=context
+                variation_id=variation_id,
+                properties=merged_context
             )
             
-        return result
+        return val
 
-    def track(self, event_name: str, properties: Any = None, value: float = None, *, identity: str = None):
+    def is_enabled(self, flag_key: str, default_value: bool = False, *, identity: str = None, context: dict = None, **kwargs) -> bool:
+        merged_context = context.copy() if context else {}
+        merged_context.update(kwargs)
+        res = self.get_variation(flag_key, "true" if default_value else "false", identity=identity, context=merged_context)
+        return res.lower() == "true"
+
+    def get_json(self, flag_key: str, default_value: Union[dict, list] = None, *, identity: str = None, context: dict = None, **kwargs) -> Union[dict, list]:
+        merged_context = context.copy() if context else {}
+        merged_context.update(kwargs)
+        
+        sentinel = "__TOGGLEMESH_DEFAULT__"
+        res = self.get_variation(flag_key, sentinel, identity=identity, context=merged_context)
+        
+        if res == sentinel:
+            return default_value
+            
+        try:
+            return json.loads(res)
+        except json.JSONDecodeError:
+            logger.warning(f"[ToggleMesh] Failed to parse '{res}' as JSON for flag '{flag_key}'. Returning default_value.")
+            return default_value
+
+    def track(self, event_name: str, properties: dict = None, value: float = None, *, identity: str = None, **kwargs):
         if not identity or not event_name:
             return
+            
+        merged_props = properties.copy() if properties else {}
+        merged_props.update(kwargs)
             
         self._queue_event(
             evt_type=1,
             identity=identity,
             event_name=event_name,
-            properties=properties,
+            properties=merged_props,
             value=value
         )
 
@@ -154,19 +204,17 @@ class ToggleMeshClient:
             except Exception as e:
                 logger.error(f"[ToggleMesh] Listener callback error: {e}")
 
-    def _update_metrics(self, flag_key: str, result: bool):
-        if not self.options.is_metrics_enabled: return
+    def _update_metrics(self, flag_key: str, variation_id: str):
+        if not self.options.is_metrics_enabled or not variation_id: return
         with self._metrics_lock:
             if flag_key not in self._metrics_buffer:
                 if len(self._metrics_buffer) >= self.options.metrics_buffer_capacity: return
                 self._metrics_buffer[flag_key] = FlagMetrics()
-            if result:
-                self._metrics_buffer[flag_key].true_count += 1
-            else:
-                self._metrics_buffer[flag_key].false_count += 1
+            m = self._metrics_buffer[flag_key]
+            m.variations_count[variation_id] = m.variations_count.get(variation_id, 0) + 1
 
     def _queue_event(self, evt_type: int, identity: str, flag_key: str = None, 
-                     result: bool = False, event_name: str = None, 
+                     variation_id: str = None, event_name: str = None, 
                      properties: Any = None, value: float = None):
         if not self.options.is_metrics_enabled: return
         try:
@@ -177,7 +225,7 @@ class ToggleMeshClient:
                 "Properties": properties
             }
             if flag_key: evt["FlagKey"] = flag_key
-            if result is not None: evt["Result"] = result
+            if variation_id: evt["VariationId"] = variation_id
             if event_name: evt["EventName"] = event_name
             if value is not None: evt["Value"] = value
             
@@ -187,7 +235,7 @@ class ToggleMeshClient:
 
     def _sync_state(self) -> None:
         url = f"{self.base_url}/api/v1/sdk/flags"
-        headers = {"x-api-key": self.options.client_key}
+        headers = {"x-api-key": self.options.server_key}
         try:
             response = self._session.get(url, headers=headers, timeout=10)
             if response.status_code != 200:
@@ -268,7 +316,7 @@ class ToggleMeshClient:
 
     def _sse_loop(self) -> None:
         url = f"{self.base_url}/api/v1/stream"
-        headers = {"x-api-key": self.options.client_key, "Accept": "text/event-stream"}
+        headers = {"x-api-key": self.options.server_key, "Accept": "text/event-stream"}
         backoff = 1
         
         while not self._stop_event.is_set():
@@ -306,7 +354,7 @@ class ToggleMeshClient:
         try:
             doc = json.loads(data)
             event_name = doc.get("EventName")
-            if event_name == "FlagUpdated" and "Payload" in doc:
+            if event_name == "SdkFlagUpdated" and "Payload" in doc:
                 payload = doc["Payload"]
                 if isinstance(payload, str): payload = json.loads(payload)
                 
@@ -324,7 +372,7 @@ class ToggleMeshClient:
 
     def _metrics_flusher(self):
         url = f"{self.base_url}/api/v1/sdk/metrics"
-        headers = {"x-api-key": self.options.client_key, "Content-Type": "application/json"}
+        headers = {"x-api-key": self.options.server_key, "Content-Type": "application/json"}
         
         while not self._stop_event.is_set():
             if self._stop_event.wait(10):
@@ -333,10 +381,9 @@ class ToggleMeshClient:
             payload = []
             with self._metrics_lock:
                 for key, m in list(self._metrics_buffer.items()):
-                    if m.true_count > 0 or m.false_count > 0:
-                        payload.append({"Key": key, "TrueCount": m.true_count, "FalseCount": m.false_count})
-                        m.true_count = 0
-                        m.false_count = 0
+                    if m.variations_count:
+                        payload.append({"Key": key, "VariationsCount": dict(m.variations_count)})
+                        m.variations_count.clear()
                         
             if not payload: continue
                 
@@ -348,12 +395,12 @@ class ToggleMeshClient:
                     for item in payload:
                         if item["Key"] not in self._metrics_buffer:
                             self._metrics_buffer[item["Key"]] = FlagMetrics()
-                        self._metrics_buffer[item["Key"]].true_count += item["TrueCount"]
-                        self._metrics_buffer[item["Key"]].false_count += item["FalseCount"]
+                        for v_id, count in item["VariationsCount"].items():
+                            self._metrics_buffer[item["Key"]].variations_count[v_id] = self._metrics_buffer[item["Key"]].variations_count.get(v_id, 0) + count
 
     def _events_flusher(self):
         url = f"{self.base_url}/api/v1/sdk/events"
-        headers = {"x-api-key": self.options.client_key, "Content-Type": "application/json"}
+        headers = {"x-api-key": self.options.server_key, "Content-Type": "application/json"}
         
         while not self._stop_event.is_set():
             if self._stop_event.wait(10):

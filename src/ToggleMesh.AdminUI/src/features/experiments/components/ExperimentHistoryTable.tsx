@@ -13,9 +13,10 @@ interface ExperimentHistoryTableProps {
     canEditEnv: boolean;
     setHistoricalSnapshot: (snapshot: any) => void;
     deleteMutation: UseMutationResult<any, any, string, any>;
+    currentHistoricalSnapshotId?: string;
 }
 
-export function ExperimentHistoryTable({ iterations, isLoadingIterations, isHistoricalView, canEditEnv, setHistoricalSnapshot, deleteMutation }: ExperimentHistoryTableProps) {
+export function ExperimentHistoryTable({ iterations, isLoadingIterations, isHistoricalView, canEditEnv, setHistoricalSnapshot, deleteMutation, currentHistoricalSnapshotId }: ExperimentHistoryTableProps) {
     if (isHistoricalView || isLoadingIterations || !iterations || iterations.length === 0) return null;
 
     return (
@@ -47,9 +48,52 @@ export function ExperimentHistoryTable({ iterations, isLoadingIterations, isHist
                             if (Array.isArray(metrics) && metrics.length > 0) {
                                 if (iterationGoalEvent) {
                                     primary = metrics.find((m: any) => (m.EventName || m.eventName) === iterationGoalEvent);
+                                    if (!primary) {
+                                        const exposureMetric = metrics.find((m: any) => (m.EventName || m.eventName) === '$exposure');
+                                        if (exposureMetric) {
+                                            primary = JSON.parse(JSON.stringify(exposureMetric));
+                                            if (primary.EventName !== undefined) primary.EventName = iterationGoalEvent;
+                                            if (primary.eventName !== undefined) primary.eventName = iterationGoalEvent;
+                                            
+                                            const vars = primary.Variations || primary.variations;
+                                            if (vars && vars.length > 0) {
+                                                for (const v of vars) {
+                                                    if (v.Conversions !== undefined) v.Conversions = 0;
+                                                    if (v.conversions !== undefined) v.conversions = 0;
+                                                    if (v.ConversionRate !== undefined) v.ConversionRate = 0;
+                                                    if (v.conversionRate !== undefined) v.conversionRate = 0;
+                                                    if (v.ExpectedUplift !== undefined) v.ExpectedUplift = 0;
+                                                    if (v.expectedUplift !== undefined) v.expectedUplift = 0;
+                                                }
+                                            } else {
+                                                if (primary.ControlConversions !== undefined) primary.ControlConversions = 0;
+                                                if (primary.controlConversions !== undefined) primary.controlConversions = 0;
+                                                if (primary.TreatmentConversions !== undefined) primary.TreatmentConversions = 0;
+                                                if (primary.treatmentConversions !== undefined) primary.treatmentConversions = 0;
+                                                if (primary.ControlConversionRate !== undefined) primary.ControlConversionRate = 0;
+                                                if (primary.controlConversionRate !== undefined) primary.controlConversionRate = 0;
+                                                if (primary.TreatmentConversionRate !== undefined) primary.TreatmentConversionRate = 0;
+                                                if (primary.treatmentConversionRate !== undefined) primary.treatmentConversionRate = 0;
+                                                if (primary.ExpectedUplift !== undefined) primary.ExpectedUplift = 0;
+                                                if (primary.expectedUplift !== undefined) primary.expectedUplift = 0;
+                                            }
+                                        }
+                                    }
                                 }
                                 if (!primary) {
-                                    primary = [...metrics].sort((a: any, b: any) => (b.ControlExposures || 0) - (a.ControlExposures || 0))[0];
+                                    const nonSystem = metrics.filter((m: any) => !(m.EventName || m.eventName).startsWith('$'));
+                                    if (nonSystem.length > 0) {
+                                        primary = [...nonSystem].sort((a: any, b: any) => {
+                                            const getExps = (m: any) => {
+                                                const vars = m.variations || m.Variations;
+                                                if (vars && vars.length > 0) {
+                                                    return vars.reduce((sum: number, v: any) => sum + (v.exposures ?? v.Exposures ?? 0), 0);
+                                                }
+                                                return (m.controlExposures ?? m.ControlExposures ?? 0) + (m.treatmentExposures ?? m.TreatmentExposures ?? 0);
+                                            };
+                                            return getExps(b) - getExps(a);
+                                        })[0];
+                                    }
                                 }
                             }
 
@@ -62,26 +106,76 @@ export function ExperimentHistoryTable({ iterations, isLoadingIterations, isHist
                                         {format(new Date(iter.endedAt), 'MMM d, yyyy HH:mm')}
                                     </TableCell>
                                     <TableCell>
-                                        {primary ? (
-                                            <div className="flex items-center gap-4 text-xs">
-                                                <span className="font-medium text-foreground">{primary.EventName}</span>
-                                                <span className="text-muted-foreground">
-                                                    Control: {(primary.ControlConversionRate * 100).toFixed(1)}% ({primary.ControlExposures})
-                                                </span>
-                                                <span className="text-muted-foreground">
-                                                    Treatment: {(primary.TreatmentConversionRate * 100).toFixed(1)}% ({primary.TreatmentExposures})
-                                                </span>
-                                                <span className={`font-bold ${primary.ExpectedUplift > 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                                                    {primary.ExpectedUplift > 0 ? '+' : ''}{(primary.ExpectedUplift * 100).toFixed(1)}% uplift
-                                                </span>
-                                            </div>
-                                        ) : (
-                                            <span className="text-xs text-muted-foreground">No metric data</span>
-                                        )}
+                                        {(() => {
+                                            if (!primary) return <span className="text-xs text-muted-foreground">No metric data</span>;
+
+                                            const variations = primary.variations || primary.Variations || [];
+                                            let baseline: any = null;
+                                            let topPerformer: any = null;
+
+                                            if (variations.length > 0) {
+                                                baseline = [...variations].sort((a: any, b: any) => {
+                                                    const expA = a.exposures ?? a.Exposures ?? 0;
+                                                    const expB = b.exposures ?? b.Exposures ?? 0;
+                                                    return expB - expA;
+                                                })[0];
+
+                                                const others = variations.filter((v: any) => (v.variationId || v.VariationId) !== (baseline.variationId || baseline.VariationId));
+                                                if (others.length > 0) {
+                                                    topPerformer = [...others].sort((a: any, b: any) => {
+                                                        const upA = a.expectedUplift ?? a.ExpectedUplift ?? 0;
+                                                        const upB = b.expectedUplift ?? b.ExpectedUplift ?? 0;
+                                                        return upB - upA;
+                                                    })[0];
+                                                }
+                                            }
+
+                                            let baseCr = 0, baseExp = 0, baseName = "Baseline";
+                                            let topCr = 0, topExp = 0, topName = "Top Performer";
+                                            let uplift = 0;
+
+                                            if (baseline) {
+                                                baseExp = baseline.exposures ?? baseline.Exposures ?? 0;
+                                                const baseConv = baseline.conversions ?? baseline.Conversions ?? 0;
+                                                baseCr = baseExp > 0 ? baseConv / baseExp : 0;
+                                            } else {
+                                                baseExp = primary.controlExposures ?? primary.ControlExposures ?? 0;
+                                                baseCr = primary.controlConversionRate ?? primary.ControlConversionRate ?? 0;
+                                                baseName = "Control";
+                                            }
+
+                                            if (topPerformer) {
+                                                topExp = topPerformer.exposures ?? topPerformer.Exposures ?? 0;
+                                                const topConv = topPerformer.conversions ?? topPerformer.Conversions ?? 0;
+                                                topCr = topExp > 0 ? topConv / topExp : 0;
+                                                uplift = topPerformer.expectedUplift ?? topPerformer.ExpectedUplift ?? 0;
+                                            } else {
+                                                topExp = primary.treatmentExposures ?? primary.TreatmentExposures ?? 0;
+                                                topCr = primary.treatmentConversionRate ?? primary.TreatmentConversionRate ?? 0;
+                                                uplift = primary.expectedUplift ?? primary.ExpectedUplift ?? 0;
+                                                topName = "Treatment";
+                                            }
+
+                                            return (
+                                                <div className="flex items-center gap-4 text-xs">
+                                                    <span className="font-medium text-foreground">{primary.EventName || primary.eventName}</span>
+                                                    <span className="text-muted-foreground">
+                                                        {baseName}: {(baseCr * 100).toFixed(1)}% ({baseExp})
+                                                    </span>
+                                                    <span className="text-muted-foreground">
+                                                        {topName}: {(topCr * 100).toFixed(1)}% ({topExp})
+                                                    </span>
+                                                    <span className={`font-bold ${uplift > 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                                        {uplift > 0 ? '+' : ''}{(uplift * 100).toFixed(1)}% uplift
+                                                    </span>
+                                                </div>
+                                            );
+                                        })()}
                                     </TableCell>
                                     <TableCell className='print:hidden'>
                                         <div className="flex items-center gap-2">
                                             <Button
+                                                type="button"
                                                 variant="ghost"
                                                 size="icon"
                                                 className="h-8 w-8 text-muted-foreground hover:text-primary"
@@ -97,6 +191,7 @@ export function ExperimentHistoryTable({ iterations, isLoadingIterations, isHist
                                             <AlertDialog>
                                                 <AlertDialogTrigger asChild>
                                                     <Button
+                                                        type="button"
                                                         variant="ghost"
                                                         size="icon"
                                                         className="h-8 w-8 text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10"
@@ -116,7 +211,15 @@ export function ExperimentHistoryTable({ iterations, isLoadingIterations, isHist
                                                         <AlertDialogCancel>Cancel</AlertDialogCancel>
                                                         <AlertDialogAction
                                                             className="bg-rose-500 hover:bg-rose-600 text-white"
-                                                            onClick={() => deleteMutation.mutate(iter.id)}
+                                                            onClick={() => {
+                                                                deleteMutation.mutate(iter.id, {
+                                                                    onSuccess: () => {
+                                                                        if (currentHistoricalSnapshotId === iter.id) {
+                                                                            setHistoricalSnapshot(null);
+                                                                        }
+                                                                    }
+                                                                });
+                                                            }}
                                                         >
                                                             Delete Iteration
                                                         </AlertDialogAction>

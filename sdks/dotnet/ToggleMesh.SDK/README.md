@@ -8,21 +8,18 @@ ToggleMesh SDK is engineered for **hardcore, high-throughput backend services**.
 
 ## 🚀 Performance Metrics
 
-*   **Evaluation Latency:** **~24-77 nanoseconds** (Mean) on standard hardware depending on context structure.
+*   **Evaluation Latency:** **<30 nanoseconds** (Mean) on standard hardware depending on context structure.
 *   **Memory Allocations:** **0 Bytes** (Zero managed allocations per check, including complex string matching and segment evaluations).
 *   **Synchronization:** Real-time push via SignalR over Redis backplane (no polling).
 
-*Benchmarks executed using BenchmarkDotNet on .NET 10.0 / Intel Core i7-14700K:*
-```text
-| Method                         | Mean     | Error    | StdDev   | Allocated |
-|------------------------------- |---------:|---------:|---------:|----------:|
-| IsEnabled_WithRules_Typed      | 52.40 ns | 0.352 ns | 0.329 ns |         - |
-| IsEnabled_WithRules_AOT        | 24.68 ns | 0.169 ns | 0.158 ns |         - |
-| IsEnabled_WithRules_Dictionary | 49.38 ns | 0.269 ns | 0.252 ns |         - |
-| IsEnabled_Complex_Typed        | 98.90 ns | 0.337 ns | 0.315 ns |         - |
-| IsEnabled_Complex_AOT          | 77.42 ns | 0.295 ns | 0.261 ns |         - |
-| Track_Event                    | 46.37 ns | 0.136 ns | 0.127 ns |         - |
-```
+*Benchmarks executed using [BenchmarkDotNet](https://github.com/dotnet/BenchmarkDotNet) on .NET 10.0 / Intel Core i7-14700K:*
+| Method | Mean | StdDev | Max | P95 | Allocated |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| **Evaluate_NoRules_AOT** *(Baseline)* | **7.43 ns** | 0.04 ns | 7.50 ns | 7.48 ns | **-** |
+| **Evaluate_1Rule_AOT** *(Typical)* | **29.53 ns** | 0.11 ns | 29.67 ns | 29.66 ns | **-** |
+| **Evaluate_ComplexRule_AOT** *(MAB/Rollout)* | **96.66 ns** | 0.48 ns | 97.69 ns | 97.47 ns | **-** |
+| **Evaluate_10Rules_AOT** *(Worst-case)* | **114.23 ns** | 0.38 ns | 114.94 ns | 114.76 ns | **-** |
+| **TrackEvent_10Rules_AOT** *(Metrics Buffer)*| **45.84 ns** | 0.06 ns | 45.98 ns | 45.93 ns | **-** |
 
 ---
 

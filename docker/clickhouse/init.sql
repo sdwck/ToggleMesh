@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS default.AnalyticsExposures
     EnvironmentId UUID,
     FlagKey String,
     Identity String,
-    Variant Bool,
+    VariationId Nullable(UUID),
     Properties String,
     Timestamp DateTime64(3, 'UTC')
 )

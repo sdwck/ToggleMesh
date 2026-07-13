@@ -14,7 +14,6 @@ using Testcontainers.PostgreSql;
 using Testcontainers.Redis;
 using ToggleMesh.API.Features.Organizations.Domain;
 using ToggleMesh.API.Features.Projects.Domain;
-using ToggleMesh.API.Features.Webhooks.Workers;
 using ToggleMesh.API.Infrastructure.Data;
 using ToggleMesh.API.Infrastructure.Data.Interceptors;
 using ToggleMesh.API.Infrastructure.Email;
@@ -44,15 +43,12 @@ public class TestWebApplicationFactory : WebApplicationFactory<Program>, IAsyncL
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
-        builder.ConfigureAppConfiguration((context, config) =>
+        builder.ConfigureAppConfiguration((_, config) =>
         {
             config.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["RateLimits:Auth"] = "10000",
-                ["RateLimits:Sdk"] = "10000",
-                ["ConnectionStrings:DefaultConnection"] = _db.GetConnectionString(),
-                ["Analytics:ClickHouse:ConnectionString"] = "",
-                ["Analytics:Kafka:BootstrapServers"] = ""
+                ["RateLimits:Sdk"] = "10000"
             });
         });
 
@@ -104,9 +100,7 @@ public class TestWebApplicationFactory : WebApplicationFactory<Program>, IAsyncL
             services.AddSingleton<TestOrganizationInterceptor>();
             var emailSenders = services.Where(d => d.ServiceType == typeof(IEmailSender)).ToList();
             foreach (var s in emailSenders)
-            {
                 services.Remove(s);
-            }
             services.AddSingleton<IEmailSender, FakeEmailSender>();
             services.AddScoped<IEmailSender, DatabaseOutboxEmailSender>();
 
@@ -129,7 +123,7 @@ public class TestWebApplicationFactory : WebApplicationFactory<Program>, IAsyncL
         });
     }
 
-    private static readonly object HostCreationLock = new();
+    private static readonly Lock HostCreationLock = new();
     
     protected override IHost CreateHost(IHostBuilder builder)
     {
@@ -144,11 +138,16 @@ public class TestWebApplicationFactory : WebApplicationFactory<Program>, IAsyncL
         await _db.StartAsync();
         await _redis.StartAsync();
 
+        Environment.SetEnvironmentVariable("ConnectionStrings__DefaultConnection", _db.GetConnectionString());
+        Environment.SetEnvironmentVariable("ConnectionStrings__Redis", _redis.GetConnectionString());
+        Environment.SetEnvironmentVariable("Analytics__ClickHouse__ConnectionString", " ");
+        Environment.SetEnvironmentVariable("Analytics__Kafka__BootstrapServers", " ");
+
         using var scope = Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         await db.Database.MigrateAsync();
 
-        _dbConnection = new Npgsql.NpgsqlConnection(_db.GetConnectionString());
+        _dbConnection = new NpgsqlConnection(_db.GetConnectionString());
         await _dbConnection.OpenAsync();
 
         _respawner = await Respawner.CreateAsync(_dbConnection, new RespawnerOptions

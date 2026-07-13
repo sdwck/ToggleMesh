@@ -32,7 +32,9 @@ public class ToggleFlagEndpoint : ToggleEndpoint<ToggleFlagRequest>
 
         var state = await _db.FlagEnvironmentStates
             .Include(x => x.FeatureFlag)
+                .ThenInclude(f => f.Variations)
             .Include(x => x.Rules)
+            .AsSplitQuery()
             .FirstOrDefaultAsync(x => x.EnvironmentId == environmentId && x.FeatureFlag.Key == flagKey, ct);
 
         if (state is null)
@@ -48,7 +50,8 @@ public class ToggleFlagEndpoint : ToggleEndpoint<ToggleFlagRequest>
         await new NotifyFlagUpdatedCommand(
             environmentId, 
             flagKey, 
-            response
+            response,
+            state.ToSdkDto()
         ).ExecuteAsync(ct);
 
         await Send.OkAsync(new { flagKey, req.IsEnabled }, ct);

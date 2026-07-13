@@ -24,13 +24,13 @@ describe('ToggleMeshClient SDK', () => {
             clientKey: 'tm_client_test'
         });
 
-        const mockFetch = vi.fn().mockResolvedValue({
+        const mockFetch = vi.fn().mockImplementation(() => Promise.resolve({
             ok: true,
-            json: async () => [
-                { key: 'new-checkout', isEnabled: true },
-                { key: 'stale-feature', isEnabled: false }
-            ]
-        });
+            json: () => Promise.resolve([
+                { key: 'new-checkout', variationId: 'v1', variationValue: 'true' },
+                { key: 'stale-feature', variationId: 'v2', variationValue: 'false' }
+            ])
+        }));
         global.fetch = mockFetch as any;
 
         await client.identify('user_123', { Country: 'MD' });
@@ -58,11 +58,14 @@ describe('ToggleMeshClient SDK', () => {
             clientKey: 'tm_client_test'
         });
 
-        global.fetch = vi.fn().mockResolvedValue({
+        const mockFetch = vi.fn().mockImplementation(() => Promise.resolve({
             ok: true,
-            json: async () => [{ key: 'feature', isEnabled: true }]
-        }) as any;
-
+            json: () => Promise.resolve([
+                { key: 'feature', variationId: 'v1', variationValue: 'true' }
+            ])
+        }));
+        global.fetch = mockFetch as any;
+        
         let callbackCalled = false;
         let receivedFlags: Record<string, boolean> = {};
 
@@ -81,6 +84,54 @@ describe('ToggleMeshClient SDK', () => {
 
         await client.identify('user_123');
         expect(callbackCalled).toBe(false);
+    });
+
+    describe('Evaluation Types', () => {
+        let evalClient: ToggleMeshClient;
+
+        beforeEach(async () => {
+            evalClient = new ToggleMeshClient({
+                baseUrl: BASE_URL,
+                clientKey: 'tm_client_test'
+            });
+
+            const mockFetch = vi.fn().mockImplementation(() => Promise.resolve({
+                ok: true,
+                json: () => Promise.resolve([
+                    { key: 'str-flag', variationId: 'v1', variationValue: 'hello world' },
+                    { key: 'bool-flag', variationId: 'v2', variationValue: 'true' },
+                    { key: 'num-flag', variationId: 'v3', variationValue: '42.5' },
+                    { key: 'bad-num-flag', variationId: 'v4', variationValue: 'not a number' },
+                    { key: 'json-flag', variationId: 'v5', variationValue: '{"theme":"dark"}' },
+                    { key: 'bad-json-flag', variationId: 'v6', variationValue: 'invalid { json' }
+                ])
+            }));
+            global.fetch = mockFetch as any;
+
+            await evalClient.identify('user_1');
+        });
+
+        it('should get string variation', () => {
+            expect(evalClient.getVariation('str-flag', 'default')).toBe('hello world');
+            expect(evalClient.getVariation('missing-flag', 'default')).toBe('default');
+        });
+
+        it('should get boolean variation', () => {
+            expect(evalClient.isEnabled('bool-flag', false)).toBe(true);
+            expect(evalClient.isEnabled('missing-flag', true)).toBe(true);
+        });
+
+        it('should get number variation', () => {
+            expect(evalClient.getNumber('num-flag', 0)).toBe(42.5);
+            expect(evalClient.getNumber('bad-num-flag', 99)).toBe(99);
+            expect(evalClient.getNumber('missing-flag', 10)).toBe(10);
+        });
+
+        it('should get json variation', () => {
+            expect(evalClient.getJson('json-flag', {})).toEqual({ theme: 'dark' });
+            expect(evalClient.getJson('bad-json-flag', { fallback: true })).toEqual({ fallback: true });
+            expect(evalClient.getJson('missing-flag', { fallback: true })).toEqual({ fallback: true });
+        });
     });
 
     describe('track()', () => {

@@ -44,7 +44,7 @@ public class KafkaPublisherTests : IAsyncLifetime
             new()
             {
                 Type = AnalyticsEventType.Exposure, Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-                Identity = "user-1", FlagKey = "flag-1", Result = true
+                Identity = "user-1", FlagKey = "flag-1", VariationId = Guid.NewGuid()
             }
         };
 

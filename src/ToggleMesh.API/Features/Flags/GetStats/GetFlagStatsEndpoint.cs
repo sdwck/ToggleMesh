@@ -45,16 +45,18 @@ public class GetFlagStatsEndpoint : ToggleEndpointWithoutRequest<List<FlagEnviro
             .Select(e => e.Id)
             .ToListAsync(ct);
 
-        var buckets = await _db.FlagMetricBuckets
+        var rawBuckets = await _db.FlagMetricBuckets
             .AsNoTracking()
             .Where(x => x.FlagKey == flagKey && projectEnvIds.Contains(x.EnvironmentId))
+            .ToListAsync(ct);
+
+        var buckets = rawBuckets
             .GroupBy(x => x.EnvironmentId)
             .Select(g => new FlagEnvironmentStatsDto(
                 g.Key,
-                g.Sum(b => b.TrueCount),
-                g.Sum(b => b.FalseCount)
+                g.GroupBy(b => b.VariationId).ToDictionary(v => v.Key, v => v.Sum(b => b.Count))
             ))
-            .ToListAsync(ct);
+            .ToList();
 
         await Send.OkAsync(buckets, ct);
     }

@@ -39,10 +39,12 @@ public class SseConnectionManager : ISseConnectionManager
 
         var message = $"data: {payload}\n\n";
         
+        var bytes = System.Text.Encoding.UTF8.GetBytes(message);
+        
         foreach (var client in envClients)
             try
             {
-                await client.Value.WriteAsync(message);
+                await client.Value.Body.WriteAsync(bytes);
                 await client.Value.Body.FlushAsync();
             }
             catch (Exception ex)

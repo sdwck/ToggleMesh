@@ -77,7 +77,7 @@ public class CacheInvalidationTests : IAsyncLifetime
         var l1CacheKey = $"sdk:compiled_rules:{envId}";
         var l2CacheKey = $"sdk:flags:states:{envId}";
 
-        var dummyL2Data = new List<FlagStateDto> { new(flagKey, false, null, false, [], null, null) };
+        var dummyL2Data = new List<FlagStateDto> { new(flagKey, false, null, [], false, [], null, null, null, null) };
 
         await redis.StringSetAsync(l2CacheKey, JsonSerializer.Serialize(dummyL2Data));
         memoryCache.Set(l1CacheKey, "dummy_l1_data");

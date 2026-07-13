@@ -13,8 +13,8 @@ builder.ConfigureServices((context, services) =>
         options.ApiKey = context.Configuration["ToggleMesh:ApiKey"]!;
         options.MaxBatchSize = 5000;
     });
-    services.AddHostedService<Worker>();
-    services.AddHostedService<EnterpriseSimulationWorker>();
+    services.AddHostedService<ShowcaseWorker>();
+    // services.AddHostedService<MabSimulationWorker>();
 });
 
 var app = builder.Build();

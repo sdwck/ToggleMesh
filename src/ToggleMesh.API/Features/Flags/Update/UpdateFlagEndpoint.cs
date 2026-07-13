@@ -1,3 +1,4 @@
+using System.Text.Json;
 using FastEndpoints;
 using Microsoft.EntityFrameworkCore;
 using ToggleMesh.API.Extensions;
@@ -33,7 +34,10 @@ public class UpdateFlagEndpoint : ToggleEndpoint<UpdateFlagRequest, GetFlagRespo
 
         var state = await _db.FlagEnvironmentStates
             .Include(x => x.FeatureFlag)
+                .ThenInclude(x => x.Variations)
             .Include(x => x.Rules)
+            .Include(x => x.IndividualTargets)
+            .AsSplitQuery()
             .FirstOrDefaultAsync(x => x.EnvironmentId == environmentId && x.FeatureFlag.Key == flagKey, ct);
 
         if (state is null)
@@ -42,38 +46,100 @@ public class UpdateFlagEndpoint : ToggleEndpoint<UpdateFlagRequest, GetFlagRespo
             return;
         }
         
-        state.IsEnabled = req.IsEnabled;
-        state.RolloutPercentage = req.RolloutPercentage;
+        state.OffVariationId = req.OffVariationId;
 
-        var existingRules = state.Rules.ToList();
-        foreach (var oldRule in existingRules)
-            if (!req.Rules.Any(r => 
-                    r.GroupId == oldRule.GroupId 
-                    && r.Attribute == oldRule.Attribute 
-                    && r.Operator == oldRule.Operator 
-                    && r.Value == oldRule.Value))
-                _db.Remove(oldRule);
-        
-        foreach (var newRule in req.Rules)
-            if (!existingRules.Any(r => 
-                    r.GroupId == newRule.GroupId 
-                    && r.Attribute == newRule.Attribute 
-                    && r.Operator == newRule.Operator 
-                    && r.Value == newRule.Value))
-                state.Rules.Add(new FlagRule { 
-                    GroupId = newRule.GroupId, 
-                    Attribute = newRule.Attribute, 
-                    Operator = newRule.Operator, 
-                    Value = newRule.Value 
-                });
+        if (!state.IsExperimentActive)
+        {
+            var currentRolloutJson = JsonSerializer.Serialize(state.FallthroughRollout);
+            var newRolloutJson = JsonSerializer.Serialize(req.FallthroughRollout);
+            if (currentRolloutJson != newRolloutJson)
+                state.FallthroughRollout = req.FallthroughRollout;
 
-        await _db.SaveChangesAsync(ct);
+            var currentRulesJson = JsonSerializer.Serialize(
+                state.Rules.Select(r => 
+                    new { 
+                        r.GroupId, 
+                        r.Attribute, 
+                        r.Operator, 
+                        r.Value, 
+                        r.Rollout 
+                    }));
+            var newRulesJson = JsonSerializer.Serialize(
+                req.Rules.Select(r => 
+                    new
+                    {
+                        r.GroupId, 
+                        r.Attribute, 
+                        r.Operator, 
+                        r.Value, 
+                        Rollout = r.Rollout?.Select(rw => 
+                            new { rw.VariationId, rw.Weight })
+                    }));
+            
+            if (currentRulesJson != newRulesJson)
+            {
+                _db.FlagRules.RemoveRange(state.Rules);
+                state.Rules.Clear();
+                
+                foreach (var newRule in req.Rules)
+                    state.Rules.Add(new FlagRule 
+                    { 
+                        GroupId = newRule.GroupId, 
+                        Attribute = newRule.Attribute, 
+                        Operator = newRule.Operator, 
+                        Value = newRule.Value,
+                        Rollout = newRule.Rollout?
+                            .Select(r => 
+                                new VariationWeight
+                                {
+                                    VariationId = r.VariationId, 
+                                    Weight = r.Weight
+                                })
+                            .ToList() ?? []
+                    });
+            }
+        }
+
+        var currentTargetsJson = JsonSerializer.Serialize(
+            state.IndividualTargets
+                .OrderBy(t => t.IdentityKey)
+                .Select(t => new { t.IdentityKey, t.VariationId }));
+        var newTargets = req.IndividualTargets?
+            .OrderBy(t => t.Key)
+            .Select(t => 
+                new { IdentityKey = t.Key, VariationId = t.Value })
+            .ToList() ?? [];
+        var newTargetsJson = JsonSerializer.Serialize(newTargets);
+
+        if (currentTargetsJson != newTargetsJson)
+        {
+            _db.RemoveRange(state.IndividualTargets);
+            state.IndividualTargets.Clear();
+
+            if (req.IndividualTargets != null)
+                foreach (var kvp in req.IndividualTargets)
+                    state.IndividualTargets.Add(new FlagIndividualTarget
+                    {
+                        IdentityKey = kvp.Key,
+                        VariationId = kvp.Value
+                    });
+        }
+
+        try
+        {
+            await _db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            ThrowError("Concurrent update detected. The flag was modified by another process. Please refresh and try again.", 409);
+        }
 
         var response = state.ToDto();
         await new NotifyFlagUpdatedCommand(
             environmentId, 
             flagKey, 
-            response
+            response,
+            state.ToSdkDto()
         ).ExecuteAsync(ct);
 
         await Send.OkAsync(response, ct);

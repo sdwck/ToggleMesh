@@ -4,7 +4,8 @@ namespace ToggleMesh.API.Features.Flags.Update;
 
 public class UpdateFlagRequest
 {
-    public bool IsEnabled { get; set; }
-    public List<RuleDto> Rules { get; set; } = [];
-    public int? RolloutPercentage { get; set; }
+    public List<RuleInput> Rules { get; set; } = [];
+    public Guid? OffVariationId { get; set; }
+    public List<VariationWeight> FallthroughRollout { get; set; } = [];
+    public Dictionary<string, Guid>? IndividualTargets { get; set; }
 }

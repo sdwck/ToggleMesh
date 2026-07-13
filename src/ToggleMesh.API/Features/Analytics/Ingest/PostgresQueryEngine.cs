@@ -13,35 +13,38 @@ public class PostgresQueryEngine : IAnalyticsQueryEngine
     public PostgresQueryEngine(AppDbContext db)
     {
         _db = db;
+        _db.Database.SetCommandTimeout(TimeSpan.FromMinutes(5));
     }
 
     public async Task AggregateMetricsAsync(CancellationToken ct = default)
     {
         var sql = @"
             WITH active_rollouts AS (
-                SELECT fes.""EnvironmentId"", ff.""Key"" as ""FlagKey""
+                SELECT fes.""EnvironmentId"", ff.""Key"" as ""FlagKey"", fes.""ExperimentStartedAt""
                 FROM ""FlagEnvironmentStates"" fes
                 JOIN ""ProjectFeatureFlags"" ff ON ff.""Id"" = fes.""FeatureFlagId""
+                WHERE fes.""IsExperimentActive"" = true
             ),
             exposed_users AS (
                 SELECT 
                     e.""EnvironmentId"", 
                     e.""FlagKey"", 
                     e.""Identity"", 
-                    e.""Variant"", 
+                    e.""VariationId"", 
                     MIN(e.""Timestamp"") as ""FirstExposureTimestamp""
                 FROM ""AnalyticsExposures"" e
                 JOIN active_rollouts ar 
                   ON e.""EnvironmentId"" = ar.""EnvironmentId"" 
                  AND e.""FlagKey"" = ar.""FlagKey""
-                GROUP BY e.""EnvironmentId"", e.""FlagKey"", e.""Identity"", e.""Variant""
+                WHERE e.""Timestamp"" >= COALESCE(ar.""ExperimentStartedAt"", '1970-01-01'::timestamp)
+                GROUP BY e.""EnvironmentId"", e.""FlagKey"", e.""Identity"", e.""VariationId""
             ),
             conversions AS (
                 SELECT
                     e.""EnvironmentId"",
                     e.""FlagKey"",
                     t.""EventName"",
-                    e.""Variant"",
+                    e.""VariationId"",
                     COUNT(DISTINCT e.""Identity"") as ""TotalConversions"",
                     SUM(COALESCE(t.""Value"", 0)) as ""TotalValue"",
                     SUM(COALESCE(t.""Value"", 0) * COALESCE(t.""Value"", 0)) as ""SumOfSquaredValues""
@@ -50,24 +53,28 @@ public class PostgresQueryEngine : IAnalyticsQueryEngine
                   ON e.""EnvironmentId"" = t.""EnvironmentId"" 
                  AND e.""Identity"" = t.""Identity""
                  AND t.""Timestamp"" >= e.""FirstExposureTimestamp""
-                GROUP BY e.""EnvironmentId"", e.""FlagKey"", t.""EventName"", e.""Variant""
+                JOIN active_rollouts ar
+                  ON e.""EnvironmentId"" = ar.""EnvironmentId""
+                 AND e.""FlagKey"" = ar.""FlagKey""
+                WHERE t.""Timestamp"" >= COALESCE(ar.""ExperimentStartedAt"", '1970-01-01'::timestamp)
+                GROUP BY e.""EnvironmentId"", e.""FlagKey"", t.""EventName"", e.""VariationId""
             ),
             exposures_count AS (
                 SELECT 
                     ""EnvironmentId"",
                     ""FlagKey"",
-                    ""Variant"",
+                    ""VariationId"",
                     COUNT(DISTINCT ""Identity"") as ""TotalExposures""
                 FROM exposed_users
-                GROUP BY ""EnvironmentId"", ""FlagKey"", ""Variant""
+                GROUP BY ""EnvironmentId"", ""FlagKey"", ""VariationId""
             )
-            INSERT INTO ""ExperimentMetrics"" (""Id"", ""EnvironmentId"", ""FlagKey"", ""EventName"", ""Variant"", ""TotalExposures"", ""TotalConversions"", ""TotalValue"", ""SumOfSquaredValues"", ""LastCalculatedAt"", ""CreatedAt"")
+            INSERT INTO ""ExperimentMetrics"" (""Id"", ""EnvironmentId"", ""FlagKey"", ""EventName"", ""VariationId"", ""TotalExposures"", ""TotalConversions"", ""TotalValue"", ""SumOfSquaredValues"", ""LastCalculatedAt"", ""CreatedAt"")
             SELECT 
                 gen_random_uuid(),
                 e.""EnvironmentId"",
                 e.""FlagKey"",
                 c.""EventName"",
-                e.""Variant"",
+                e.""VariationId"",
                 e.""TotalExposures"",
                 COALESCE(c.""TotalConversions"", 0),
                 COALESCE(c.""TotalValue"", 0),
@@ -78,8 +85,22 @@ public class PostgresQueryEngine : IAnalyticsQueryEngine
             JOIN conversions c 
               ON e.""EnvironmentId"" = c.""EnvironmentId"" 
              AND e.""FlagKey"" = c.""FlagKey"" 
-             AND e.""Variant"" = c.""Variant""
-            ON CONFLICT (""EnvironmentId"", ""FlagKey"", ""EventName"", ""Variant"") 
+             AND e.""VariationId"" = c.""VariationId""
+            UNION ALL
+            SELECT 
+                gen_random_uuid(),
+                ""EnvironmentId"",
+                ""FlagKey"",
+                '$exposure',
+                ""VariationId"",
+                ""TotalExposures"",
+                0,
+                0,
+                0,
+                now(),
+                now()
+            FROM exposures_count
+            ON CONFLICT (""EnvironmentId"", ""FlagKey"", ""EventName"", ""VariationId"") 
             DO UPDATE SET 
                 ""TotalExposures"" = EXCLUDED.""TotalExposures"",
                 ""TotalConversions"" = EXCLUDED.""TotalConversions"",
@@ -98,123 +119,146 @@ public class PostgresQueryEngine : IAnalyticsQueryEngine
             .AsNoTracking()
             .Include(f => f.FeatureFlag)
             .Include(f => f.ContextualRollouts)
-            .Where(f => f.RolloutPercentage != null && f.ContextPartitionKeys != null && f.ContextPartitionKeys.Length > 0)
+            .Where(f => f.ContextPartitionKeys.Length > 0 && f.MabGoalEvent != null)
             .AsSplitQuery()
             .ToListAsync(ct);
 
-        if (activeRollouts.Count == 0) return;
+        if (activeRollouts.Count == 0) 
+            return;
 
-        foreach (var state in activeRollouts)
+        var connection = _db.Database.GetDbConnection();
+        var wasClosed = connection.State == ConnectionState.Closed;
+        if (wasClosed) await connection.OpenAsync(ct);
+
+        try
         {
-            var keys = state.ContextPartitionKeys;
-
-            var exposures = await _db.AnalyticsExposures
-                .AsNoTracking()
-                .Where(e => e.EnvironmentId == state.EnvironmentId && e.FlagKey == state.FeatureFlag.Key)
-                .ToListAsync(ct);
-            var allExposedIdentities = exposures.Select(e => e.Identity).ToHashSet();
-                
-            var tracks = await _db.AnalyticsTracks
-                .AsNoTracking()
-                .Where(t => t.EnvironmentId == state.EnvironmentId && (t.EventName == state.MabGoalEvent || t.Properties != null))
-                .Where(t => allExposedIdentities.Contains(t.Identity))
-                .ToListAsync(ct);
-
-            var tracksByIdentity = tracks
-                .GroupBy(t => t.Identity)
-                .ToDictionary(g => g.Key, g => g.ToList());
-
-            var userExposures = exposures.GroupBy(e => new { e.Identity, e.Variant })
-                .Select(g => {
-                    var identity = g.Key.Identity;
-                    var identityTracks = tracksByIdentity.TryGetValue(identity, out var list) ? list : new List<AnalyticsTrack>();
-                    
-                    var props = g.FirstOrDefault(e => e.Properties != null)?.Properties 
-                        ?? identityTracks.Where(t => t.Properties != null).OrderBy(t => t.Timestamp).FirstOrDefault()?.Properties;
-
-                    return new { 
-                        g.Key.Identity, 
-                        g.Key.Variant, 
-                        FirstExposure = g.Min(e => e.Timestamp),
-                        Properties = props
-                    };
-                }).ToList();
-
-
-            var slices = userExposures.Select(e => GetContextSliceString(e.Properties, keys)).Distinct().ToList();
-
-            foreach (var slice in slices)
+            foreach (var state in activeRollouts)
             {
-                var sliceUsers = userExposures.Where(e => GetContextSliceString(e.Properties, keys) == slice).ToList();
-                var variants = new[] { false, true };
+                var keys = state.ContextPartitionKeys;
+                var selectExtracts = string.Join(", ", keys.Select((k, i) => $"COALESCE(\"Properties\"->>'{k.Replace("'", "''")}', 'null') as \"Key{i}\""));
+                var groupByKeys = string.Join(", ", keys.Select((_, i) => $"\"Key{i}\""));
 
-                foreach (var variant in variants)
+                var sql = $"""
+                    WITH user_props AS (
+                        SELECT 
+                            e."Identity", 
+                            e."VariationId", 
+                            MIN(e."Timestamp") as "FirstExposure",
+                            COALESCE(
+                                (SELECT "Properties" FROM "AnalyticsExposures" e2 WHERE e2."EnvironmentId" = @envId AND e2."FlagKey" = @flagKey AND e2."Identity" = e."Identity" AND e2."Properties" IS NOT NULL LIMIT 1),
+                                (SELECT "Properties" FROM "AnalyticsTracks" t2 WHERE t2."EnvironmentId" = @envId AND t2."Identity" = e."Identity" AND t2."Properties" IS NOT NULL ORDER BY t2."Timestamp" LIMIT 1)
+                            ) as "Properties"
+                        FROM "AnalyticsExposures" e
+                        WHERE e."EnvironmentId" = @envId AND e."FlagKey" = @flagKey AND e."Timestamp" >= @startedAt
+                        GROUP BY e."Identity", e."VariationId"
+                    ),
+                    user_slices AS (
+                        SELECT 
+                            "Identity",
+                            "VariationId",
+                            "FirstExposure",
+                            {selectExtracts}
+                        FROM user_props
+                    ),
+                    conversions AS (
+                        SELECT
+                            s."VariationId",
+                            COUNT(DISTINCT s."Identity") as "TotalExposures",
+                            COUNT(DISTINCT t."Identity") as "TotalConversions",
+                            SUM(COALESCE(t."Value", 0)) as "TotalValue",
+                            SUM(COALESCE(t."Value", 0) * COALESCE(t."Value", 0)) as "SumOfSquaredValues",
+                            {groupByKeys}
+                        FROM user_slices s
+                        LEFT JOIN "AnalyticsTracks" t 
+                          ON t."EnvironmentId" = @envId 
+                            AND t."Identity" = s."Identity" 
+                            AND t."EventName" = @goalEvent 
+                            AND t."Timestamp" >= s."FirstExposure"
+                        WHERE t."Timestamp" IS NULL OR t."Timestamp" >= @startedAt
+                        GROUP BY s."VariationId", {groupByKeys}
+                    )
+                    SELECT "VariationId", "TotalExposures", "TotalConversions", "TotalValue", "SumOfSquaredValues", {groupByKeys} FROM conversions;             
+                    """;
+
+                var results = new List<(Guid VariationId, long Exposures, long Conversions, double Value, double SumSquared, string Slice)>();
+
+                await using (var command = connection.CreateCommand())
                 {
-                    var variantUsers = sliceUsers.Where(u => u.Variant == variant).ToList();
-                    if (variantUsers.Count == 0) continue;
-
-                    var userIdentities = variantUsers.Select(u => u.Identity).ToHashSet();
-                    var firstExposureLookup = variantUsers.ToDictionary(u => u.Identity, u => u.FirstExposure);
+                    command.CommandText = sql;
                     
-                    var variantTracks = tracks
-                        .Where(t => userIdentities.Contains(t.Identity) && t.EventName == state.MabGoalEvent)
-                        .Where(t => t.Timestamp >= firstExposureLookup[t.Identity])
-                        .ToList();
+                    var pEnv = command.CreateParameter(); pEnv.ParameterName = "@envId"; pEnv.Value = state.EnvironmentId; command.Parameters.Add(pEnv);
+                    var pFlag = command.CreateParameter(); pFlag.ParameterName = "@flagKey"; pFlag.Value = state.FeatureFlag.Key; command.Parameters.Add(pFlag);
+                    var pEvent = command.CreateParameter(); pEvent.ParameterName = "@goalEvent"; pEvent.Value = state.MabGoalEvent ?? ""; command.Parameters.Add(pEvent);
+                    var pStartedAt = command.CreateParameter(); pStartedAt.ParameterName = "@startedAt"; pStartedAt.Value = state.ExperimentStartedAt ?? DateTimeOffset.FromUnixTimeSeconds(0); command.Parameters.Add(pStartedAt);
 
-                    var totalExposures = variantUsers.Count;
-                    var totalConversions = variantTracks.Select(t => t.Identity).Distinct().Count();
-                    var totalValue = variantTracks.Sum(t => t.Value ?? 0);
-                    var sumOfSquaredValues = variantTracks.Sum(t => (t.Value ?? 0) * (t.Value ?? 0));
-
-                    var rolloutId = state.ContextualRollouts?.FirstOrDefault(r => r.ContextSlice == slice)?.Id;
-
-                    var metric = await _db.ContextualExperimentMetrics.FirstOrDefaultAsync(m => 
-                        m.EnvironmentId == state.EnvironmentId && 
-                        m.FlagKey == state.FeatureFlag.Key && 
-                        m.EventName == state.MabGoalEvent && 
-                        m.Variant == variant && 
-                        m.ContextSlice == slice &&
-                        m.RolloutId == rolloutId, ct);
-
-                    if (metric == null)
+                    using var reader = await command.ExecuteReaderAsync(ct);
+                    while (await reader.ReadAsync(ct))
                     {
-                        metric = new ContextualExperimentMetric
-                        {
-                            EnvironmentId = state.EnvironmentId,
-                            FlagKey = state.FeatureFlag.Key,
-                            EventName = state.MabGoalEvent ?? string.Empty,
-                            Variant = variant,
-                            RolloutId = rolloutId,
-                            ContextSlice = slice,
-                            CreatedAt = DateTime.UtcNow
-                        };
-                        _db.ContextualExperimentMetrics.Add(metric);
-                    }
+                        var variationId = reader.GetGuid(0);
+                        var totalExposures = reader.GetInt64(1);
+                        var totalConversions = reader.GetInt64(2);
+                        var totalValue = reader.IsDBNull(3) ? 0.0 : reader.GetDouble(3);
+                        var sumOfSquaredValues = reader.IsDBNull(4) ? 0.0 : reader.GetDouble(4);
 
-                    metric.TotalExposures = totalExposures;
-                    metric.TotalConversions = totalConversions;
-                    metric.TotalValue = totalValue;
-                    metric.SumOfSquaredValues = sumOfSquaredValues;
-                    metric.LastCalculatedAt = DateTimeOffset.UtcNow;
+                        var dict = new Dictionary<string, string>();
+                        for (int i = 0; i < keys.Length; i++)
+                        {
+                            var val = reader.IsDBNull(5 + i) ? "null" : reader.GetString(5 + i);
+                            dict[keys[i]] = val;
+                        }
+
+                        results.Add((variationId, totalExposures, totalConversions, totalValue, sumOfSquaredValues, JsonSerializer.Serialize(dict)));
+                    }
+                }
+
+                if (results.Count > 0)
+                {
+                    var existingMetrics = await _db.ContextualExperimentMetrics
+                        .Where(x => x.EnvironmentId == state.EnvironmentId && x.FlagKey == state.FeatureFlag.Key && x.EventName == state.MabGoalEvent)
+                        .ToDictionaryAsync(x => $"{x.VariationId}_{x.ContextSlice}_{x.RolloutId}", ct);
+
+                    foreach (var r in results)
+                    {
+                        var rolloutId = state.ContextualRollouts?.FirstOrDefault(x => x.ContextSlice == r.Slice)?.Id;
+                        var key = $"{r.VariationId}_{r.Slice}_{rolloutId}";
+
+                        if (existingMetrics.TryGetValue(key, out var metric))
+                        {
+                            metric.TotalExposures = r.Exposures;
+                            metric.TotalConversions = r.Conversions;
+                            metric.TotalValue = r.Value;
+                            metric.SumOfSquaredValues = r.SumSquared;
+                            metric.LastCalculatedAt = DateTimeOffset.UtcNow;
+                        }
+                        else
+                        {
+                            metric = new ContextualExperimentMetric
+                            {
+                                EnvironmentId = state.EnvironmentId,
+                                FlagKey = state.FeatureFlag.Key,
+                                EventName = state.MabGoalEvent ?? string.Empty,
+                                VariationId = r.VariationId,
+                                RolloutId = rolloutId,
+                                ContextSlice = r.Slice,
+                                CreatedAt = DateTime.UtcNow,
+                                TotalExposures = r.Exposures,
+                                TotalConversions = r.Conversions,
+                                TotalValue = r.Value,
+                                SumOfSquaredValues = r.SumSquared,
+                                LastCalculatedAt = DateTimeOffset.UtcNow
+                            };
+                            _db.ContextualExperimentMetrics.Add(metric);
+                        }
+                    }
                 }
             }
-        }
-        
-        await _db.SaveChangesAsync(ct);
-    }
 
-    private string GetContextSliceString(JsonDocument? properties, string[] keys)
-    {
-        if (properties == null) return "{}";
-        var dict = new Dictionary<string, string>();
-        foreach (var key in keys)
-        {
-            if (properties.RootElement.TryGetProperty(key, out var el))
-                dict[key] = el.ToString();
-            else
-                dict[key] = "null";
+            await _db.SaveChangesAsync(ct);
         }
-        return JsonSerializer.Serialize(dict);
+        finally
+        {
+            if (wasClosed) await connection.CloseAsync();
+        }
     }
 
     public async Task<IEnumerable<(DateTime Time, long Count)>> GetProjectHourlyEvaluationsAsync(Guid projectId, IEnumerable<Guid> environmentIds, TimeSpan duration, CancellationToken ct = default)
@@ -227,12 +271,12 @@ public class PostgresQueryEngine : IAnalyticsQueryEngine
             .Select(g => new
             {
                 Time = g.Key,
-                Count = g.Sum(x => x.TrueCount + x.FalseCount)
+                Count = g.Sum(x => x.Count)
             })
             .OrderBy(x => x.Time)
             .ToListAsync(ct);
 
-        return query.Select(x => (x.Time, x.Count));
+        return query.Select(x => (x.Time.UtcDateTime, x.Count));
     }
 
     public async Task<IEnumerable<ExperimentTimeSeriesPoint>> GetExperimentTimeSeriesAsync(Guid environmentId, string flagKey, string eventName, TimeSpan duration, CancellationToken ct = default)
@@ -254,14 +298,14 @@ public class PostgresQueryEngine : IAnalyticsQueryEngine
                 WITH hourly_exposures AS (
                     SELECT 
                         DATE_TRUNC('minute', ""Timestamp"") as ""TimeBucket"",
-                        ""Variant"",
+                        ""VariationId"",
                         COUNT(DISTINCT ""Identity"") as ""Exposures""
                     FROM ""AnalyticsExposures""
                     WHERE ""EnvironmentId"" = @envId AND ""FlagKey"" = @flagKey AND ""Timestamp"" >= @cutoff
                     GROUP BY 1, 2
                 ),
                 exposed_users AS (
-                    SELECT ""Identity"", ""Variant"", MIN(""Timestamp"") as ""FirstExposure""
+                    SELECT ""Identity"", ""VariationId"", MIN(""Timestamp"") as ""FirstExposure""
                     FROM ""AnalyticsExposures""
                     WHERE ""EnvironmentId"" = @envId AND ""FlagKey"" = @flagKey AND ""Timestamp"" >= @cutoff
                     GROUP BY 1, 2
@@ -269,37 +313,47 @@ public class PostgresQueryEngine : IAnalyticsQueryEngine
                 hourly_conversions AS (
                     SELECT 
                         DATE_TRUNC('minute', t.""Timestamp"") as ""TimeBucket"",
-                        e.""Variant"",
+                        e.""VariationId"",
                         COUNT(DISTINCT t.""Identity"") as ""Conversions""
                     FROM ""AnalyticsTracks"" t
                     JOIN exposed_users e ON t.""Identity"" = e.""Identity""
                     WHERE t.""EnvironmentId"" = @envId AND t.""EventName"" = @eventName AND t.""Timestamp"" >= e.""FirstExposure""
                     GROUP BY 1, 2
                 )
-                SELECT 
-                    COALESCE(e.""TimeBucket"", c.""TimeBucket"") as ""TimeBucket"",
-                    COALESCE(e.""Variant"", c.""Variant"") as ""Variant"",
-                    COALESCE(e.""Exposures"", 0) as ""Exposures"",
-                    COALESCE(c.""Conversions"", 0) as ""Conversions""
-                FROM hourly_exposures e
-                FULL OUTER JOIN hourly_conversions c 
-                  ON e.""TimeBucket"" = c.""TimeBucket"" AND e.""Variant"" = c.""Variant""
-                ORDER BY 1, 2;
-            ";
+            SELECT 
+                COALESCE(e.""TimeBucket"", c.""TimeBucket"") as ""TimeBucket"",
+                COALESCE(e.""VariationId"", c.""VariationId"") as ""VariationId"",
+                COALESCE(e.""Exposures"", 0) as ""Exposures"",
+                COALESCE(c.""Conversions"", 0) as ""Conversions""
+            FROM hourly_exposures e
+            FULL OUTER JOIN hourly_conversions c 
+              ON e.""TimeBucket"" = c.""TimeBucket"" AND e.""VariationId"" = c.""VariationId""
+            ORDER BY 1, 2;
+        ";
 
             var pEnv = command.CreateParameter(); pEnv.ParameterName = "@envId"; pEnv.Value = environmentId; command.Parameters.Add(pEnv);
             var pFlag = command.CreateParameter(); pFlag.ParameterName = "@flagKey"; pFlag.Value = flagKey; command.Parameters.Add(pFlag);
             var pEvent = command.CreateParameter(); pEvent.ParameterName = "@eventName"; pEvent.Value = eventName; command.Parameters.Add(pEvent);
             var pCutoff = command.CreateParameter(); pCutoff.ParameterName = "@cutoff"; pCutoff.Value = cutoff; command.Parameters.Add(pCutoff);
 
-            using var reader = await command.ExecuteReaderAsync(ct);
+            var cumulativeExposures = new Dictionary<Guid, long>();
+            var cumulativeConversions = new Dictionary<Guid, long>();
+
+            await using var reader = await command.ExecuteReaderAsync(ct);
             while (await reader.ReadAsync(ct))
             {
                 var timeBucket = reader.GetDateTime(0);
-                var variant = reader.GetBoolean(1);
+                var variationId = reader.GetGuid(1);
                 var exposures = reader.GetInt64(2);
                 var conversions = reader.GetInt64(3);
-                results.Add(new ExperimentTimeSeriesPoint(timeBucket, variant, exposures, conversions));
+
+                if (cumulativeExposures.TryAdd(variationId, 0))
+                    cumulativeConversions[variationId] = 0;
+
+                cumulativeExposures[variationId] += exposures;
+                cumulativeConversions[variationId] += conversions;
+
+                results.Add(new ExperimentTimeSeriesPoint(timeBucket, variationId, cumulativeExposures[variationId], cumulativeConversions[variationId]));
             }
         }
         finally

@@ -1,4 +1,4 @@
-﻿namespace ToggleMesh.API.Features.RealTime.ManageSubscriptions;
+namespace ToggleMesh.API.Features.RealTime.ManageSubscriptions;
 
 public class ManageSubscriptionsRequest
 {

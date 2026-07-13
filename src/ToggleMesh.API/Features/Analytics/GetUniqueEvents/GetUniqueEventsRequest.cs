@@ -1,4 +1,4 @@
-﻿namespace ToggleMesh.API.Features.Analytics.GetUniqueEvents;
+namespace ToggleMesh.API.Features.Analytics.GetUniqueEvents;
 
 public class GetUniqueEventsRequest
 {

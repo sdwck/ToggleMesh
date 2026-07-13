@@ -15,16 +15,17 @@ public class RuleEngine : IRuleEngine
         _segmentProvider = segmentProvider;
     }
 
-    public bool Evaluate<TAccessor>(
+    public int Evaluate<TAccessor>(
         CompiledRuleGroup[] groups, 
         ref EvaluationContext<TAccessor> context) 
         where TAccessor : IContextAccessor
     {
-        if (groups.Length == 0)
-            return true;
+        if (groups.Length == 0) 
+            return -1;
 
-        foreach (ref readonly var group in groups.AsSpan())
+        for (int i = 0; i < groups.Length; i++)
         {
+            ref readonly var group = ref groups[i];
             var groupPassed = true;
 
             foreach (ref readonly var rule in group.Rules.AsSpan())
@@ -34,27 +35,23 @@ public class RuleEngine : IRuleEngine
                     if (rule.CompiledValue is string segmentId && _segmentProvider != null)
                     {
                         var segmentRules = _segmentProvider.GetSegmentRules(segmentId);
-                        if (segmentRules != null && Evaluate(segmentRules, ref context))
-                        {
+                        if (segmentRules != null && Evaluate(segmentRules, ref context) >= 0) 
                             continue;
-                        }
                     }
                 }
                 else if (context.TryGetValue(rule.Attribute, out var userValue) &&
-                    rule.Operator.Evaluate(userValue!, rule.CompiledValue))
-                {
+                         rule.Operator.Evaluate(userValue!, rule.CompiledValue))
                     continue;
-                }
 
                 groupPassed = false;
                 break;
             }
 
-            if (groupPassed)
-                return true;
+            if (groupPassed) 
+                return i;
         }
 
-        return false;
+        return -1;
     }
 
     public CompiledRuleGroup[] CompileRules(IEnumerable<RuleDto>? rules)
@@ -64,6 +61,7 @@ public class RuleEngine : IRuleEngine
 
         return rules
             .GroupBy(x => x.GroupId)
+            .OrderBy(g => g.First().Priority)
             .Select(g => new CompiledRuleGroup(
                 g.Select(r =>
                 {
@@ -84,7 +82,8 @@ public class RuleEngine : IRuleEngine
                         op,
                         op.Compile(r.Value),
                         isSegment);
-                }).ToArray())
+                }).ToArray(),
+                g.First().Rollout)
             ).ToArray();
     }
     

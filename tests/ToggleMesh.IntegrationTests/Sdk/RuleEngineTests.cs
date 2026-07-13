@@ -42,7 +42,7 @@ public class RuleEngineTests
         var compiledRules = _engine.CompileRules(rules);
         var accessor = new ContextAccessor<IDictionary<string, string>>(context);
         var evalContext = new EvaluationContext<ContextAccessor<IDictionary<string, string>>>(accessor, [], []);
-        return _engine.Evaluate(compiledRules, ref evalContext);
+        return _engine.Evaluate(compiledRules, ref evalContext) >= 0;
     }
 
     [Theory]
@@ -77,7 +77,7 @@ public class RuleEngineTests
         // Arrange
         var rules = new List<RuleDto>
         {
-            new(0, "CustomAttribute", op, ruleValue)
+            new(0, 0, "CustomAttribute", op, ruleValue)
         };
 
         var context = new Dictionary<string, string>
@@ -98,10 +98,10 @@ public class RuleEngineTests
         // Arrange
         var rules = new List<RuleDto>
         {
-            new(1, "Email", "EndsWith", "@company.com"),
-            new(1, "Age", "GreaterThan", "21"),
-            new(2, "Country", "Equals", "CA"),
-            new(2, "Plan", "Equals", "Premium")
+            new(0, 1, "Email", "EndsWith", "@company.com"),
+            new(0, 1, "Age", "GreaterThan", "21"),
+            new(0, 2, "Country", "Equals", "CA"),
+            new(0, 2, "Plan", "Equals", "Premium")
         };
 
         var contextGroup1Pass = new Dictionary<string, string>
@@ -136,9 +136,9 @@ public class RuleEngineTests
         // Arrange
         var rules = new List<RuleDto>
         {
-            new(0, "Email", "EndsWith", "@company.com"),
-            new(0, "Age", "GreaterThan", "21"),
-            new(0, "Role", "InList", "Admin,Manager")
+            new(0, 0, "Email", "EndsWith", "@company.com"),
+            new(0, 0, "Age", "GreaterThan", "21"),
+            new(0, 0, "Role", "InList", "Admin,Manager")
         };
 
         var passingContext = new Dictionary<string, string>
@@ -168,9 +168,9 @@ public class RuleEngineTests
     }
 
     [Fact]
-    public void Evaluate_NoRules_ShouldReturnTrue()
+    public void Evaluate_NoRules_ShouldReturnFalse()
     {
-        EvaluateHelper(new List<RuleDto>(), new Dictionary<string, string>()).Should().BeTrue();
+        EvaluateHelper(new List<RuleDto>(), new Dictionary<string, string>()).Should().BeFalse();
     }
 
     [Fact]
@@ -179,7 +179,7 @@ public class RuleEngineTests
         // Arrange
         var rules = new List<RuleDto>
         {
-            new(0, "Device", "MagicOperator", "iPhone")
+            new(0, 0, "Device", "MagicOperator", "iPhone")
         };
 
         var context = new Dictionary<string, string>

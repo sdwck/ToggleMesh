@@ -1,4 +1,4 @@
-import { FeatureFlagDto, RuleDto, SegmentDto } from './models.js';
+import { FeatureFlagDto, RuleDto, SegmentDto, VariationWeight } from './models.js';
 import { RuleOperator, OPERATOR_MAP, FalseOperator, InSegmentOperator } from './operators.js';
 
 export class CompiledRule {
@@ -10,23 +10,25 @@ export class CompiledRule {
 }
 
 export class CompiledRuleGroup {
-    constructor(public rules: CompiledRule[]) { }
+    constructor(
+        public rules: CompiledRule[],
+        public priority: number,
+        public rollout: VariationWeight[]
+    ) { }
 }
 
 export class CachedFlag {
     key: string;
     isEnabled: boolean;
-    rolloutPercentage?: number;
-    contextualRollouts?: Record<string, number>;
+    contextualRollouts?: Record<string, VariationWeight[]>;
     isExperimentActive: boolean;
     groups: CompiledRuleGroup[];
     originalDto: FeatureFlagDto;
-    parsedContextualRollouts: Record<string, number> = {};
+    parsedContextualRollouts: Record<string, VariationWeight[]> = {};
 
     constructor(dto: FeatureFlagDto, groups: CompiledRuleGroup[]) {
         this.key = dto.key;
         this.isEnabled = dto.isEnabled;
-        this.rolloutPercentage = dto.rolloutPercentage;
         this.contextualRollouts = dto.contextualRollouts;
         this.isExperimentActive = dto.isExperimentActive;
         this.groups = groups;
@@ -102,15 +104,17 @@ export class RuleEngine {
                 ));
             }
 
-            compiledGroups.push(new CompiledRuleGroup(compiledRules));
+            compiledGroups.push(new CompiledRuleGroup(compiledRules, gRules[0].priority, gRules[0].rollout || []));
         }
+
+        compiledGroups.sort((a, b) => a.priority - b.priority);
 
         return compiledGroups;
     }
 
-    evaluate(groups: CompiledRuleGroup[], context: Record<string, string>): boolean {
+    evaluate(groups: CompiledRuleGroup[], context: Record<string, string>): CompiledRuleGroup | null {
         if (!groups || groups.length === 0) {
-            return true;
+            return null;
         }
 
         for (const group of groups) {
@@ -137,10 +141,10 @@ export class RuleEngine {
             }
 
             if (groupPassed) {
-                return true;
+                return group;
             }
         }
 
-        return false;
+        return null;
     }
 }

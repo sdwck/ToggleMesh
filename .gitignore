@@ -4,6 +4,11 @@
 # Environment secrets
 .env
 
+# Local utility scripts
+.local/
+*.local.ps1
+*.local.js
+
 # User-specific files
 *.suo
 *.user

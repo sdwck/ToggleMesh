@@ -32,8 +32,10 @@ public class DeleteContextualRolloutEndpoint : ToggleEndpoint<DeleteContextualRo
 
         var state = await _db.FlagEnvironmentStates
             .Include(x => x.FeatureFlag)
+                .ThenInclude(x => x.Variations)
             .Include(x => x.Rules)
             .Include(x => x.ContextualRollouts)
+            .AsSplitQuery()
             .FirstOrDefaultAsync(x => x.EnvironmentId == envId && x.FeatureFlag.Key == flagKey, ct);
 
         if (state is null)
@@ -42,7 +44,7 @@ public class DeleteContextualRolloutEndpoint : ToggleEndpoint<DeleteContextualRo
             return;
         }
 
-        var rollout = state.ContextualRollouts?.FirstOrDefault(x => x.ContextSlice == req.ContextSlice);
+        var rollout = state.ContextualRollouts.FirstOrDefault(x => x.ContextSlice == req.ContextSlice);
         if (rollout != null)
             _db.ContextualRollouts.Remove(rollout);
 
@@ -52,7 +54,8 @@ public class DeleteContextualRolloutEndpoint : ToggleEndpoint<DeleteContextualRo
         await new NotifyFlagUpdatedCommand(
             envId, 
             flagKey, 
-            response
+            response,
+            state.ToSdkDto()
         ).ExecuteAsync(ct);
 
         await Send.OkAsync(response, ct);

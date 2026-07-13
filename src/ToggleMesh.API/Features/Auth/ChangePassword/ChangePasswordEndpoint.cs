@@ -1,4 +1,3 @@
-using FastEndpoints;
 using Microsoft.AspNetCore.Identity;
 using ToggleMesh.API.Infrastructure.Endpoints;
 using ToggleMesh.API.Infrastructure.Security.Authorization.Models;

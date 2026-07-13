@@ -34,10 +34,43 @@ import {
     FormMessage,
 } from '@/components/ui/form';
 import { handleApiError } from '@/api/errorUtils';
+import { VariationsManager } from '../flags/components/VariationsManager';
+
+const uuidv4 = () => crypto.randomUUID();
 
 const createFlagSchema = z.object({
     key: z.string().min(1, 'Flag key is required')
-        .regex(/^[a-zA-Z0-9_-]+$/, 'Only letters, numbers, hyphens, and underscores are allowed')
+        .regex(/^[a-zA-Z0-9_-]+$/, 'Only letters, numbers, hyphens, and underscores are allowed'),
+    type: z.number().default(0),
+    variations: z.array(z.object({
+        id: z.string(),
+        value: z.string()
+    })).optional()
+}).superRefine((val, ctx) => {
+    if (val.type !== 0 && val.variations) {
+        val.variations.forEach((v, idx) => {
+            if (!v.value.trim()) {
+                ctx.addIssue({
+                    code: z.ZodIssueCode.custom,
+                    message: "Variation value cannot be empty",
+                    path: ['variations', idx, 'value']
+                });
+                return;
+            }
+            
+            if (val.type === 2) {
+                try {
+                    JSON.parse(v.value);
+                } catch (e) {
+                    ctx.addIssue({
+                        code: z.ZodIssueCode.custom,
+                        message: "Invalid JSON format",
+                        path: ['variations', idx, 'value']
+                    });
+                }
+            }
+        });
+    }
 });
 type CreateFlagValues = z.infer<typeof createFlagSchema>;
 
@@ -52,8 +85,15 @@ export function ProjectFlagsPage() {
     const [isCreateOpen, setIsCreateOpen] = useState(false);
 
     const createForm = useForm<CreateFlagValues>({
-        resolver: zodResolver(createFlagSchema),
-        defaultValues: { key: '' }
+        resolver: zodResolver(createFlagSchema) as any,
+        defaultValues: { 
+            key: '', 
+            type: 0, 
+            variations: [
+                { id: uuidv4(), value: '' },
+                { id: uuidv4(), value: '' }
+            ] 
+        }
     });
 
     const [isTagsOpen, setIsTagsOpen] = useState(false);
@@ -113,9 +153,21 @@ export function ProjectFlagsPage() {
 
     const handleCreateFlagSubmit = async (values: CreateFlagValues) => {
         try {
-            await createFlag.mutateAsync(values.key.trim());
+            const req = {
+                key: values.key.trim(),
+                type: values.type,
+                variations: values.type === 0 ? undefined : values.variations
+            };
+            await createFlag.mutateAsync(req);
             toast.success(`Successfully created feature flag`);
-            createForm.reset({ key: '' });
+            createForm.reset({ 
+                key: '', 
+                type: 0, 
+                variations: [
+                    { id: uuidv4(), value: '' },
+                    { id: uuidv4(), value: '' }
+                ] 
+            });
             setIsCreateOpen(false);
         } catch (error: any) {
             handleApiError(error, createForm.setError, 'Failed to create flag. It might already exist.');
@@ -285,13 +337,14 @@ export function ProjectFlagsPage() {
                                     </DialogDescription>
                                 </DialogHeader>
                                 <Form {...createForm}>
-                                    <form onSubmit={createForm.handleSubmit(handleCreateFlagSubmit)}>
-                                        <div className="py-4">
+                                    <form onSubmit={createForm.handleSubmit(handleCreateFlagSubmit as any)}>
+                                        <div className="py-4 space-y-4">
                                             <FormField
-                                                control={createForm.control}
+                                                control={createForm.control as any}
                                                 name="key"
                                                 render={({ field }) => (
                                                     <FormItem>
+                                                        <span className="text-sm font-medium">Flag Key</span>
                                                         <FormControl>
                                                             <Input
                                                                 {...field}
@@ -304,6 +357,46 @@ export function ProjectFlagsPage() {
                                                     </FormItem>
                                                 )}
                                             />
+                                            
+                                            <FormField
+                                                control={createForm.control as any}
+                                                name="type"
+                                                render={({ field }) => (
+                                                    <FormItem>
+                                                        <span className="text-sm font-medium">Flag Type</span>
+                                                        <Select value={field.value.toString()} onValueChange={(v) => field.onChange(parseInt(v))}>
+                                                            <FormControl>
+                                                                <SelectTrigger>
+                                                                    <SelectValue placeholder="Select type" />
+                                                                </SelectTrigger>
+                                                            </FormControl>
+                                                            <SelectContent>
+                                                                <SelectItem value="0">Boolean (True/False)</SelectItem>
+                                                                <SelectItem value="1">String (Multivariate)</SelectItem>
+                                                                <SelectItem value="2">JSON (Multivariate)</SelectItem>
+                                                            </SelectContent>
+                                                        </Select>
+                                                        <FormMessage />
+                                                    </FormItem>
+                                                )}
+                                            />
+                                            
+                                            {createForm.watch("type") !== 0 && (
+                                                <FormField
+                                                    control={createForm.control as any}
+                                                    name="variations"
+                                                    render={({ field }) => (
+                                                        <FormItem>
+                                                            <VariationsManager
+                                                                type={createForm.watch("type") === 1 ? "String" : "JSON"}
+                                                                variations={field.value || []}
+                                                                onChange={field.onChange}
+                                                            />
+                                                            <FormMessage />
+                                                        </FormItem>
+                                                    )}
+                                                />
+                                            )}
                                         </div>
                                         <DialogFooter>
                                             <Button type="button" variant="outline" onClick={() => setIsCreateOpen(false)}>Cancel</Button>

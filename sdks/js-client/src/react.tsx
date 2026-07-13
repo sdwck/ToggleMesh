@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useSyncExternalStore } from 'react';
 import { ToggleMeshClient } from './index.js';
 
 const ToggleMeshContext = createContext<ToggleMeshClient | null>(null);
@@ -16,6 +16,14 @@ export const ToggleMeshProvider: React.FC<ToggleMeshProviderProps> = ({ client, 
     );
 };
 
+export const useToggleMeshClient = (): ToggleMeshClient => {
+    const client = useContext(ToggleMeshContext);
+    if (!client) {
+        throw new Error('[ToggleMesh] useToggleMeshClient must be used within a ToggleMeshProvider.');
+    }
+    return client;
+};
+
 export const useFeatureFlag = (flagKey: string, defaultValue = false): boolean => {
     const client = useContext(ToggleMeshContext);
 
@@ -24,17 +32,24 @@ export const useFeatureFlag = (flagKey: string, defaultValue = false): boolean =
         return defaultValue;
     }
 
-    const [isEnabled, setIsEnabled] = useState(() => client.isEnabled(flagKey, defaultValue));
+    return useSyncExternalStore(
+        (callback) => client.subscribe(callback),
+        () => client.isEnabled(flagKey, defaultValue),
+        () => defaultValue
+    );
+};
 
-    useEffect(() => {
-        const unsubscribe = client.subscribe(() => {
-            setIsEnabled(client.isEnabled(flagKey, defaultValue));
-        });
+export const useFeatureFlagVariation = (flagKey: string, defaultValue = ""): string => {
+    const client = useContext(ToggleMeshContext);
 
-        setIsEnabled(client.isEnabled(flagKey, defaultValue));
+    if (!client) {
+        console.warn('[ToggleMesh] useFeatureFlagVariation must be used within a ToggleMeshProvider.');
+        return defaultValue;
+    }
 
-        return unsubscribe;
-    }, [client, flagKey, defaultValue]);
-
-    return isEnabled;
+    return useSyncExternalStore(
+        (callback) => client.subscribe(callback),
+        () => client.getVariation(flagKey, defaultValue),
+        () => defaultValue
+    );
 };

@@ -55,7 +55,7 @@ public class
 
         var result = rawData.Select(x => new TimeSeriesResponsePoint(
             x.TimeBucket.ToString("o"),
-            x.Variant,
+            x.VariationId,
             x.Exposures,
             x.Conversions,
             x.Exposures > 0 ? (double)x.Conversions / x.Exposures : 0

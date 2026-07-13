@@ -49,3 +49,31 @@ export const handleApiError = (error: any, setError: UseFormSetError<any>, defau
         toast.error(defaultMessage);
     }
 };
+
+export const toastApiError = (error: any, defaultMessage: string = 'An error occurred') => {
+    const data = error?.response?.data;
+    if (!data) {
+        toast.error(error.message || defaultMessage);
+        return;
+    }
+    if (data.errors) {
+        if (Array.isArray(data.errors)) {
+            toast.error(data.errors[0]?.reason || data.errors[0]?.message || defaultMessage);
+            return;
+        } else {
+            const firstKey = Object.keys(data.errors)[0];
+            const msg = Array.isArray(data.errors[firstKey]) ? data.errors[firstKey][0] : data.errors[firstKey];
+            if (msg) {
+                toast.error(msg);
+                return;
+            }
+        }
+    }
+    if (data.message) {
+        toast.error(data.message);
+    } else if (data.title) {
+        toast.error(data.title);
+    } else {
+        toast.error(defaultMessage);
+    }
+};

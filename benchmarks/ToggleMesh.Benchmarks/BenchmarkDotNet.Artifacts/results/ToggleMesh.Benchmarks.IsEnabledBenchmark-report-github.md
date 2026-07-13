@@ -3,20 +3,23 @@
 BenchmarkDotNet v0.15.8, Windows 11 (10.0.22631.6199/23H2/2023Update/SunValley3)
 Intel Core i7-14700K 3.40GHz, 1 CPU, 28 logical and 20 physical cores
 .NET SDK 10.0.100
-  [Host]     : .NET 10.0.9 (10.0.9, 10.0.926.27113), X64 RyuJIT x86-64-v3
-  DefaultJob : .NET 10.0.9 (10.0.9, 10.0.926.27113), X64 RyuJIT x86-64-v3
+  [Host] : .NET 10.0.9 (10.0.9, 10.0.926.27113), X64 RyuJIT x86-64-v3
 
+Toolchain=InProcessNoEmitToolchain  
 
 ```
-| Method                         | Mean      | Error    | StdDev   | Median    | Max       | Min       | P95       | Allocated |
-|------------------------------- |----------:|---------:|---------:|----------:|----------:|----------:|----------:|----------:|
-| IsEnabled_WithRules_Typed      |  36.72 ns | 0.755 ns | 0.928 ns |  37.33 ns |  37.65 ns |  35.32 ns |  37.60 ns |         - |
-| IsEnabled_WithRules_AOT        |  22.49 ns | 0.062 ns | 0.055 ns |  22.51 ns |  22.55 ns |  22.37 ns |  22.55 ns |         - |
-| IsEnabled_NoRules_AOT          |  17.34 ns | 0.031 ns | 0.026 ns |  17.34 ns |  17.39 ns |  17.29 ns |  17.38 ns |         - |
-| IsEnabled_WithRules_Dictionary |  33.72 ns | 0.125 ns | 0.117 ns |  33.71 ns |  33.89 ns |  33.48 ns |  33.86 ns |         - |
-| IsEnabled_Complex_Typed        | 113.15 ns | 0.208 ns | 0.174 ns | 113.14 ns | 113.40 ns | 112.81 ns | 113.39 ns |         - |
-| IsEnabled_Complex_AOT          |  81.44 ns | 0.191 ns | 0.160 ns |  81.43 ns |  81.82 ns |  81.28 ns |  81.74 ns |         - |
-| IsEnabled_Complex_Dictionary   | 104.29 ns | 1.968 ns | 2.021 ns | 103.69 ns | 108.44 ns | 102.25 ns | 107.44 ns |         - |
-| Track_Event                    |  41.58 ns | 0.085 ns | 0.071 ns |  41.58 ns |  41.69 ns |  41.49 ns |  41.69 ns |         - |
-| IsEnabled_With10Rules_AOT      | 127.14 ns | 0.710 ns | 0.664 ns | 127.22 ns | 128.12 ns | 125.73 ns | 127.93 ns |         - |
-| Track_Event_With10Rules_AOT    |  52.31 ns | 0.047 ns | 0.039 ns |  52.31 ns |  52.36 ns |  52.24 ns |  52.36 ns |         - |
+| Method                            | Mean       | Error     | StdDev    | Max        | Min        | P95        | Allocated |
+|---------------------------------- |-----------:|----------:|----------:|-----------:|-----------:|-----------:|----------:|
+| Evaluate_1Rule_TypedContext       |  70.160 ns | 0.4558 ns | 0.4264 ns |  71.189 ns |  69.629 ns |  70.772 ns |         - |
+| Evaluate_1Rule_AOT                |  29.533 ns | 0.1249 ns | 0.1107 ns |  29.667 ns |  29.269 ns |  29.658 ns |         - |
+| Evaluate_1Rule_Dictionary         |  79.205 ns | 0.3959 ns | 0.3703 ns |  79.800 ns |  78.534 ns |  79.686 ns |         - |
+| Evaluate_ComplexRule_TypedContext | 145.408 ns | 0.6078 ns | 0.5686 ns | 146.411 ns | 144.294 ns | 146.129 ns |         - |
+| Evaluate_ComplexRule_AOT          |  96.656 ns | 0.5116 ns | 0.4785 ns |  97.686 ns |  95.977 ns |  97.468 ns |         - |
+| Evaluate_ComplexRule_Dictionary   | 160.223 ns | 0.3670 ns | 0.3254 ns | 160.718 ns | 159.554 ns | 160.640 ns |         - |
+| Evaluate_10Rules_AOT              | 114.230 ns | 0.4029 ns | 0.3769 ns | 114.939 ns | 113.569 ns | 114.758 ns |         - |
+| Evaluate_NoRules_AOT              |   7.432 ns | 0.0452 ns | 0.0401 ns |   7.495 ns |   7.358 ns |   7.484 ns |         - |
+| Evaluate_50_50_Rollout_AOT        |  38.266 ns | 0.1731 ns | 0.1620 ns |  38.558 ns |  38.038 ns |  38.517 ns |         - |
+| GetJsonVariation                  |  28.685 ns | 0.1165 ns | 0.1090 ns |  28.830 ns |  28.449 ns |  28.798 ns |         - |
+| GetStringVariation                |  28.440 ns | 0.0130 ns | 0.0122 ns |  28.461 ns |  28.420 ns |  28.459 ns |         - |
+| Analytics_TrackEvent_Simple       |  43.758 ns | 0.0699 ns | 0.0584 ns |  43.920 ns |  43.715 ns |  43.860 ns |         - |
+| Analytics_TrackEvent_10Rules_AOT  |  45.841 ns | 0.0764 ns | 0.0597 ns |  45.978 ns |  45.774 ns |  45.931 ns |         - |

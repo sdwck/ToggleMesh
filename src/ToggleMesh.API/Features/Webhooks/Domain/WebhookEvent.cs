@@ -4,4 +4,5 @@ public record WebhookEvent(
     Guid ProjectId,
     Guid? EnvironmentId,
     string EventName,
-    string FlagKey);
+    string FlagKey,
+    string? ContextMessage = null);

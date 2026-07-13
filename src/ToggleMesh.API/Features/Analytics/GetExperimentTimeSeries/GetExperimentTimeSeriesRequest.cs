@@ -1,4 +1,4 @@
-﻿namespace ToggleMesh.API.Features.Analytics.GetExperimentTimeSeries;
+namespace ToggleMesh.API.Features.Analytics.GetExperimentTimeSeries;
 
 public class GetExperimentTimeSeriesRequest
 {

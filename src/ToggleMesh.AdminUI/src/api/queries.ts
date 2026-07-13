@@ -8,7 +8,6 @@ import type {
     CursorPagedResponse,
     PaginatedResponse,
     ProjectMember,
-    UpdateFlagRequest,
     ProjectFlagDto,
     CreateKeyRequest,
     CreateKeyResponse,
@@ -30,7 +29,10 @@ import type {
     SegmentDto,
     CreateSegmentRequest,
     UpdateSegmentRequest,
-    ChangePasswordRequest
+    UpdateFlagRequest,
+    UpdateGlobalFlagSettingsRequest,
+    ChangePasswordRequest,
+    Integration
 } from './types';
 
 export const useSystemConfig = () => {
@@ -356,7 +358,7 @@ export const useFlagStats = (projectId: string, flagKey: string) => {
     return useQuery({
         queryKey: ['projects', projectId, 'flags', flagKey, 'stats'],
         queryFn: async () => {
-            const { data } = await api.get<{ environmentId: string; trueCount: number; falseCount: number }[]>(`/projects/${projectId}/flags/${flagKey}/stats`);
+            const { data } = await api.get<{ environmentId: string; variationsCount: Record<string, number> }[]>(`/projects/${projectId}/flags/${flagKey}/stats`);
             return data;
         },
         enabled: !!projectId && !!flagKey,
@@ -367,8 +369,8 @@ export const useFlagStats = (projectId: string, flagKey: string) => {
 export const useCreateFeatureFlag = (projectId: string) => {
     const queryClient = useQueryClient();
     return useMutation({
-        mutationFn: async (key: string) => {
-            const { data } = await api.post<{ id: string }>(`/projects/${projectId}/flags`, { key });
+        mutationFn: async (req: { key: string, type?: number, variations?: { id: string, value: string }[] }) => {
+            const { data } = await api.post<{ id: string }>(`/projects/${projectId}/flags`, req);
             return data;
         },
         onSuccess: () => {
@@ -530,6 +532,19 @@ export const useUpdateFeatureFlag = (projectId: string, envId: string, flagKey: 
             queryClient.invalidateQueries({ queryKey: ['projects', projectId, 'flags'] });
             queryClient.invalidateQueries({ queryKey: ['environments', envId, 'flags'] });
             queryClient.invalidateQueries({ queryKey: ['environments', envId, 'audit'] });
+        },
+    });
+};
+
+export const useUpdateGlobalFlagSettings = (projectId: string, flagKey: string) => {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async (request: UpdateGlobalFlagSettingsRequest) => {
+            await api.put(`/projects/${projectId}/flags/${flagKey}/settings`, request);
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['projects', projectId, 'flags'] });
+            queryClient.invalidateQueries({ queryKey: ['environments'] });
         },
     });
 };
@@ -802,7 +817,7 @@ export const useProjectExperiments = (projectId: string) => {
     return useQuery({
         queryKey: ['projects', projectId, 'experiments'],
         queryFn: async () => {
-            const { data } = await api.get<ProjectExperimentSummaryDto[]>(`/projects/${projectId}/experiments`);
+            const { data } = await api.get<ProjectExperimentSummaryDto[]>(`/projects/${projectId}/experiments?isActiveOnly=true`);
             return data;
         },
         enabled: !!projectId,
@@ -859,15 +874,16 @@ export const useContextualExperimentDetails = (projectId: string, environmentId:
     });
 };
 
-export const useSetContextualRollout = (projectId: string, environmentId: string, flagKey: string) => {
+export const useSetContextualRollout = (projectId: string, environmentId: string, flagKey: string, onMutate?: () => void) => {
     const queryClient = useQueryClient();
     return useMutation({
-        mutationFn: async (req: { contextSlice: string, rolloutPercentage: number }) => {
+        mutationFn: async (req: { contextSlice: string, rollout: { variationId: string, weight: number }[] }) => {
             await api.post(`/projects/${projectId}/environments/${environmentId}/flags/${flagKey}/contextual-rollouts/set`, req);
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['projects', projectId, 'environments', environmentId, 'flags', flagKey, 'experiments', 'contextual'] });
-            queryClient.invalidateQueries({ queryKey: ['environments', environmentId, 'flags', flagKey] });
+            queryClient.invalidateQueries({ queryKey: ['flagState', environmentId, flagKey] });
+            if (onMutate) onMutate();
         },
     });
 };
@@ -953,7 +969,7 @@ export const useUniqueEvents = (projectId: string, environmentId: string) => {
 export const useStartExperiment = (projectId: string, envId: string, flagKey: string) => {
     const queryClient = useQueryClient();
     return useMutation({
-        mutationFn: async (req: { mode: string; goalEvent: string; optimizationType: number; contextPartitionKeys: string[], initialRolloutPercentage?: number }) => {
+        mutationFn: async (req: { mode: string; goalEvent: string; optimizationType: number; contextPartitionKeys: string[], initialRolloutPercentage?: number, mabExplorationFloor?: number, balanceWeights?: boolean }) => {
             const { data } = await api.post(`/projects/${projectId}/environments/${envId}/flags/${flagKey}/experiments/start`, req);
             return data;
         },
@@ -1067,5 +1083,63 @@ export const useDeleteSegment = () => {
         onSuccess: (_, variables) => {
             queryClient.invalidateQueries({ queryKey: ['projects', variables.projectId, 'environments', variables.environmentId, 'segments'] });
         },
+    });
+};
+
+export const useProjectIntegrations = (projectId: string) => {
+    return useQuery({
+        queryKey: ['projects', projectId, 'integrations'],
+        queryFn: async () => {
+            const { data } = await api.get<Integration[]>(`/projects/${projectId}/integrations`);
+            return data;
+        },
+        enabled: !!projectId,
+        placeholderData: keepPreviousData,
+    });
+};
+
+export const useCreateIntegration = (projectId: string) => {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async (req: Partial<Integration>) => {
+            const { data } = await api.post<Integration>(`/projects/${projectId}/integrations`, req);
+            return data;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['projects', projectId, 'integrations'] });
+        },
+    });
+};
+
+export const useUpdateIntegration = (projectId: string) => {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async (req: { id: string } & Partial<Integration>) => {
+            const { data } = await api.put<Integration>(`/projects/${projectId}/integrations/${req.id}`, req);
+            return data;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['projects', projectId, 'integrations'] });
+        },
+    });
+};
+
+export const useDeleteIntegration = (projectId: string) => {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async (id: string) => {
+            await api.delete(`/projects/${projectId}/integrations/${id}`);
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['projects', projectId, 'integrations'] });
+        },
+    });
+};
+
+export const useTestIntegration = (projectId: string) => {
+    return useMutation({
+        mutationFn: async (id: string) => {
+            await api.post(`/projects/${projectId}/integrations/${id}/test`, {});
+        }
     });
 };

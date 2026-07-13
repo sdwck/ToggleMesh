@@ -2,7 +2,6 @@ import { useEffect } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Checkbox } from '@/components/ui/checkbox';
 import type { Webhook } from '@/api/types';
 import { useUpdateWebhook } from '@/api/queries';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -17,6 +16,7 @@ import {
     FormMessage,
 } from '@/components/ui/form';
 import { handleApiError } from '@/api/errorUtils';
+import { EventSelectionCheckboxes } from './EventSelectionCheckboxes';
 import { toast } from 'sonner';
 
 const editWebhookSchema = z.object({
@@ -125,51 +125,7 @@ export function EditWebhookModal({ webhook, open, onOpenChange }: Props) {
                                     </FormItem>
                                 )}
                             />
-                            <FormField
-                                control={form.control}
-                                name="events"
-                                render={() => (
-                                    <FormItem>
-                                        <FormLabel>Events</FormLabel>
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                            {['flag.created', 'flag.updated', 'flag.deleted', 'experiment.winner_found', 'experiment.degraded'].map((evt) => (
-                                                <FormField
-                                                    key={evt}
-                                                    control={form.control}
-                                                    name="events"
-                                                    render={({ field }) => {
-                                                        return (
-                                                            <FormItem
-                                                                key={evt}
-                                                                className="flex items-center space-x-2 space-y-0"
-                                                            >
-                                                                <FormControl>
-                                                                    <Checkbox
-                                                                        checked={field.value?.includes(evt)}
-                                                                        onCheckedChange={(checked) => {
-                                                                            return checked
-                                                                                ? field.onChange([...field.value, evt])
-                                                                                : field.onChange(
-                                                                                    field.value?.filter(
-                                                                                        (value) => value !== evt
-                                                                                    )
-                                                                                )
-                                                                        }}
-                                                                    />
-                                                                </FormControl>
-                                                                <FormLabel className="text-xs font-mono font-normal">
-                                                                    {evt}
-                                                                </FormLabel>
-                                                            </FormItem>
-                                                        )
-                                                    }}
-                                                />
-                                            ))}
-                                        </div>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}
-                            />
+                            <EventSelectionCheckboxes form={form} name="events" title="Events" />
                         </div>
 
                         <DialogFooter>

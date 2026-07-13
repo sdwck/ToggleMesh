@@ -5,6 +5,7 @@ using ToggleMesh.API.Features.Projects.Domain;
 using ToggleMesh.API.Infrastructure.Data;
 using ToggleMesh.API.Infrastructure.Endpoints;
 using ToggleMesh.Common.Pagination;
+using ToggleMesh.API.Features.Flags.Domain;
 using AuthModels = ToggleMesh.API.Infrastructure.Security.Authorization.Models;
 
 namespace ToggleMesh.API.Features.Flags.GetAll;
@@ -43,9 +44,10 @@ public class GetFlagsEndpoint : ToggleEndpoint<GetFlagsRequest, PagedResponse<Pr
 
         var query = _db.FeatureFlags
             .AsNoTracking()
-            .AsSplitQuery()
+            .Include(x => x.Variations)
             .Include(x => x.States.Where(s => !s.Environment.IsDeleted))
-            .ThenInclude(s => s.Rules)
+                .ThenInclude(s => s.Rules)
+            .AsSplitQuery()
             .Where(x => x.ProjectId == projectId);
 
         if (!string.IsNullOrWhiteSpace(req.Search))
@@ -85,14 +87,18 @@ public class GetFlagsEndpoint : ToggleEndpoint<GetFlagsRequest, PagedResponse<Pr
                 }).Select(s => new FlagEnvironmentStateDto(
                     s.EnvironmentId,
                     s.IsEnabled,
-                    s.RolloutPercentage,
+                    s.FallthroughRollout.Count > 0,
                     0L,
                     0L,
                     s.Rules.Count,
                     s.IsMabEnabled,
-                    s.MabGoalEvent
+                    s.MabGoalEvent,
+                    s.IsExperimentActive
                 )),
-                x.Tags))
+                x.Tags,
+                (int)x.Type,
+                x.Variations.OrderBy(v => v.Sequence).Select(v => new VariationDto(v.Id, v.Value))
+            ))
             .ToList();
 
         await Send.OkAsync(new PagedResponse<ProjectFlagDto>(

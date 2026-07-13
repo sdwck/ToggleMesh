@@ -10,7 +10,8 @@ export interface ToggleMeshOptions {
 
 export interface FlagState {
     key: string;
-    isEnabled: boolean;
+    variationId?: string;
+    variationValue?: string;
     isExperimentActive?: boolean;
 }
 
@@ -20,7 +21,7 @@ export class ToggleMeshClient {
     private baseUrl: string;
     private clientKey: string;
     private refreshInterval: number;
-    private flags: Record<string, boolean> = {};
+    private flags: Record<string, FlagState> = {};
     private activeExperiments = new Set<string>();
     private listeners = new Set<ToggleMeshListener>();
 
@@ -28,7 +29,7 @@ export class ToggleMeshClient {
     private currentContext: Record<string, string> = {};
     private intervalId: any = null;
     private eventBuffer: any[] = [];
-    private metricsBuffer = new Map<string, { trueCount: number, falseCount: number }>();
+    private metricsBuffer = new Map<string, { variationsCount: Record<string, number> }>();
     private flushIntervalId: any = null;
     private readonly EVENT_FLUSH_INTERVAL = 10000;
     private readonly supportsKeepalive: boolean = false;
@@ -63,8 +64,8 @@ export class ToggleMeshClient {
                 
                 const metricPayload: any[] = [];
                 for (const [key, m] of this.metricsBuffer.entries()) {
-                    if (m.trueCount > 0 || m.falseCount > 0) {
-                        metricPayload.push({ Key: key, TrueCount: m.trueCount, FalseCount: m.falseCount });
+                    if (Object.keys(m.variationsCount).length > 0) {
+                        metricPayload.push({ Key: key, VariationsCount: { ...m.variationsCount } });
                     }
                 }
                 if (metricPayload.length > 0 && navigator.sendBeacon) {
@@ -87,31 +88,33 @@ export class ToggleMeshClient {
         }
     }
 
-    isEnabled(flagKey: string, defaultValue = false): boolean {
-        const isEnabled = this.flags.hasOwnProperty(flagKey) ? this.flags[flagKey] : defaultValue;
+    getVariation(flagKey: string, defaultValue = ""): string {
+        const flag = this.flags[flagKey];
+        if (!flag) return defaultValue;
 
-        if (this.isMetricsEnabled) {
+        const val = flag.variationValue ?? defaultValue;
+
+        if (this.isMetricsEnabled && flag.variationId) {
             if (!this.metricsBuffer.has(flagKey)) {
                 if (this.metricsBuffer.size < this.metricsBufferCapacity) {
-                    this.metricsBuffer.set(flagKey, { trueCount: 0, falseCount: 0 });
+                    this.metricsBuffer.set(flagKey, { variationsCount: {} });
                 }
             }
             const m = this.metricsBuffer.get(flagKey);
             if (m) {
-                if (isEnabled) m.trueCount++;
-                else m.falseCount++;
+                m.variationsCount[flag.variationId] = (m.variationsCount[flag.variationId] || 0) + 1;
             }
         }
 
-        if (this.isMetricsEnabled && this.currentIdentity && this.activeExperiments.has(flagKey)) {
+        if (this.isMetricsEnabled && this.currentIdentity && this.activeExperiments.has(flagKey) && flag.variationId) {
             if (this.eventBuffer.length < this.analyticsChannelCapacity) {
                 this.eventBuffer.push({
                     Type: 0,
                     Timestamp: Date.now(),
                     Identity: this.currentIdentity,
-                    EventName: flagKey,
+                    FlagKey: flagKey,
                     Properties: this.currentContext,
-                    Value: isEnabled ? 1 : 0
+                    VariationId: flag.variationId
                 });
 
                 if (this.eventBuffer.length >= this.maxBatchSize) {
@@ -120,7 +123,29 @@ export class ToggleMeshClient {
             }
         }
 
-        return isEnabled;
+        return val;
+    }
+
+    isEnabled(flagKey: string, defaultValue = false): boolean {
+        const str = this.getVariation(flagKey, defaultValue ? "true" : "false");
+        return str.toLowerCase() === "true";
+    }
+
+    getNumber(flagKey: string, defaultValue = 0): number {
+        const str = this.getVariation(flagKey, "");
+        if (!str) return defaultValue;
+        const parsed = parseFloat(str);
+        return isNaN(parsed) ? defaultValue : parsed;
+    }
+
+    getJson<T>(flagKey: string, defaultValue: T): T {
+        const str = this.getVariation(flagKey, "");
+        if (!str) return defaultValue;
+        try {
+            return JSON.parse(str) as T;
+        } catch {
+            return defaultValue;
+        }
     }
 
     track(eventName: string, properties?: Record<string, any>, value?: number): void {
@@ -180,10 +205,9 @@ export class ToggleMeshClient {
 
         const payload: any[] = [];
         for (const [key, m] of this.metricsBuffer.entries()) {
-            if (m.trueCount > 0 || m.falseCount > 0) {
-                payload.push({ Key: key, TrueCount: m.trueCount, FalseCount: m.falseCount });
-                m.trueCount = 0;
-                m.falseCount = 0;
+            if (Object.keys(m.variationsCount).length > 0) {
+                payload.push({ Key: key, VariationsCount: { ...m.variationsCount } });
+                m.variationsCount = {};
             }
         }
 
@@ -266,12 +290,12 @@ export class ToggleMeshClient {
             this.activeExperiments.clear();
 
             this.flags = data.reduce((acc, flag) => {
-                acc[flag.key] = flag.isEnabled;
+                acc[flag.key] = flag;
                 if (flag.isExperimentActive) {
                     this.activeExperiments.add(flag.key);
                 }
                 return acc;
-            }, {} as Record<string, boolean>);
+            }, {} as Record<string, FlagState>);
 
             this.notifyListeners();
         } catch (error) {
@@ -280,6 +304,10 @@ export class ToggleMeshClient {
     }
 
     private notifyListeners(): void {
-        this.listeners.forEach(listener => listener(this.flags));
+        const boolFlags: Record<string, boolean> = {};
+        for (const [key, val] of Object.entries(this.flags)) {
+            boolFlags[key] = val.variationValue?.toLowerCase() === "true";
+        }
+        this.listeners.forEach(listener => listener(boolFlags));
     }
 }

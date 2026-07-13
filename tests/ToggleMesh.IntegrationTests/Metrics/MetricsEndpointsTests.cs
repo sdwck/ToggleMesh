@@ -73,10 +73,12 @@ public class MetricsEndpointsTests : IAsyncLifetime
         const string flagKey = "test_metrics_flag";
         var (_, apiKey) = await SeedEnvironmentAndFlagAsync(flagKey);
 
+        var trueVarId = Guid.NewGuid();
+        var falseVarId = Guid.NewGuid();
         var payload = new List<MetricPayloadDto>
         {
-            new(flagKey, 15, 5),
-            new(flagKey, 10, 2)
+            new(flagKey, new List<MetricVariationPayloadDto> { new(trueVarId, 15), new(falseVarId, 5) }),
+            new(flagKey, new List<MetricVariationPayloadDto> { new(trueVarId, 10), new(falseVarId, 2) })
         };
 
         var httpRequest = new HttpRequestMessage(HttpMethod.Post, "/api/v1/sdk/metrics")
@@ -96,14 +98,14 @@ public class MetricsEndpointsTests : IAsyncLifetime
 
         for (var i = 0; i < 10; i++)
         {
-            var totalTrue = await db.FlagMetricBuckets.Where(b => b.FlagKey == flagKey).SumAsync(b => b.TrueCount);
+            var totalTrue = await db.FlagMetricBuckets.Where(b => b.FlagKey == flagKey && b.VariationId == trueVarId).SumAsync(b => (long?)b.Count) ?? 0;
             if (totalTrue == 25)
                 break;
             await Task.Delay(200);
         }
 
-        var trueCount = db.FlagMetricBuckets.Where(b => b.FlagKey == flagKey).Sum(b => b.TrueCount);
-        var falseCount = db.FlagMetricBuckets.Where(b => b.FlagKey == flagKey).Sum(b => b.FalseCount);
+        var trueCount = db.FlagMetricBuckets.Where(b => b.FlagKey == flagKey && b.VariationId == trueVarId).Sum(b => (long?)b.Count) ?? 0;
+        var falseCount = db.FlagMetricBuckets.Where(b => b.FlagKey == flagKey && b.VariationId == falseVarId).Sum(b => (long?)b.Count) ?? 0;
         trueCount.Should().Be(25);
         falseCount.Should().Be(7);
     }
@@ -111,7 +113,7 @@ public class MetricsEndpointsTests : IAsyncLifetime
     [Fact]
     public async Task IngestMetrics_WithInvalidApiKey_ShouldReturn401()
     {
-        var payload = new List<MetricPayloadDto> { new("some_flag", 1, 0) };
+        var payload = new List<MetricPayloadDto> { new("some_flag", new List<MetricVariationPayloadDto> { new(Guid.NewGuid(), 1) }) };
 
         var httpRequest = new HttpRequestMessage(HttpMethod.Post, "/api/v1/sdk/metrics")
         {

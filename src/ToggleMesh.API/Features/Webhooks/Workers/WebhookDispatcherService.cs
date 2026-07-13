@@ -3,6 +3,10 @@ using System.Threading.Channels;
 using Microsoft.EntityFrameworkCore;
 using ToggleMesh.API.Features.Webhooks.Domain;
 using ToggleMesh.API.Infrastructure.Data;
+using ToggleMesh.API.Features.Integrations.Domain;
+using ToggleMesh.API.Features.Integrations.Formatters;
+using ToggleMesh.API.Infrastructure.Security;
+using System.Text;
 
 namespace ToggleMesh.API.Features.Webhooks.Workers;
 
@@ -57,9 +61,6 @@ public class WebhookDispatcherService : BackgroundService
             .AsNoTracking()
             .Where(w => w.ProjectId == webhookEvent.ProjectId && w.Status == WebhookStatus.Active)
             .ToListAsync(ct);
-
-        if (webhooks.Count == 0)
-            return;
 
         var project = await db.Projects
             .AsNoTracking()
@@ -121,6 +122,8 @@ public class WebhookDispatcherService : BackgroundService
                 ct);
         }
         
+        await DispatchIntegrationsAsync(webhookEvent, project.Name, envName, db, scope.ServiceProvider, ct);
+
         await db.SaveChangesAsync(ct);
     }
 
@@ -134,40 +137,64 @@ public class WebhookDispatcherService : BackgroundService
     {
         object? data = null;
 
-        if (webhookEvent.EventName != "flag.deleted")
+        if (webhookEvent.EventName != "flag.deleted" && webhookEvent.EnvironmentId.HasValue)
         {
-            if (webhookEvent.EnvironmentId.HasValue)
-            {
-                var state = await db.FlagEnvironmentStates
-                    .AsNoTracking()
-                    .Include(x => x.FeatureFlag)
-                    .Include(x => x.Rules)
-                    .FirstOrDefaultAsync(x => x.EnvironmentId == webhookEvent.EnvironmentId.Value && x.FeatureFlag.Key == webhookEvent.FlagKey, ct);
+            var state = await db.FlagEnvironmentStates
+                .AsNoTracking()
+                .Include(x => x.FeatureFlag)
+                    .ThenInclude(f => f.Variations)
+                .Include(x => x.Rules)
+                .Include(x => x.IndividualTargets)
+                .AsSplitQuery()
+                .FirstOrDefaultAsync(x => x.EnvironmentId == webhookEvent.EnvironmentId.Value && x.FeatureFlag.Key == webhookEvent.FlagKey, ct);
 
-                if (state != null)
-                    data = new
-                    {
-                        key = state.FeatureFlag.Key,
-                        isEnabled = state.IsEnabled,
-                        rolloutPercentage = state.RolloutPercentage,
-                        tags = state.FeatureFlag.Tags,
-                        isClientSideExposed = state.FeatureFlag.IsClientSideExposed,
-                        rules = state.Rules.Select(r => new { r.GroupId, r.Attribute, r.Operator, r.Value }).ToList()
-                    };
+            if (state != null)
+            {
+                var baseData = new Dictionary<string, object?>
+                {
+                    ["key"] = state.FeatureFlag.Key,
+                    ["type"] = state.FeatureFlag.Type.ToString(),
+                    ["tags"] = state.FeatureFlag.Tags,
+                    ["isClientSideExposed"] = state.FeatureFlag.IsClientSideExposed,
+                    ["rules"] = state.Rules.Select(r => new { r.GroupId, r.Attribute, r.Operator, r.Value }).ToList(),
+                    ["individualTargets"] = state.IndividualTargets.Select(t => new { t.IdentityKey, t.VariationId }).ToList()
+                };
+
+                if (state.FeatureFlag.Type == Flags.Domain.FlagType.Boolean)
+                    baseData["isEnabled"] = state.IsEnabled;
+                else
+                {
+                    baseData["variations"] = state.FeatureFlag.Variations.OrderBy(v => v.Sequence).Select(v => new { v.Id, v.Value }).ToList();
+                    baseData["defaultRollout"] = state.FallthroughRollout;
+                }
+
+                data = baseData;
             }
-            else
-            {
-                var flag = await db.FeatureFlags
-                    .AsNoTracking()
-                    .FirstOrDefaultAsync(x => x.ProjectId == webhookEvent.ProjectId && x.Key == webhookEvent.FlagKey, ct);
+        }
+        else
+        {
+            var flag = await db.FeatureFlags
+                .AsNoTracking()
+                .Include(f => f.Variations)
+                .FirstOrDefaultAsync(x => x.ProjectId == webhookEvent.ProjectId && x.Key == webhookEvent.FlagKey, ct);
 
-                if (flag != null)
-                    data = new
-                    {
-                        key = flag.Key,
-                        tags = flag.Tags,
-                        isClientSideExposed = flag.IsClientSideExposed
-                    };
+            if (flag != null)
+            {
+                var baseData = new Dictionary<string, object?>
+                {
+                    ["key"] = flag.Key,
+                    ["type"] = flag.Type.ToString(),
+                    ["tags"] = flag.Tags,
+                    ["isClientSideExposed"] = flag.IsClientSideExposed
+                };
+
+                if (flag.Type != Flags.Domain.FlagType.Boolean)
+                    baseData["variations"] = flag.Variations
+                        .OrderBy(v => v.Sequence)
+                        .Select(v => new { v.Id, v.Value })
+                        .ToList();
+
+                data = baseData;
             }
         }
 
@@ -181,6 +208,7 @@ public class WebhookDispatcherService : BackgroundService
             environmentId = webhookEvent.EnvironmentId,
             environmentName = envName,
             flagKey = webhookEvent.FlagKey,
+            contextMessage = webhookEvent.ContextMessage,
             data
         };
 
@@ -197,5 +225,79 @@ public class WebhookDispatcherService : BackgroundService
         };
 
         db.WebhookDeliveries.Add(delivery);
+    }
+
+    private async Task DispatchIntegrationsAsync(
+        WebhookEvent webhookEvent, 
+        string projectName,
+        string? envName,
+        AppDbContext db,
+        IServiceProvider sp,
+        CancellationToken ct)
+    {
+        var integrations = await db.Integrations
+            .AsNoTracking()
+            .Where(i => i.ProjectId == webhookEvent.ProjectId && i.IsActive)
+            .ToListAsync(ct);
+
+        if (integrations.Count == 0)
+            return;
+
+        var encryptionService = sp.GetRequiredService<IAesEncryptionService>();
+        var httpClientFactory = sp.GetRequiredService<IHttpClientFactory>();
+        var config = sp.GetRequiredService<IConfiguration>();
+        var adminBaseUrl = config["App:AdminBaseUrl"]?.TrimEnd('/');
+
+        var evt = new IntegrationEvent(
+            webhookEvent.EventName,
+            projectName,
+            envName,
+            webhookEvent.FlagKey,
+            null,
+            _timeProvider.GetUtcNow(),
+            adminBaseUrl,
+            webhookEvent.ContextMessage
+        );
+        
+        var dispatchTasks = new List<Task>();
+
+        foreach (var integration in integrations)
+        {
+            if (integration.Events.Length > 0 && !integration.Events.Contains(webhookEvent.EventName))
+                continue;
+
+            if (webhookEvent.EnvironmentId.HasValue && 
+                integration.EnvironmentIds.Length > 0 && 
+                !integration.EnvironmentIds.Contains(webhookEvent.EnvironmentId.Value))
+                continue;
+
+            IIntegrationFormatter formatter = integration.Provider switch
+            {
+                IntegrationProvider.Slack => new SlackFormatter(),
+                IntegrationProvider.Discord => new DiscordFormatter(),
+                IntegrationProvider.MicrosoftTeams => new TeamsFormatter(),
+                _ => throw new NotImplementedException()
+            };
+
+            var payload = formatter.FormatMessage(evt);
+            var webhookUrl = encryptionService.Decrypt(integration.WebhookUrl);
+
+            dispatchTasks.Add(Task.Run(async () =>
+            {
+                try
+                {
+                    var client = httpClientFactory.CreateClient("IntegrationClient");
+                    var content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+                    await client.PostAsync(webhookUrl, content, ct);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to dispatch integration {IntegrationId} to {Provider}", integration.Id, integration.Provider);
+                }
+            }, ct));
+        }
+        
+        if (dispatchTasks.Count > 0)
+            await Task.WhenAll(dispatchTasks);
     }
 }

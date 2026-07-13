@@ -65,27 +65,29 @@ public class SdkGetFlagsEndpoint : ToggleEndpoint<SdkGetFlagsRequest, SdkGetFlag
         var statesData = await _db.FlagEnvironmentStates
             .AsNoTracking()
             .Include(x => x.FeatureFlag)
+                .ThenInclude(f => f.Variations)
             .Include(x => x.Rules)
             .Include(x => x.ContextualRollouts)
             .Where(x => x.EnvironmentId == req.EnvId)
             .AsSplitQuery()
             .ToListAsync(ct);
 
-        var states = statesData.Select(state => state.ToDto()).ToList();
+        var states = statesData.Select(state => state.ToSdkDto()).ToList();
 
-        var segments = await _db.Segments
+        var segmentsData = await _db.Segments
             .AsNoTracking()
             .Include(x => x.Rules)
             .Where(x => x.EnvironmentId == req.EnvId)
-            .Select(s => new SegmentDto(
+            .AsSplitQuery()
+            .ToListAsync(ct);
+
+        var segments = segmentsData.Select(s => new SegmentDto(
                 s.Id,
                 s.EnvironmentId,
                 s.Name,
                 s.Description,
-                s.Rules.Select(r => new RuleDto(r.GroupId, r.Attribute, r.Operator, r.Value)),
-                s.CreatedAt))
-            .AsSplitQuery()
-            .ToListAsync(ct);
+                s.Rules.Select(r => new RuleInput(r.GroupId, r.Attribute, r.Operator, r.Value)),
+                s.CreatedAt)).ToList();
 
         var response = new SdkGetFlagsResponse(states, segments);
 
@@ -96,3 +98,4 @@ public class SdkGetFlagsEndpoint : ToggleEndpoint<SdkGetFlagsRequest, SdkGetFlag
         await Send.OkAsync(response, ct);
     }
 }
+

@@ -7,7 +7,8 @@ public class RawAnalyticsEventDto
     public string Identity { get; set; } = null!;
     
     public string? FlagKey { get; set; }
-    public bool Result { get; set; }
+    public Guid? VariationId { get; set; }
+    public string? VariationValue { get; set; }
     
     public string? EventName { get; set; }
     public double? Value { get; set; }

@@ -22,8 +22,10 @@ public sealed class FlagRuleConfiguration
             .IsRequired();
 
         entity.Property(x => x.Value)
-            .HasMaxLength(1024)
+            .HasMaxLength(256)
             .IsRequired();
+
+        entity.OwnsMany(x => x.Rollout, b => b.ToJson());
 
         entity.HasOne(x => x.FlagEnvironmentState)
             .WithMany(x => x.Rules)

@@ -87,8 +87,22 @@ public readonly struct ContextAccessor<T> : IContextAccessor
             return false;
         }
 
-        if (IsDictionary && _instance is IDictionary<string, string> dict)
-            return dict.TryGetValue(key, out value);
+        if (_instance is IContextAccessor ca)
+            return ca.TryGetValue(key, out value);
+
+        if (_instance is IDictionary<string, string> dict)
+        {
+            if (dict.TryGetValue(key, out value)) return true;
+
+            foreach (var kvp in dict)
+            {
+                if (!string.Equals(kvp.Key, key, StringComparison.OrdinalIgnoreCase)) 
+                    continue;
+                
+                value = kvp.Value;
+                return true;
+            }
+        }
 
         if (Getters.TryGetValue(key, out var getter))
         {

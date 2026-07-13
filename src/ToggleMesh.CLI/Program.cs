@@ -1,4 +1,4 @@
-﻿using Spectre.Console.Cli;
+using Spectre.Console.Cli;
 using ToggleMesh.CLI.Commands;
 
 var app = new CommandApp();

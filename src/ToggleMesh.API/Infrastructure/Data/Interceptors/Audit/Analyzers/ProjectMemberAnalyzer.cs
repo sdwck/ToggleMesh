@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using ToggleMesh.API.Features.Projects.Domain;
 using ToggleMesh.API.Infrastructure.Security.Authorization.Models;
 

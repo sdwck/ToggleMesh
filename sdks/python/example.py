@@ -1,40 +1,39 @@
+import os
 import time
-import logging
-import urllib3
-from togglemesh import ToggleMeshClient, ToggleMeshOptions
-
-logging.basicConfig(level=logging.INFO)
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+from togglemesh.client import ToggleMeshClient
+from togglemesh.models import ToggleMeshOptions
 
 def main():
+    API_KEY = os.environ.get("TOGGLEMESH_API_KEY")
+    if not API_KEY:
+        print("TOGGLEMESH_API_KEY environment variable is required.")
+        exit(1)
+
     options = ToggleMeshOptions(
         base_url="http://localhost:5264",
-        client_key="tm_server_w9pYCQFCJj3DdXuzsQfWvZNSIjE1x0zrMSv5PHvrW8",
-        disable_ssl_verification=True
+        server_key=API_KEY,
+        disable_ssl_verification=False
     )
-    
+
     client = ToggleMeshClient(options)
-    
+    print("Python SDK started. Simulating traffic...")
+
     try:
-        print("Starting flag evaluation loop (press Ctrl+C to exit)...")
         while True:
-            email = "nirawolker@gmail.com"
-            uid = "123456"
-            context = {"Email": email, "UserId": uid}
-            
-            is_enabled = client.is_enabled("gmail-20percent", identity=uid, context=context)
-            
-            if is_enabled:
-                client.track("python_gmail_checked", properties=context, value=1.0, identity=uid)
-                print(f"[Gmail 20%] {email} -> ENABLED!")
-            else:
-                print(f"[Gmail 20%] {email} -> DISABLED.")
-                
-            time.sleep(3)
+            user_id = "user_python_1"
+            context = {"Browser": "Firefox"}
+
+            variation = client.get_variation("mab-string-test", "default-variant", identity=user_id, context=context)
+            print(f"[Python SDK] Evaluated mab-string-test for {user_id}: {variation}")
+
+            if int(time.time() * 1000) % 3 == 0:
+                client.track("purchase", identity=user_id, properties={"sdk": "python"}, value=15.0)
+                print(f"[Python SDK] Tracked 'purchase' for {user_id}")
+
+            time.sleep(1.5)
     except KeyboardInterrupt:
-        print("Stopping...")
-    finally:
-        client.stop()
+        print("Exiting...")
+        client.close()
 
 if __name__ == "__main__":
     main()

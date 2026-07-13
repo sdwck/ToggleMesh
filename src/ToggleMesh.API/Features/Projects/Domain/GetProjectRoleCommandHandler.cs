@@ -1,4 +1,4 @@
-﻿using FastEndpoints;
+using FastEndpoints;
 using Microsoft.EntityFrameworkCore;
 using ToggleMesh.API.Features.Organizations.Domain;
 using ToggleMesh.API.Infrastructure.Data;

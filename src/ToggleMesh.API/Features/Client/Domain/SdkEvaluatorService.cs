@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
@@ -8,6 +10,8 @@ using ToggleMesh.API.Infrastructure.Caching;
 using ToggleMesh.API.Infrastructure.Data;
 using ToggleMesh.Common.Contexts;
 using ToggleMesh.Common.Rules;
+using ToggleMesh.Common;
+// ReSharper disable ForCanBeConvertedToForeach
 
 namespace ToggleMesh.API.Features.Client.Domain;
 
@@ -55,8 +59,10 @@ public class SdkEvaluatorService : ISdkEvaluatorService
                 var states = await _db.FlagEnvironmentStates
                     .AsNoTracking()
                     .Include(x => x.FeatureFlag)
+                        .ThenInclude(x => x.Variations)
                     .Include(x => x.Rules)
                     .Include(x => x.ContextualRollouts)
+                    .Include(x => x.IndividualTargets)
                     .Where(x => x.EnvironmentId == envId)
                     .AsSplitQuery()
                     .ToListAsync(ct);
@@ -64,17 +70,24 @@ public class SdkEvaluatorService : ISdkEvaluatorService
                 dtoList = states.Select(x => new FlagStateDto(
                     x.FeatureFlag.Key,
                     x.IsEnabled,
-                    x.RolloutPercentage,
+                    x.OffVariationId,
+                    x.FallthroughRollout.Select(r => new VariationWeight(r.VariationId, r.Weight)).ToArray(),
                     x.FeatureFlag.IsClientSideExposed,
                     x.Rules.Select(xx =>
                         new RuleDto(
+                            xx.Priority,
                             xx.GroupId,
                             xx.Attribute,
                             xx.Operator,
-                            xx.Value)
+                            xx.Value,
+                            xx.Rollout.Select(r => new VariationWeight(r.VariationId, r.Weight)).ToArray())
                     ).ToList(),
                     x.ContextPartitionKeys,
-                    x.ContextualRollouts?.ToDictionary(c => c.ContextSlice, c => c.RolloutPercentage),
+                    x.ContextualRollouts.Count > 0 ? x.ContextualRollouts.ToDictionary(
+                        c => c.ContextSlice, 
+                        c => c.Rollout.Select(r => new VariationWeight(r.VariationId, r.Weight)).ToArray()) : null,
+                    x.IndividualTargets.Count > 0 ? x.IndividualTargets.ToDictionary(t => t.IdentityKey, t => t.VariationId) : null,
+                    x.FeatureFlag.Variations.ToDictionary(v => v.Id, v => v.Value),
                     x.IsExperimentActive
                 )).ToList();
 
@@ -88,11 +101,14 @@ public class SdkEvaluatorService : ISdkEvaluatorService
                 result.Add(new CompiledFlagState(
                     dto.Key,
                     dto.IsEnabled,
-                    dto.RolloutPercentage,
+                    dto.OffVariationId,
+                    dto.FallthroughRollout,
                     dto.IsClientSideExposed,
                     _ruleEngine.CompileRules(dto.Rules),
                     dto.ContextPartitionKeys,
                     dto.ContextualRollouts,
+                    dto.IndividualTargets,
+                    dto.Variations,
                     dto.IsExperimentActive));
 
             return result;
@@ -101,23 +117,50 @@ public class SdkEvaluatorService : ISdkEvaluatorService
         return cacheResult ?? [];
     }
 
-    public bool Evaluate(CompiledFlagState state, string identity, Dictionary<string, string> context)
+    public EvaluationResult? Evaluate(CompiledFlagState state, string identity, Dictionary<string, string> context)
     {
-        if (!state.IsEnabled)
-            return false;
-        
         var accessor = new ContextAccessor<Dictionary<string, string>>(context);
         var evalContext = new EvaluationContext<ContextAccessor<Dictionary<string, string>>>(
             accessor,
             [],
             DefaultIdentityKeys);
 
-        if (!_ruleEngine.Evaluate(state.Groups, ref evalContext))
-            return false;
-
         var actualIdentity = evalContext.GetIdentity(identity);
+
+        if (!state.IsEnabled)
+        {
+            if (state is { OffVariationId: not null, Variations: not null } && 
+                state.Variations.TryGetValue(state.OffVariationId.Value, out var offVal))
+                return new EvaluationResult(state.OffVariationId.Value, offVal);
+            
+            return null;
+        }
         
-        int? activeRolloutPercentage = state.RolloutPercentage;
+        if (state.IndividualTargets != null && state.IndividualTargets.TryGetValue(actualIdentity, out var targetVarId))
+        {
+            if (state.Variations != null && state.Variations.TryGetValue(targetVarId, out var val))
+            {
+                return new EvaluationResult(targetVarId, val);
+            }
+        }
+
+        var matchedIndex = _ruleEngine.Evaluate(state.Groups, ref evalContext);
+        if (matchedIndex >= 0)
+        {
+            ref readonly var matchedGroup = ref state.Groups[matchedIndex];
+            
+            if (matchedGroup.FastResultVariationId.HasValue)
+            {
+                if (state.Variations != null && state.Variations.TryGetValue(matchedGroup.FastResultVariationId.Value, out var val))
+                    return new EvaluationResult(matchedGroup.FastResultVariationId.Value, val);
+            }
+            else if (matchedGroup.Rollout is { Length: > 0 })
+            {
+                return EvaluateRollout(matchedGroup.Rollout, state, actualIdentity);
+            }
+        }
+
+        var activeRollout = state.FallthroughRollout;
         
         if (state is { ContextualRollouts.Count: > 0, ContextPartitionKeys: not null })
         {
@@ -129,7 +172,7 @@ public class SdkEvaluatorService : ISdkEvaluatorService
                 
                 var sliceString = JsonSerializer.Serialize(dict);
                 if (state.ContextualRollouts.TryGetValue(sliceString, out var contextualRollout))
-                    activeRolloutPercentage = contextualRollout;
+                    activeRollout = contextualRollout;
             }
             catch
             {
@@ -137,6 +180,53 @@ public class SdkEvaluatorService : ISdkEvaluatorService
             }
         }
 
-        return RolloutEvaluator.Evaluate(activeRolloutPercentage, state.Key, actualIdentity);
+        if (activeRollout.Length > 0)
+            return EvaluateRollout(activeRollout, state, actualIdentity);
+
+        return null;
+    }
+
+    private EvaluationResult? EvaluateRollout(VariationWeight[] rollout, CompiledFlagState state, string identity)
+    {
+        if (rollout.Length == 0) return null;
+        
+        var bucket = GetBucket(state.Key, identity);
+        
+        int currentLimit = 0;
+        foreach (var r in rollout)
+        {
+            currentLimit += r.Weight;
+            if (bucket < currentLimit)
+            {
+                if (state.Variations != null && state.Variations.TryGetValue(r.VariationId, out var val))
+                {
+                    return new EvaluationResult(r.VariationId, val);
+                }
+                break;
+            }
+        }
+        
+        return null;
+    }
+
+    private static int GetBucket(string flagKey, string identity)
+    {
+        const uint offsetBasis = 2166136261;
+        const uint prime = 16777619;
+        var hash = offsetBasis;
+        
+        for (var i = 0; i < flagKey.Length; i++)
+        {
+            hash ^= flagKey[i];
+            hash *= prime;
+        }
+
+        for (var i = 0; i < identity.Length; i++)
+        {
+            hash ^= identity[i];
+            hash *= prime;
+        }
+        
+        return (int)(hash % 10000);
     }
 }

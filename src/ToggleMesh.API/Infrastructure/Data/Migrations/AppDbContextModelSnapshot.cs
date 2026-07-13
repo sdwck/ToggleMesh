@@ -175,8 +175,8 @@ namespace ToggleMesh.API.Infrastructure.Data.Migrations
                     b.Property<JsonDocument>("Properties")
                         .HasColumnType("jsonb");
 
-                    b.Property<bool>("Variant")
-                        .HasColumnType("boolean");
+                    b.Property<Guid>("VariationId")
+                        .HasColumnType("uuid");
 
                     b.HasKey("Id", "Timestamp");
 
@@ -274,8 +274,8 @@ namespace ToggleMesh.API.Infrastructure.Data.Migrations
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<bool>("Variant")
-                        .HasColumnType("boolean");
+                    b.Property<Guid>("VariationId")
+                        .HasColumnType("uuid");
 
                     b.HasKey("Id");
 
@@ -364,12 +364,12 @@ namespace ToggleMesh.API.Infrastructure.Data.Migrations
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<bool>("Variant")
-                        .HasColumnType("boolean");
+                    b.Property<Guid>("VariationId")
+                        .HasColumnType("uuid");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("EnvironmentId", "FlagKey", "EventName", "Variant")
+                    b.HasIndex("EnvironmentId", "FlagKey", "EventName", "VariationId")
                         .IsUnique();
 
                     b.ToTable("ExperimentMetrics");
@@ -450,9 +450,6 @@ namespace ToggleMesh.API.Infrastructure.Data.Migrations
                     b.Property<bool>("IsAutoManaged")
                         .HasColumnType("boolean");
 
-                    b.Property<int>("RolloutPercentage")
-                        .HasColumnType("integer");
-
                     b.HasKey("Id");
 
                     b.HasIndex("FlagEnvironmentStateId");
@@ -492,6 +489,9 @@ namespace ToggleMesh.API.Infrastructure.Data.Migrations
                     b.PrimitiveCollection<string[]>("Tags")
                         .IsRequired()
                         .HasColumnType("text[]");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("integer");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -536,17 +536,32 @@ namespace ToggleMesh.API.Infrastructure.Data.Migrations
                     b.Property<bool>("IsMabEnabled")
                         .HasColumnType("boolean");
 
+                    b.Property<bool>("IsSrmAlertSent")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("MabExplorationFloor")
+                        .HasColumnType("integer");
+
                     b.Property<string>("MabGoalEvent")
                         .HasColumnType("text");
 
                     b.Property<int>("MabOptimizationType")
                         .HasColumnType("integer");
 
-                    b.Property<int?>("RolloutPercentage")
-                        .HasColumnType("integer");
+                    b.Property<Guid?>("OffVariationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<double?>("SrmPValue")
+                        .HasColumnType("double precision");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
 
                     b.HasKey("Id");
 
@@ -556,6 +571,39 @@ namespace ToggleMesh.API.Infrastructure.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("FlagEnvironmentStates");
+                });
+
+            modelBuilder.Entity("ToggleMesh.API.Features.Flags.Domain.FlagIndividualTarget", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("FlagEnvironmentStateId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("IdentityKey")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("VariationId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("VariationId");
+
+                    b.HasIndex("FlagEnvironmentStateId", "IdentityKey")
+                        .IsUnique();
+
+                    b.ToTable("FlagIndividualTargets");
                 });
 
             modelBuilder.Entity("ToggleMesh.API.Features.Flags.Domain.FlagRule", b =>
@@ -583,13 +631,16 @@ namespace ToggleMesh.API.Infrastructure.Data.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
 
+                    b.Property<int>("Priority")
+                        .HasColumnType("integer");
+
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("Value")
                         .IsRequired()
-                        .HasMaxLength(1024)
-                        .HasColumnType("character varying(1024)");
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
 
                     b.HasKey("Id");
 
@@ -598,7 +649,97 @@ namespace ToggleMesh.API.Infrastructure.Data.Migrations
                     b.ToTable("ProjectFlagRules", (string)null);
                 });
 
-            modelBuilder.Entity("ToggleMesh.API.Features.Metrics.Entities.FlagMetricBucket", b =>
+            modelBuilder.Entity("ToggleMesh.API.Features.Flags.Domain.FlagVariation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("FeatureFlagId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("Sequence")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FeatureFlagId", "Key")
+                        .IsUnique();
+
+                    b.ToTable("FlagVariations");
+                });
+
+            modelBuilder.Entity("ToggleMesh.API.Features.Integrations.Domain.Integration", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.PrimitiveCollection<Guid[]>("EnvironmentIds")
+                        .IsRequired()
+                        .HasColumnType("uuid[]");
+
+                    b.PrimitiveCollection<string[]>("Events")
+                        .IsRequired()
+                        .HasColumnType("text[]");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("WebhookUrl")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectId");
+
+                    b.ToTable("Integrations");
+                });
+
+            modelBuilder.Entity("ToggleMesh.API.Features.Metrics.Domain.FlagMetricBucket", b =>
                 {
                     b.Property<Guid>("EnvironmentId")
                         .HasColumnType("uuid");
@@ -606,16 +747,16 @@ namespace ToggleMesh.API.Infrastructure.Data.Migrations
                     b.Property<string>("FlagKey")
                         .HasColumnType("text");
 
-                    b.Property<DateTime>("TimestampBucket")
+                    b.Property<DateTimeOffset>("TimestampBucket")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<long>("FalseCount")
+                    b.Property<Guid>("VariationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("Count")
                         .HasColumnType("bigint");
 
-                    b.Property<long>("TrueCount")
-                        .HasColumnType("bigint");
-
-                    b.HasKey("EnvironmentId", "FlagKey", "TimestampBucket");
+                    b.HasKey("EnvironmentId", "FlagKey", "TimestampBucket", "VariationId");
 
                     b.ToTable("FlagMetricBuckets");
                 });
@@ -1301,7 +1442,32 @@ namespace ToggleMesh.API.Infrastructure.Data.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.OwnsMany("ToggleMesh.API.Features.Flags.Domain.VariationWeight", "Rollout", b1 =>
+                        {
+                            b1.Property<Guid>("ContextualRolloutId");
+
+                            b1.Property<int>("__synthesizedOrdinal")
+                                .ValueGeneratedOnAdd();
+
+                            b1.Property<Guid>("VariationId");
+
+                            b1.Property<int>("Weight");
+
+                            b1.HasKey("ContextualRolloutId", "__synthesizedOrdinal");
+
+                            b1.ToTable("ContextualRollouts");
+
+                            b1
+                                .ToJson("Rollout")
+                                .HasColumnType("jsonb");
+
+                            b1.WithOwner()
+                                .HasForeignKey("ContextualRolloutId");
+                        });
+
                     b.Navigation("FlagEnvironmentState");
+
+                    b.Navigation("Rollout");
                 });
 
             modelBuilder.Entity("ToggleMesh.API.Features.Flags.Domain.FeatureFlag", b =>
@@ -1329,9 +1495,53 @@ namespace ToggleMesh.API.Infrastructure.Data.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.OwnsMany("ToggleMesh.API.Features.Flags.Domain.VariationWeight", "FallthroughRollout", b1 =>
+                        {
+                            b1.Property<Guid>("FlagEnvironmentStateId");
+
+                            b1.Property<int>("__synthesizedOrdinal")
+                                .ValueGeneratedOnAdd();
+
+                            b1.Property<Guid>("VariationId");
+
+                            b1.Property<int>("Weight");
+
+                            b1.HasKey("FlagEnvironmentStateId", "__synthesizedOrdinal");
+
+                            b1.ToTable("FlagEnvironmentStates");
+
+                            b1
+                                .ToJson("FallthroughRollout")
+                                .HasColumnType("jsonb");
+
+                            b1.WithOwner()
+                                .HasForeignKey("FlagEnvironmentStateId");
+                        });
+
                     b.Navigation("Environment");
 
+                    b.Navigation("FallthroughRollout");
+
                     b.Navigation("FeatureFlag");
+                });
+
+            modelBuilder.Entity("ToggleMesh.API.Features.Flags.Domain.FlagIndividualTarget", b =>
+                {
+                    b.HasOne("ToggleMesh.API.Features.Flags.Domain.FlagEnvironmentState", "FlagEnvironmentState")
+                        .WithMany("IndividualTargets")
+                        .HasForeignKey("FlagEnvironmentStateId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ToggleMesh.API.Features.Flags.Domain.FlagVariation", "Variation")
+                        .WithMany()
+                        .HasForeignKey("VariationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("FlagEnvironmentState");
+
+                    b.Navigation("Variation");
                 });
 
             modelBuilder.Entity("ToggleMesh.API.Features.Flags.Domain.FlagRule", b =>
@@ -1342,10 +1552,57 @@ namespace ToggleMesh.API.Infrastructure.Data.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.OwnsMany("ToggleMesh.API.Features.Flags.Domain.VariationWeight", "Rollout", b1 =>
+                        {
+                            b1.Property<Guid>("FlagRuleId");
+
+                            b1.Property<int>("__synthesizedOrdinal")
+                                .ValueGeneratedOnAdd();
+
+                            b1.Property<Guid>("VariationId");
+
+                            b1.Property<int>("Weight");
+
+                            b1.HasKey("FlagRuleId", "__synthesizedOrdinal");
+
+                            b1.ToTable("ProjectFlagRules");
+
+                            b1
+                                .ToJson("Rollout")
+                                .HasColumnType("jsonb");
+
+                            b1.WithOwner()
+                                .HasForeignKey("FlagRuleId");
+                        });
+
                     b.Navigation("FlagEnvironmentState");
+
+                    b.Navigation("Rollout");
                 });
 
-            modelBuilder.Entity("ToggleMesh.API.Features.Metrics.Entities.FlagMetricBucket", b =>
+            modelBuilder.Entity("ToggleMesh.API.Features.Flags.Domain.FlagVariation", b =>
+                {
+                    b.HasOne("ToggleMesh.API.Features.Flags.Domain.FeatureFlag", "FeatureFlag")
+                        .WithMany("Variations")
+                        .HasForeignKey("FeatureFlagId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("FeatureFlag");
+                });
+
+            modelBuilder.Entity("ToggleMesh.API.Features.Integrations.Domain.Integration", b =>
+                {
+                    b.HasOne("ToggleMesh.API.Features.Projects.Domain.Project", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Project");
+                });
+
+            modelBuilder.Entity("ToggleMesh.API.Features.Metrics.Domain.FlagMetricBucket", b =>
                 {
                     b.HasOne("ToggleMesh.API.Features.Projects.Domain.ProjectEnvironment", "Environment")
                         .WithMany()
@@ -1526,11 +1783,15 @@ namespace ToggleMesh.API.Infrastructure.Data.Migrations
             modelBuilder.Entity("ToggleMesh.API.Features.Flags.Domain.FeatureFlag", b =>
                 {
                     b.Navigation("States");
+
+                    b.Navigation("Variations");
                 });
 
             modelBuilder.Entity("ToggleMesh.API.Features.Flags.Domain.FlagEnvironmentState", b =>
                 {
                     b.Navigation("ContextualRollouts");
+
+                    b.Navigation("IndividualTargets");
 
                     b.Navigation("Rules");
                 });

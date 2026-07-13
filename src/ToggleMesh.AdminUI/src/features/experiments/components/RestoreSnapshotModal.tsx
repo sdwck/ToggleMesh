@@ -55,7 +55,7 @@ export function RestoreSnapshotModal({
         if (currentFlagState) {
             const currentObj = {
                 IsEnabled: currentFlagState.isEnabled,
-                RolloutPercentage: currentFlagState.rolloutPercentage,
+                FallthroughRollout: currentFlagState.fallthroughRollout,
                 IsMabEnabled: currentFlagState.isMabEnabled,
                 ContextualRollouts: currentFlagState.contextualRollouts,
                 ContextPartitionKeys: currentFlagState.contextPartitionKeys,
@@ -125,6 +125,7 @@ export function RestoreSnapshotModal({
                         Cancel
                     </Button>
                     <Button
+                        type="button"
                         onClick={handleRestore}
                         disabled={restoreMutation.isPending || confirmText !== 'Confirm'}
                         className="bg-emerald-800 hover:bg-emerald-700 text-emerald-50 border border-emerald-700/50"

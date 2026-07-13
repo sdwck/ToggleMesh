@@ -1,0 +1,613 @@
+{
+  "scenarios": [
+    {
+      "name": "Suite 1: Missing Flag Returns Default",
+      "flags": [],
+      "evaluations": [
+        {
+          "flagKey": "non_existent_flag",
+          "identity": "user-1",
+          "context": {},
+          "expectedValue": "default",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "Suite 1: Disabled Flag Returns OffVariationId",
+      "flags": [
+        {
+          "key": "disabled_flag",
+          "isEnabled": false,
+          "offVariationId": "00000000-0000-0000-0000-000000000000",
+          "variations": {
+            "00000000-0000-0000-0000-000000000001": "on",
+            "00000000-0000-0000-0000-000000000000": "off"
+          },
+          "rules": [],
+          "fallthroughRollout": []
+        }
+      ],
+      "evaluations": [
+        {
+          "flagKey": "disabled_flag",
+          "identity": "user-1",
+          "context": {},
+          "expectedValue": "off",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "Suite 2: Rule Engine Match",
+      "flags": [
+        {
+          "key": "rule_flag",
+          "isEnabled": true,
+          "variations": {
+            "00000000-0000-0000-0000-000000000001": "A",
+            "00000000-0000-0000-0000-000000000000": "B"
+          },
+          "rules": [
+            {
+              "priority": 0,
+              "groupId": 1,
+              "attribute": "country",
+              "operator": "equals",
+              "value": "US",
+              "rollout": [
+                {
+                  "variationId": "00000000-0000-0000-0000-000000000001",
+                  "weight": 10000
+                }
+              ]
+            }
+          ],
+          "fallthroughRollout": [
+            {
+              "variationId": "00000000-0000-0000-0000-000000000000",
+              "weight": 10000
+            }
+          ]
+        }
+      ],
+      "evaluations": [
+        {
+          "flagKey": "rule_flag",
+          "identity": "user-1",
+          "context": {
+            "country": "US"
+          },
+          "expectedValue": "A",
+          "type": "string"
+        },
+        {
+          "flagKey": "rule_flag",
+          "identity": "user-2",
+          "context": {
+            "country": "CA"
+          },
+          "expectedValue": "B",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "Suite 3: Contextual Bandits Parsing",
+      "flags": [
+        {
+          "key": "ctx_flag",
+          "isEnabled": true,
+          "variations": {
+            "00000000-0000-0000-0000-000000000001": "A",
+            "00000000-0000-0000-0000-000000000000": "B"
+          },
+          "rules": [],
+          "fallthroughRollout": [
+            {
+              "variationId": "00000000-0000-0000-0000-000000000001",
+              "weight": 10000
+            }
+          ],
+          "contextPartitionKeys": [
+            "device",
+            "os"
+          ],
+          "contextualRollouts": {
+            "{\"device\":\"mobile\",\"os\":\"ios\"}": [
+              {
+                "variationId": "00000000-0000-0000-0000-000000000000",
+                "weight": 10000
+              }
+            ]
+          }
+        }
+      ],
+      "evaluations": [
+        {
+          "flagKey": "ctx_flag",
+          "identity": "user-1",
+          "context": {
+            "device": "mobile",
+            "os": "ios"
+          },
+          "expectedValue": "B",
+          "type": "string"
+        },
+        {
+          "flagKey": "ctx_flag",
+          "identity": "user-2",
+          "context": {
+            "device": "desktop",
+            "os": "ios"
+          },
+          "expectedValue": "A",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "Suite 4: Deterministic Hashing",
+      "flags": [
+        {
+          "key": "hash_flag",
+          "isEnabled": true,
+          "variations": {
+            "00000000-0000-0000-0000-00000000000a": "A",
+            "00000000-0000-0000-0000-00000000000b": "B",
+            "00000000-0000-0000-0000-00000000000c": "C"
+          },
+          "rules": [],
+          "fallthroughRollout": [
+            {
+              "variationId": "00000000-0000-0000-0000-00000000000a",
+              "weight": 3334
+            },
+            {
+              "variationId": "00000000-0000-0000-0000-00000000000b",
+              "weight": 3333
+            },
+            {
+              "variationId": "00000000-0000-0000-0000-00000000000c",
+              "weight": 3333
+            }
+          ]
+        }
+      ],
+      "evaluations": [
+        {
+          "flagKey": "hash_flag",
+          "identity": "user-1",
+          "context": {},
+          "expectedValue": "A",
+          "type": "string"
+        },
+        {
+          "flagKey": "hash_flag",
+          "identity": "user-999",
+          "context": {},
+          "expectedValue": "C",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "Suite 5: All Operators",
+      "flags": [
+        {
+          "key": "op_flag",
+          "isEnabled": true,
+          "variations": {
+            "00000000-0000-0000-0000-000000000001": "MATCH",
+            "00000000-0000-0000-0000-000000000000": "MISS"
+          },
+          "fallthroughRollout": [
+            {
+              "variationId": "00000000-0000-0000-0000-000000000000",
+              "weight": 10000
+            }
+          ],
+          "rules": [
+            {
+              "priority": 0,
+              "groupId": 1,
+              "attribute": "attr_eq",
+              "operator": "Equals",
+              "value": "EQ",
+              "rollout": [
+                {
+                  "variationId": "00000000-0000-0000-0000-000000000001",
+                  "weight": 10000
+                }
+              ]
+            },
+            {
+              "priority": 1,
+              "groupId": 2,
+              "attribute": "attr_neq",
+              "operator": "NotEquals",
+              "value": "NEQ",
+              "rollout": [
+                {
+                  "variationId": "00000000-0000-0000-0000-000000000001",
+                  "weight": 10000
+                }
+              ]
+            },
+            {
+              "priority": 2,
+              "groupId": 3,
+              "attribute": "attr_inc",
+              "operator": "Contains",
+              "value": "INC",
+              "rollout": [
+                {
+                  "variationId": "00000000-0000-0000-0000-000000000001",
+                  "weight": 10000
+                }
+              ]
+            },
+            {
+              "priority": 3,
+              "groupId": 4,
+              "attribute": "attr_pre",
+              "operator": "StartsWith",
+              "value": "PRE",
+              "rollout": [
+                {
+                  "variationId": "00000000-0000-0000-0000-000000000001",
+                  "weight": 10000
+                }
+              ]
+            },
+            {
+              "priority": 4,
+              "groupId": 5,
+              "attribute": "attr_suf",
+              "operator": "EndsWith",
+              "value": "SUF",
+              "rollout": [
+                {
+                  "variationId": "00000000-0000-0000-0000-000000000001",
+                  "weight": 10000
+                }
+              ]
+            },
+            {
+              "priority": 5,
+              "groupId": 6,
+              "attribute": "attr_regex",
+              "operator": "Regex",
+              "value": "^R.*X$",
+              "rollout": [
+                {
+                  "variationId": "00000000-0000-0000-0000-000000000001",
+                  "weight": 10000
+                }
+              ]
+            },
+            {
+              "priority": 6,
+              "groupId": 7,
+              "attribute": "attr_in",
+              "operator": "InList",
+              "value": "A,B,C",
+              "rollout": [
+                {
+                  "variationId": "00000000-0000-0000-0000-000000000001",
+                  "weight": 10000
+                }
+              ]
+            },
+            {
+              "priority": 7,
+              "groupId": 8,
+              "attribute": "attr_gt",
+              "operator": "GreaterThan",
+              "value": "10",
+              "rollout": [
+                {
+                  "variationId": "00000000-0000-0000-0000-000000000001",
+                  "weight": 10000
+                }
+              ]
+            },
+            {
+              "priority": 8,
+              "groupId": 9,
+              "attribute": "attr_lt",
+              "operator": "LessThan",
+              "value": "10",
+              "rollout": [
+                {
+                  "variationId": "00000000-0000-0000-0000-000000000001",
+                  "weight": 10000
+                }
+              ]
+            },
+            {
+              "priority": 9,
+              "groupId": 10,
+              "attribute": "attr_sveq",
+              "operator": "SemVerEqual",
+              "value": "1.2.3",
+              "rollout": [
+                {
+                  "variationId": "00000000-0000-0000-0000-000000000001",
+                  "weight": 10000
+                }
+              ]
+            },
+            {
+              "priority": 10,
+              "groupId": 11,
+              "attribute": "attr_svgt",
+              "operator": "SemVerGreaterThan",
+              "value": "1.2.3",
+              "rollout": [
+                {
+                  "variationId": "00000000-0000-0000-0000-000000000001",
+                  "weight": 10000
+                }
+              ]
+            },
+            {
+              "priority": 11,
+              "groupId": 12,
+              "attribute": "attr_svlt",
+              "operator": "SemVerLessThan",
+              "value": "1.2.3",
+              "rollout": [
+                {
+                  "variationId": "00000000-0000-0000-0000-000000000001",
+                  "weight": 10000
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "evaluations": [
+        {
+          "flagKey": "op_flag",
+          "identity": "u",
+          "context": {
+            "attr_eq": "EQ"
+          },
+          "expectedValue": "MATCH",
+          "type": "string"
+        },
+        {
+          "flagKey": "op_flag",
+          "identity": "u",
+          "context": {
+            "attr_neq": "NEQ2"
+          },
+          "expectedValue": "MATCH",
+          "type": "string"
+        },
+        {
+          "flagKey": "op_flag",
+          "identity": "u",
+          "context": {
+            "attr_inc": "X_INC_Y"
+          },
+          "expectedValue": "MATCH",
+          "type": "string"
+        },
+        {
+          "flagKey": "op_flag",
+          "identity": "u",
+          "context": {
+            "attr_pre": "PRE_TEST"
+          },
+          "expectedValue": "MATCH",
+          "type": "string"
+        },
+        {
+          "flagKey": "op_flag",
+          "identity": "u",
+          "context": {
+            "attr_suf": "TEST_SUF"
+          },
+          "expectedValue": "MATCH",
+          "type": "string"
+        },
+        {
+          "flagKey": "op_flag",
+          "identity": "u",
+          "context": {
+            "attr_regex": "REgEX"
+          },
+          "expectedValue": "MATCH",
+          "type": "string"
+        },
+        {
+          "flagKey": "op_flag",
+          "identity": "u",
+          "context": {
+            "attr_in": "B"
+          },
+          "expectedValue": "MATCH",
+          "type": "string"
+        },
+        {
+          "flagKey": "op_flag",
+          "identity": "u",
+          "context": {
+            "attr_gt": "15"
+          },
+          "expectedValue": "MATCH",
+          "type": "string"
+        },
+        {
+          "flagKey": "op_flag",
+          "identity": "u",
+          "context": {
+            "attr_lt": "5"
+          },
+          "expectedValue": "MATCH",
+          "type": "string"
+        },
+        {
+          "flagKey": "op_flag",
+          "identity": "u",
+          "context": {
+            "attr_sveq": "v1.2.3"
+          },
+          "expectedValue": "MATCH",
+          "type": "string"
+        },
+        {
+          "flagKey": "op_flag",
+          "identity": "u",
+          "context": {
+            "attr_svgt": "1.3.0"
+          },
+          "expectedValue": "MATCH",
+          "type": "string"
+        },
+        {
+          "flagKey": "op_flag",
+          "identity": "u",
+          "context": {
+            "attr_svlt": "0.9.0"
+          },
+          "expectedValue": "MATCH",
+          "type": "string"
+        },
+        {
+          "flagKey": "op_flag",
+          "identity": "u",
+          "context": {
+            "attr_neq": "NEQ"
+          },
+          "expectedValue": "MISS",
+          "type": "string"
+        },
+        {
+          "flagKey": "op_flag",
+          "identity": "u",
+          "context": {
+            "attr_gt": "10"
+          },
+          "expectedValue": "MISS",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "Suite 6: Individual Targets",
+      "flags": [
+        {
+          "key": "target_flag",
+          "isEnabled": true,
+          "variations": {
+            "00000000-0000-0000-0000-000000000001": "TARGETED",
+            "00000000-0000-0000-0000-000000000000": "DEFAULT"
+          },
+          "fallthroughRollout": [
+            {
+              "variationId": "00000000-0000-0000-0000-000000000000",
+              "weight": 10000
+            }
+          ],
+          "rules": [],
+          "individualTargets": {
+            "user-target-1": "00000000-0000-0000-0000-000000000001",
+            "user-target-2": "00000000-0000-0000-0000-000000000001"
+          }
+        }
+      ],
+      "evaluations": [
+        {
+          "flagKey": "target_flag",
+          "identity": "user-target-1",
+          "context": {},
+          "expectedValue": "TARGETED",
+          "type": "string"
+        },
+        {
+          "flagKey": "target_flag",
+          "identity": "user-target-999",
+          "context": {},
+          "expectedValue": "DEFAULT",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "Suite 7: Data Types",
+      "flags": [
+        {
+          "key": "bool_flag",
+          "isEnabled": true,
+          "variations": {
+            "00000000-0000-0000-0000-000000000001": "true",
+            "00000000-0000-0000-0000-000000000000": "false"
+          },
+          "fallthroughRollout": [
+            {
+              "variationId": "00000000-0000-0000-0000-000000000001",
+              "weight": 10000
+            }
+          ],
+          "rules": []
+        },
+        {
+          "key": "num_flag",
+          "isEnabled": true,
+          "variations": {
+            "00000000-0000-0000-0000-000000000001": "42.5",
+            "00000000-0000-0000-0000-000000000000": "0"
+          },
+          "fallthroughRollout": [
+            {
+              "variationId": "00000000-0000-0000-0000-000000000001",
+              "weight": 10000
+            }
+          ],
+          "rules": []
+        },
+        {
+          "key": "json_flag",
+          "isEnabled": true,
+          "variations": {
+            "00000000-0000-0000-0000-000000000001": "{\"color\":\"red\",\"size\":10}",
+            "00000000-0000-0000-0000-000000000000": "{}"
+          },
+          "fallthroughRollout": [
+            {
+              "variationId": "00000000-0000-0000-0000-000000000001",
+              "weight": 10000
+            }
+          ],
+          "rules": []
+        }
+      ],
+      "evaluations": [
+        {
+          "flagKey": "bool_flag",
+          "identity": "u",
+          "context": {},
+          "expectedValue": "true",
+          "type": "boolean"
+        },
+        {
+          "flagKey": "num_flag",
+          "identity": "u",
+          "context": {},
+          "expectedValue": "42.5",
+          "type": "number"
+        },
+        {
+          "flagKey": "json_flag",
+          "identity": "u",
+          "context": {},
+          "expectedValue": "{\"color\":\"red\",\"size\":10}",
+          "type": "json"
+        }
+      ]
+    }
+  ]
+}

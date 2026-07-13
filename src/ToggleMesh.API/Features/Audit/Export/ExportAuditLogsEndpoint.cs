@@ -97,9 +97,9 @@ public class ExportAuditLogsEndpoint : ToggleEndpoint<GetAuditLogsRequest>
         {
             var searchTerm = $"%{req.Search}%";
             query = query.Where(x =>
-                (x.EntityFriendlyName != null && EF.Functions.ILike(x.EntityFriendlyName, searchTerm)) ||
+                EF.Functions.ILike(x.EntityFriendlyName, searchTerm) ||
                 EF.Functions.ILike(x.EntityId, searchTerm) ||
-                (x.PerformedByEmail != null && EF.Functions.ILike(x.PerformedByEmail, searchTerm)));
+                EF.Functions.ILike(x.PerformedByEmail, searchTerm));
         }
         
         if (dateFrom.HasValue)
@@ -121,10 +121,10 @@ public class ExportAuditLogsEndpoint : ToggleEndpoint<GetAuditLogsRequest>
         foreach (var log in logs)
         {
             var timestamp = log.Timestamp.ToString("yyyy-MM-ddTHH:mm:ssZ");
-            var performedBy = EscapeCsv(log.PerformedByEmail ?? "System");
+            var performedBy = EscapeCsv(string.IsNullOrEmpty(log.PerformedByEmail) ? "System" : log.PerformedByEmail);
             var action = EscapeCsv(log.Action);
             var entityName = EscapeCsv(log.EntityName);
-            var friendlyName = EscapeCsv(log.EntityFriendlyName ?? log.EntityId);
+            var friendlyName = EscapeCsv(string.IsNullOrEmpty(log.EntityFriendlyName) ? log.EntityId : log.EntityFriendlyName);
             var envId = log.EnvironmentId?.ToString() ?? "Project-Level";
 
             sb.AppendLine($"{timestamp},{performedBy},{action},{entityName},{friendlyName},{envId}");

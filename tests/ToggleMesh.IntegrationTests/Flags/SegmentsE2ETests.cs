@@ -70,7 +70,7 @@ public class SegmentsE2ETests : IAsyncLifetime
         {
             Name = "Beta Testers",
             Description = "Internal testers group",
-            Rules = [new RuleDto(0, "Email", "EndsWith", "@example.com")]
+            Rules = [new RuleInput(0, "Email", "EndsWith", "@example.com")]
         };
 
         // Act
@@ -96,7 +96,7 @@ public class SegmentsE2ETests : IAsyncLifetime
             {
                 Name = "Segment To Edit",
                 Description = "Temp segment",
-                Rules = [new RuleDto(0, "Country", "Equals", "US")]
+                Rules = [new RuleInput(0, "Country", "Equals", "US")]
             });
         createSegResponse.StatusCode.Should().Be(HttpStatusCode.Created);
         var segment = await createSegResponse.Content.ReadFromJsonAsync<SegmentDto>();

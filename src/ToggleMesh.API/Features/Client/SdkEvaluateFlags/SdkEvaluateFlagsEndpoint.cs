@@ -38,7 +38,7 @@ public class SdkEvaluateFlagsEndpoint : ToggleEndpoint<SdkEvaluateFlagsRequest, 
                 continue;
 
             var result = _evaluatorService.Evaluate(state, req.Identity, req.Context);
-            response.Add(new SdkEvaluateFlagResponse(state.Key, result, state.IsExperimentActive));
+            response.Add(new SdkEvaluateFlagResponse(state.Key, result?.VariationId, result?.VariationValue, state.IsExperimentActive));
         }
 
         await Send.OkAsync(response, ct);

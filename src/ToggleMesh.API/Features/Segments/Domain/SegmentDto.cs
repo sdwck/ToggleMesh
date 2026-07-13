@@ -7,5 +7,6 @@ public record SegmentDto(
     Guid EnvironmentId,
     string Name,
     string Description,
-    IEnumerable<RuleDto> Rules,
+    IEnumerable<RuleInput> Rules,
     DateTimeOffset CreatedAt);
+

@@ -1,10 +1,9 @@
-import { ToggleMeshOptions, ToggleMeshUser, SdkGetFlagsResponse, FeatureFlagDto, SegmentDto, RuleDto } from './models.js';
+import { ToggleMeshOptions, ToggleMeshUser, SdkGetFlagsResponse, FeatureFlagDto, SegmentDto, RuleDto, EvalOptions, TrackOptions } from './models.js';
 import { RuleEngine, CachedFlag, CachedSegment, ISegmentProvider, CompiledRuleGroup } from './rules.js';
 import { evaluateRollout } from './rollout.js';
 
 class FlagMetrics {
-    trueCount = 0;
-    falseCount = 0;
+    variationsCount: Record<string, number> = {};
 }
 
 export class ToggleMeshClient implements ISegmentProvider {
@@ -185,7 +184,7 @@ export class ToggleMeshClient implements ISegmentProvider {
             const doc = JSON.parse(data);
             const eventName = doc.EventName || doc.eventName;
 
-            if (eventName === "FlagUpdated" && doc.Payload) {
+            if (eventName === "SdkFlagUpdated" && doc.Payload) {
                 let payload = doc.Payload;
                 if (typeof payload === 'string') payload = JSON.parse(payload);
                 payload = this.toCamelCase(payload);
@@ -198,47 +197,99 @@ export class ToggleMeshClient implements ISegmentProvider {
         }
     }
 
-    isEnabled(flagKey: string, user: ToggleMeshUser, defaultValue: boolean = false): boolean {
+    private getVariationInternal(flagKey: string, identity: string, context?: Record<string, any>, defaultValue: string = ""): string {
         const flag = this.flagsCache.get(flagKey);
 
         if (!flag) {
             return defaultValue;
         }
 
-        const context = user.context || {};
-        let activeRolloutPercentage = flag.rolloutPercentage;
-
-        if (Object.keys(flag.parsedContextualRollouts).length > 0 && flag.originalDto.contextPartitionKeys) {
-            const parts = [];
-            for (const key of flag.originalDto.contextPartitionKeys) {
-                parts.push(String(context[key] ?? "null"));
+        context = context || {};
+        
+        let variationId: string | null = null;
+        if (!flag.isEnabled) {
+            variationId = flag.originalDto.offVariationId || null;
+        } else {
+            if (flag.originalDto.individualTargets && identity) {
+                if (flag.originalDto.individualTargets[identity]) {
+                    variationId = flag.originalDto.individualTargets[identity];
+                }
             }
-            const sliceKey = parts.join("|");
-            if (sliceKey in flag.parsedContextualRollouts) {
-                activeRolloutPercentage = flag.parsedContextualRollouts[sliceKey];
+
+            if (!variationId) {
+                let activeRollout = flag.originalDto.fallthroughRollout;
+                
+                if (Object.keys(flag.parsedContextualRollouts).length > 0 && flag.originalDto.contextPartitionKeys) {
+                    let sliceKey = "";
+                    for (let i = 0; i < flag.originalDto.contextPartitionKeys.length; i++) {
+                        if (i > 0) sliceKey += "|";
+                        sliceKey += String(context[flag.originalDto.contextPartitionKeys[i]] ?? "null");
+                    }
+                    if (sliceKey in flag.parsedContextualRollouts) {
+                        activeRollout = flag.parsedContextualRollouts[sliceKey];
+                    }
+                }
+
+                if (flag.groups.length === 0) {
+                    variationId = evaluateRollout(activeRollout, flagKey, identity);
+                } else {
+                    const matchedGroup = this.ruleEngine.evaluate(flag.groups, context);
+                    if (matchedGroup) {
+                        variationId = evaluateRollout(matchedGroup.rollout, flagKey, identity);
+                    } else {
+                        variationId = evaluateRollout(activeRollout, flagKey, identity);
+                    }
+                }
+            }
+        }
+        
+        if (variationId) {
+            this.updateMetrics(flagKey, variationId);
+
+            if (identity && flag.isExperimentActive) {
+                this.queueEvent(0, identity, flagKey, undefined, undefined, context, undefined, variationId);
+            }
+            
+            if (flag.originalDto.variations[variationId] !== undefined) {
+                return flag.originalDto.variations[variationId] ?? defaultValue;
             }
         }
 
-        let result = false;
-        if (flag.isEnabled && this.ruleEngine.evaluate(flag.groups, context)) {
-            result = evaluateRollout(activeRolloutPercentage, flagKey, user.identity);
-        }
-
-        this.updateMetrics(flagKey, result);
-
-        if (user.identity && flag.isExperimentActive) {
-            this.queueEvent(0, user.identity, flagKey, result, undefined, context, undefined);
-        }
-
-        return result;
+        return defaultValue;
     }
 
-    track(eventName: string, user: ToggleMeshUser, properties?: any, value?: number): void {
-        if (!user.identity || !eventName) return;
-        this.queueEvent(1, user.identity, undefined, undefined, eventName, properties, value);
+    getStringValue(flagKey: string, defaultValue: string, options?: EvalOptions): string {
+        return this.getVariationInternal(flagKey, options?.identity || "", options?.context, defaultValue);
     }
 
-    private updateMetrics(flagKey: string, result: boolean) {
+    isEnabled(flagKey: string, defaultValue: boolean, options?: EvalOptions): boolean {
+        const val = this.getVariationInternal(flagKey, options?.identity || "", options?.context, defaultValue ? "true" : "false");
+        return val === "true";
+    }
+
+    getNumberValue(flagKey: string, defaultValue: number, options?: EvalOptions): number {
+        const val = this.getVariationInternal(flagKey, options?.identity || "", options?.context, String(defaultValue));
+        const parsed = Number(val);
+        return isNaN(parsed) ? defaultValue : parsed;
+    }
+
+    getJsonValue<T>(flagKey: string, defaultValue: T, options?: EvalOptions): T {
+        const val = this.getVariationInternal(flagKey, options?.identity || "", options?.context, "");
+        if (!val) return defaultValue;
+        try {
+            return JSON.parse(val) as T;
+        } catch {
+            return defaultValue;
+        }
+    }
+
+    track(eventName: string, options?: TrackOptions): void {
+        const identity = options?.identity || "";
+        if (!identity || !eventName) return;
+        this.queueEvent(1, identity, undefined, undefined, eventName, options?.context, options?.value);
+    }
+
+    private updateMetrics(flagKey: string, variationId: string) {
         if (this.options.isMetricsEnabled === false) return;
 
         let m = this.metricsBuffer.get(flagKey);
@@ -247,11 +298,10 @@ export class ToggleMeshClient implements ISegmentProvider {
             m = new FlagMetrics();
             this.metricsBuffer.set(flagKey, m);
         }
-        if (result) m.trueCount++;
-        else m.falseCount++;
+        m.variationsCount[variationId] = (m.variationsCount[variationId] || 0) + 1;
     }
 
-    private queueEvent(type: number, identity: string, flagKey?: string, result?: boolean, eventName?: string, properties?: any, value?: number) {
+    private queueEvent(type: number, identity: string, flagKey?: string, result?: boolean, eventName?: string, properties?: any, value?: number, variationId?: string) {
         if (this.options.isMetricsEnabled === false) return;
         if (this.eventsBuffer.length >= this.analyticsChannelCapacity) return;
 
@@ -265,6 +315,7 @@ export class ToggleMeshClient implements ISegmentProvider {
         if (result !== undefined) evt.Result = result;
         if (eventName !== undefined) evt.EventName = eventName;
         if (value !== undefined) evt.Value = value;
+        if (variationId !== undefined) evt.VariationId = variationId;
 
         this.eventsBuffer.push(evt);
     }
@@ -274,10 +325,9 @@ export class ToggleMeshClient implements ISegmentProvider {
 
         const payload: any[] = [];
         for (const [key, m] of this.metricsBuffer.entries()) {
-            if (m.trueCount > 0 || m.falseCount > 0) {
-                payload.push({ Key: key, TrueCount: m.trueCount, FalseCount: m.falseCount });
-                m.trueCount = 0;
-                m.falseCount = 0;
+            if (Object.keys(m.variationsCount).length > 0) {
+                payload.push({ Key: key, VariationsCount: { ...m.variationsCount } });
+                m.variationsCount = {};
             }
         }
 
@@ -297,8 +347,9 @@ export class ToggleMeshClient implements ISegmentProvider {
             for (const item of payload) {
                 let m = this.metricsBuffer.get(item.Key);
                 if (!m) { m = new FlagMetrics(); this.metricsBuffer.set(item.Key, m); }
-                m.trueCount += item.TrueCount;
-                m.falseCount += item.FalseCount;
+                for (const [vId, count] of Object.entries(item.VariationsCount)) {
+                    m.variationsCount[vId] = (m.variationsCount[vId] || 0) + (count as number);
+                }
             }
         }
     }

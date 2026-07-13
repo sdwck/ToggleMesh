@@ -8,8 +8,6 @@ import { Form } from '@/components/ui/form';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
-import { Slider } from '@/components/ui/slider';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from 'sonner';
@@ -18,15 +16,51 @@ import { ExperimentResults } from '../experiments/components/ExperimentResults';
 import { SimulationModal } from '../experiments/components/SimulationModal';
 import { SegmentEditorDialog } from '../environments/components/SegmentEditorDialog';
 import { useCreateSegment } from '@/api/queries';
-
+import { handleApiError } from '@/api/errorUtils';
 import { ruleSchema } from './validation';
 import { RulesConfigList } from './components/RulesConfigList';
+import { RolloutConfig } from './components/RolloutConfig';
+import { IndividualTargetsConfig } from './components/IndividualTargetsConfig';
 
 const formSchema = z.object({
-    isEnabled: z.boolean(),
-    rolloutPercentage: z.number().nullable(),
-    isRolloutEnabled: z.boolean(),
+    fallthroughRollout: z.array(z.object({
+        variationId: z.string(),
+        weight: z.number()
+    })),
     rules: z.array(ruleSchema),
+    type: z.number().default(0),
+    variations: z.array(z.object({
+        id: z.string(),
+        value: z.string()
+    })).optional(),
+    individualTargets: z.array(z.object({
+        key: z.string().min(1, "Identity key is required"),
+        variationId: z.string().min(1, "Variation is required")
+    })).optional()
+}).superRefine((val, ctx) => {
+    if (val.type !== 0 && val.variations) {
+        val.variations.forEach((v, idx) => {
+            if (!v.value.trim()) {
+                ctx.addIssue({
+                    code: z.ZodIssueCode.custom,
+                    message: "Variation value cannot be empty",
+                    path: ['variations', idx, 'value']
+                });
+                return;
+            }
+            if (val.type === 2) {
+                try {
+                    JSON.parse(v.value);
+                } catch (e) {
+                    ctx.addIssue({
+                        code: z.ZodIssueCode.custom,
+                        message: "Invalid JSON format",
+                        path: ['variations', idx, 'value']
+                    });
+                }
+            }
+        });
+    }
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -47,12 +81,13 @@ export function FeatureFlagEditor({ flag, projectId, envId, open, onOpenChange, 
     const operators = ['InSegment', ...(dynamicOperators || []).filter(op => op !== 'InSegment')];
 
     const form = useForm<FormValues>({
-        resolver: zodResolver(formSchema),
+        resolver: zodResolver(formSchema) as any,
         defaultValues: {
-            isEnabled: false,
-            isRolloutEnabled: false,
-            rolloutPercentage: 0,
+            fallthroughRollout: [],
             rules: [],
+            type: 0,
+            variations: [],
+            individualTargets: []
         },
     });
 
@@ -67,10 +102,14 @@ export function FeatureFlagEditor({ flag, projectId, envId, open, onOpenChange, 
 
         if (flag && open && formLoadedForFlag !== flag.key) {
             form.reset({
-                isEnabled: flag.isEnabled,
-                isRolloutEnabled: flag.rolloutPercentage !== null,
-                rolloutPercentage: flag.rolloutPercentage || 0,
-                rules: flag.rules || [],
+                fallthroughRollout: (flag.fallthroughRollout || []).map(r => ({ ...r, weight: r.weight / 100 })),
+                rules: (flag.rules || []).map(rule => ({
+                    ...rule,
+                    rollout: (rule.rollout || []).map(r => ({ ...r, weight: r.weight / 100 }))
+                })),
+                type: flag.type,
+                variations: flag.variations || [],
+                individualTargets: flag.individualTargets ? Object.entries(flag.individualTargets).map(([k, v]) => ({ key: k, variationId: v })) : []
             });
             setFormLoadedForFlag(flag.key);
         }
@@ -97,14 +136,31 @@ export function FeatureFlagEditor({ flag, projectId, envId, open, onOpenChange, 
         if (!flag) return;
         try {
             await updateFlag.mutateAsync({
-                isEnabled: values.isEnabled,
-                rolloutPercentage: values.isRolloutEnabled ? values.rolloutPercentage : null,
-                rules: values.rules,
+                fallthroughRollout: values.fallthroughRollout.map(r => ({ ...r, weight: Math.round(r.weight * 100) })),
+                rules: values.rules.map(rule => ({
+                    ...rule,
+                    rollout: (rule.rollout || []).map(r => ({ ...r, weight: Math.round(r.weight * 100) }))
+                })),
+                individualTargets: values.individualTargets?.reduce((acc, curr) => {
+                    acc[curr.key] = curr.variationId;
+                    return acc;
+                }, {} as Record<string, string>)
             });
             toast.success('Feature flag updated');
             onOpenChange(false);
-        } catch {
-            toast.error('Failed to update feature flag');
+        } catch (error: any) {
+            handleApiError(error, form.setError as any, 'Failed to update feature flag');
+            if (error?.response?.data?.errors) {
+                const errData = error.response.data.errors;
+                if (Array.isArray(errData)) {
+                    errData.forEach((e: any) => toast.error(e.message || e.reason || 'Validation error'));
+                } else {
+                    Object.values(errData).forEach((e: any) => {
+                        const msg = Array.isArray(e) ? e[0] : e;
+                        toast.error(String(msg));
+                    });
+                }
+            }
         }
     };
 
@@ -131,7 +187,7 @@ export function FeatureFlagEditor({ flag, projectId, envId, open, onOpenChange, 
                         <SheetDescription>Configure targeting rules and rollout strategy.</SheetDescription>
                     </div>
                     {import.meta.env.DEV && (
-                        <Button variant="outline" size="sm" className="gap-2 border-emerald-500/30 text-emerald-500 hover:bg-emerald-500/10 mt-0 self-end" onClick={() => setSimOpen(true)}>
+                        <Button type="button" variant="outline" size="sm" className="gap-2 border-emerald-500/30 text-emerald-500 hover:bg-emerald-500/10 mt-0 self-end" onClick={() => setSimOpen(true)}>
                             Simulate Traffic
                         </Button>
                     )}
@@ -142,87 +198,52 @@ export function FeatureFlagEditor({ flag, projectId, envId, open, onOpenChange, 
                     onOpenChange={setSimOpen}
                     projectId={projectId}
                     envId={envId}
-                    flagKey={flag.key}
-                    eventName={flag.mabGoalEvent || "test_event"}
+                    flag={flag}
                 />
 
-                <Tabs defaultValue={defaultTab} className="w-full mt-6">
-                    <TabsList className="grid w-full grid-cols-2 bg-zinc-900/50">
-                        <TabsTrigger value="rules">Targeting Rules</TabsTrigger>
-                        <TabsTrigger value="experiments">A/B Testing</TabsTrigger>
-                    </TabsList>
+                <Form {...form}>
+                    <form onSubmit={form.handleSubmit(onSubmit as any)} className="pb-10">
+                        <Tabs defaultValue={defaultTab} className="w-full mt-6">
+                            <TabsList className="grid w-full bg-zinc-900/50 grid-cols-2">
+                                <TabsTrigger value="rules">Targeting Rules</TabsTrigger>
+                                <TabsTrigger value="experiments">A/B Testing</TabsTrigger>
+                            </TabsList>
 
-                    <TabsContent value="rules" className="mt-4">
-                        {flag.isExperimentActive && (
-                            <div className="mb-6 p-4 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-sm flex items-start gap-3">
-                                <Lock className="h-5 w-5 text-emerald-500 shrink-0 mt-0.5" />
-                                <div>
-                                    <h4 className="font-medium text-emerald-400 mb-1">Locked by Active Experiment</h4>
-                                    <p className="text-emerald-500/80">Targeting rules and rollout percentages are currently being managed by an active A/B test. Stop the experiment to make manual changes.</p>
-                                </div>
-                            </div>
-                        )}
-                        <Form {...form}>
-                            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-                                <div className="flex items-center justify-between px-6 py-4 border border-border/40 rounded-lg bg-muted/20">
-                                    <div className="space-y-0.5">
-                                        <Label className="text-base">Enable Flag</Label>
-                                        <p className="text-sm text-muted-foreground">Serve this flag to users.</p>
+                            <TabsContent value="rules" className="mt-4 space-y-8">
+                                {flag.isExperimentActive && (
+                                    <div className="mb-6 p-4 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-sm flex items-start gap-3">
+                                        <Lock className="h-5 w-5 text-emerald-500 shrink-0 mt-0.5" />
+                                        <div>
+                                            <h4 className="font-medium text-emerald-400 mb-1">Locked by Active Experiment</h4>
+                                            <p className="text-emerald-500/80">Targeting rules and rollout percentages are currently being managed by an active A/B test. Stop the experiment to make manual changes.</p>
+                                        </div>
                                     </div>
-                                    <Switch
-                                        checked={form.watch('isEnabled')}
-                                        onCheckedChange={(val) => form.setValue('isEnabled', val)}
+                                )}
+
+                                <div className="space-y-4 px-2">
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <Label className="text-base font-semibold">Default Rollout</Label>
+                                    </div>
+                                    <p className="text-sm text-muted-foreground mb-4">
+                                        Served to users if no targeting rules match.
+                                    </p>
+                                    <RolloutConfig
+                                        type={flag.type}
+                                        variations={flag.variations || []}
+                                        rollout={form.watch('fallthroughRollout')}
+                                        onChange={(val) => form.setValue('fallthroughRollout', val)}
                                         disabled={flag.isExperimentActive || !canEditEnv}
                                     />
                                 </div>
 
-                                <div className="space-y-4 px-2">
-                                    <div className="flex items-center gap-2">
-                                        <Switch
-                                            checked={form.watch('isRolloutEnabled')}
-                                            onCheckedChange={(val) => {
-                                                form.setValue('isRolloutEnabled', val);
-                                            }}
-                                            disabled={flag.isExperimentActive || !canEditEnv}
-                                        />
-                                        <Label>Incremental Rollout</Label>
-                                    </div>
+                                <Separator className="bg-border/40" />
 
-                                    {form.watch('isRolloutEnabled') && (
-                                        <div className="pl-12 pr-4 space-y-4">
-                                            <div className="flex items-center justify-between">
-                                                <span className="text-sm text-muted-foreground">Percentage</span>
-                                                <div className="flex items-center text-sm font-medium">
-                                                    <input
-                                                        type="number"
-                                                        {...form.register('rolloutPercentage', { valueAsNumber: true })}
-                                                        disabled={flag.isExperimentActive || !canEditEnv}
-                                                        className={`w-[4ch] bg-transparent outline-none border-b border-dashed border-primary/40 hover:border-primary/80 focus:border-primary transition-colors text-center appearance-none [&::-webkit-inner-spin-button]:appearance-none ${flag.isExperimentActive || !canEditEnv ? 'cursor-not-allowed opacity-50' : 'cursor-text'}`}
-                                                        onBlur={(e) => {
-                                                            let val = parseInt(e.target.value || '0', 10);
-                                                            if (isNaN(val)) val = 0;
-                                                            val = Math.max(0, Math.min(100, val));
-                                                            form.setValue('rolloutPercentage', val);
-                                                        }}
-                                                        onKeyDown={(e) => {
-                                                            if (e.key === 'Enter') {
-                                                                e.preventDefault();
-                                                                e.currentTarget.blur();
-                                                            }
-                                                        }}
-                                                    />
-                                                    <span>%</span>
-                                                </div>
-                                            </div>
-                                            <Slider
-                                                value={[form.watch('rolloutPercentage') || 0]}
-                                                max={100}
-                                                step={1}
-                                                disabled={flag.isExperimentActive || !canEditEnv}
-                                                onValueChange={(val) => form.setValue('rolloutPercentage', val[0])}
-                                            />
-                                        </div>
-                                    )}
+                                <div className="space-y-4 px-2">
+                                    <IndividualTargetsConfig
+                                        form={form}
+                                        disabled={!canEditEnv}
+                                        variations={flag.variations || []}
+                                    />
                                 </div>
 
                                 <Separator className="bg-border/40" />
@@ -233,40 +254,44 @@ export function FeatureFlagEditor({ flag, projectId, envId, open, onOpenChange, 
                                         control={form.control as any}
                                         operators={operators}
                                         isLoadingOperators={isLoadingOperators}
+                                        variations={flag.variations || []}
                                         canEditEnv={canEditEnv && !flag.isExperimentActive}
                                         disabled={flag.isExperimentActive}
                                         emptyMessage="No targeting rules defined. The flag will be served based on the rollout percentage."
                                         showInSegmentSpecialHandling={true}
+                                        type={flag.type}
                                     />
                                 </div>
 
                                 <SheetFooter className="mt-8 pt-4 border-t border-border/40">
                                     <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-                                    <Button type="submit" disabled={updateFlag.isPending || flag.isExperimentActive || !canEditEnv}>
+                                    <Button type="submit" disabled={updateFlag.isPending || !canEditEnv}>
                                         {updateFlag.isPending ? 'Saving...' : 'Save Changes'}
                                     </Button>
                                 </SheetFooter>
-                            </form>
-                        </Form>
-                    </TabsContent>
+                            </TabsContent>
 
-                    <TabsContent value="experiments" className="mt-4">
-                        <ExperimentResults
-                            projectId={projectId}
-                            envId={envId}
-                            flagKey={flag.key}
-                            mabGoalEvent={flag.mabGoalEvent}
-                            highlightTrack={searchParams.get('track')}
-                            isExperimentActive={flag.isExperimentActive}
-                            isMabEnabled={flag.isMabEnabled}
-                            mabOptimizationType={flag.mabOptimizationType}
-                            contextPartitionKeys={flag.contextPartitionKeys}
-                            rolloutPercentage={flag.rolloutPercentage ?? undefined}
-                            hasRules={(flag.rules?.length ?? 0) > 0}
-                            canEditEnv={canEditEnv}
-                        />
-                    </TabsContent>
-                </Tabs>
+
+
+                            <TabsContent value="experiments" className="mt-4">
+                                <ExperimentResults
+                                    projectId={projectId}
+                                    envId={envId}
+                                    flagKey={flag.key}
+                                    mabGoalEvent={flag.mabGoalEvent || null}
+                                    highlightTrack={searchParams.get('track')}
+                                    isExperimentActive={flag.isExperimentActive || false}
+                                    isMabEnabled={flag.isMabEnabled || false}
+                                    mabOptimizationType={flag.mabOptimizationType}
+                                    contextPartitionKeys={flag.contextPartitionKeys}
+                                    rolloutPercentage={flag.fallthroughRollout?.[0]?.weight ?? undefined}
+                                    rulesCount={flag.rules?.length || 0}
+                                    canEditEnv={canEditEnv}
+                                />
+                            </TabsContent>
+                        </Tabs>
+                    </form>
+                </Form>
             </SheetContent>
 
 

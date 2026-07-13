@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using Microsoft.AspNetCore.Mvc;
 using ToggleMesh.API.Infrastructure;
 using ToggleMesh.API.Infrastructure.Endpoints;
 using ToggleMesh.API.Infrastructure.Sse;
@@ -26,34 +27,31 @@ public partial class IngestEventsEndpoint : ToggleEndpoint<IngestEventsRequest>
         Options(x => x.RequireRateLimiting("sdk"));
         
         var maxPayloadSize = Config.GetValue<long>("Ingestion:MaxPayloadSizeBytes", 5242880);
-        Options(x => x.Add(b => b.Metadata.Add(new Microsoft.AspNetCore.Mvc.RequestSizeLimitAttribute(maxPayloadSize))));
+        Options(x => x.Add(b => b.Metadata.Add(new RequestSizeLimitAttribute(maxPayloadSize))));
     }
 
     public override async Task HandleAsync(IngestEventsRequest req, CancellationToken ct)
     {
-        if (req.Events == null || req.Events.Count == 0)
+        if (req.Events.Count == 0)
         {
             await Send.OkAsync(cancellation: ct);
             return;
         }
 
-        foreach (var evt in req.Events)
+        if (req.Events.Any(evt => 
+                !string.IsNullOrEmpty(evt.Identity) && 
+                EmailRegex().IsMatch(evt.Identity)))
         {
-            if (!string.IsNullOrEmpty(evt.Identity) && EmailRegex().IsMatch(evt.Identity))
-            {
-                AddError("PII detected in Identity field. Please hash your identifiers or use UUIDs.");
-                await Send.ErrorsAsync(400, cancellation: ct);
-                return;
-            }
+            AddError("PII detected in Identity field. Please hash your identifiers or use UUIDs.");
+            await Send.ErrorsAsync(cancellation: ct);
+            return;
         }
 
         await _publisher.PublishBatchAsync(req.EnvId, req.Events, ct);
 
         var livetailTopic = $"livetail:{req.EnvId}";
         foreach (var evt in req.Events)
-        {
             await _sseService.BroadcastAsync(livetailTopic, livetailTopic, evt);
-        }
         
         HttpContext.Response.StatusCode = 202;
         await HttpContext.Response.CompleteAsync();

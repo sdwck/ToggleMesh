@@ -1,4 +1,4 @@
-﻿using FastEndpoints;
+using FastEndpoints;
 using ToggleMesh.API.Extensions;
 
 namespace ToggleMesh.API.Infrastructure.Endpoints;

@@ -89,7 +89,7 @@ public class ExperimentLifecycleTests : IAsyncLifetime
             IsMabEnabled = isMabEnabled,
             MabGoalEvent = mabGoalEvent,
             ContextualRollouts = contextualRollouts,
-            RolloutPercentage = rolloutPercentage,
+            FallthroughRollout = rolloutPercentage.HasValue ? new List<VariationWeight> { new() { VariationId = Guid.Empty, Weight = rolloutPercentage.Value * 100 } } : null,
             ExperimentStartedAt = isExperimentActive ? DateTimeOffset.UtcNow : null
         };
         db.FlagEnvironmentStates.Add(state);
@@ -136,7 +136,7 @@ public class ExperimentLifecycleTests : IAsyncLifetime
                 EnvironmentId = envId,
                 FlagKey = flagKey,
                 EventName = "click",
-                Variant = false,
+                VariationId = Guid.Empty,
                 TotalExposures = 10,
                 TotalConversions = 1,
                 LastCalculatedAt = DateTimeOffset.UtcNow
@@ -196,7 +196,7 @@ public class ExperimentLifecycleTests : IAsyncLifetime
     public async Task StopExperiment_ShouldFreezeMab_AndCreateIterationSnapshot_WithCorrectData()
     {
         // Arrange
-        var contextRollouts = new List<ContextualRollout> { new ContextualRollout { Id = Guid.NewGuid(), ContextSlice = "{\"Country\":\"US\"}", RolloutPercentage = 82 } };
+        var contextRollouts = new List<ContextualRollout> { new ContextualRollout { Id = Guid.NewGuid(), ContextSlice = "{\"Country\":\"US\"}", Rollout = new List<ToggleMesh.API.Features.Flags.Domain.VariationWeight> { new ToggleMesh.API.Features.Flags.Domain.VariationWeight { VariationId = Guid.Empty, Weight = 82 * 100 } } } };
         var (projectId, envId, _, flagKey) = await SeedExperimentScenarioAsync(
             flagKey: "mab_freeze_flag",
             isExperimentActive: true,
@@ -214,7 +214,7 @@ public class ExperimentLifecycleTests : IAsyncLifetime
                     EnvironmentId = envId,
                     FlagKey = flagKey,
                     EventName = "video_played",
-                    Variant = false,
+                    VariationId = Guid.Empty,
                     TotalExposures = 100,
                     TotalConversions = 10,
                     LastCalculatedAt = DateTimeOffset.UtcNow
@@ -224,8 +224,8 @@ public class ExperimentLifecycleTests : IAsyncLifetime
                     EnvironmentId = envId,
                     FlagKey = flagKey,
                     EventName = "video_played",
-                    Variant = true,
-                    TotalExposures = 100,
+                    VariationId = Guid.NewGuid(),
+                    TotalExposures = 99,
                     TotalConversions = 20,
                     LastCalculatedAt = DateTimeOffset.UtcNow
                 }
@@ -237,7 +237,7 @@ public class ExperimentLifecycleTests : IAsyncLifetime
                     EnvironmentId = envId,
                     FlagKey = flagKey,
                     EventName = "video_played",
-                    Variant = false,
+                    VariationId = Guid.Empty,
                     ContextSlice = "{\"Country\":\"US\"}",
                     TotalExposures = 50,
                     TotalConversions = 5,
@@ -248,9 +248,9 @@ public class ExperimentLifecycleTests : IAsyncLifetime
                     EnvironmentId = envId,
                     FlagKey = flagKey,
                     EventName = "video_played",
-                    Variant = true,
+                    VariationId = Guid.NewGuid(),
                     ContextSlice = "{\"Country\":\"US\"}",
-                    TotalExposures = 50,
+                    TotalExposures = 49,
                     TotalConversions = 12,
                     LastCalculatedAt = DateTimeOffset.UtcNow
                 }
@@ -289,22 +289,27 @@ public class ExperimentLifecycleTests : IAsyncLifetime
 
             snapshot.Global.Should().ContainSingle(x => x.EventName == "video_played");
             var globalMetric = snapshot.Global.Single(x => x.EventName == "video_played");
-            globalMetric.ControlExposures.Should().Be(100);
-            globalMetric.ControlConversions.Should().Be(10);
-            globalMetric.TreatmentExposures.Should().Be(100);
-            globalMetric.TreatmentConversions.Should().Be(20);
-            globalMetric.ExpectedUplift.Should().NotBe(0);
-            globalMetric.ProbabilityToBeatBaseline.Should().NotBe(0);
+            globalMetric.Variations.Should().HaveCount(2);
+            var gControl = globalMetric.Variations.First(v => v.VariationId == Guid.Empty);
+            var gTreatment = globalMetric.Variations.First(v => v.VariationId != Guid.Empty);
+            gControl.Exposures.Should().Be(100);
+            gControl.Conversions.Should().Be(10);
+            gTreatment.Exposures.Should().Be(99);
+            gTreatment.Conversions.Should().Be(20);
+            gTreatment.ExpectedUplift.Should().NotBe(0);
+            gTreatment.ProbabilityToBeatBaseline.Should().NotBe(0);
 
             snapshot.Contextual.Should().ContainSingle(x => x.EventName == "video_played" && x.ContextSlice == "{\"Country\":\"US\"}");
             var contextualMetric = snapshot.Contextual.Single(x => x.EventName == "video_played" && x.ContextSlice == "{\"Country\":\"US\"}");
-            contextualMetric.ControlExposures.Should().Be(50);
-            contextualMetric.ControlConversions.Should().Be(5);
-            contextualMetric.TreatmentExposures.Should().Be(50);
-            contextualMetric.TreatmentConversions.Should().Be(12);
-            contextualMetric.CurrentRollout.Should().Be(82);
-            contextualMetric.ExpectedUplift.Should().NotBe(0);
-            contextualMetric.ProbabilityToBeatBaseline.Should().NotBe(0);
+            contextualMetric.Variations.Should().HaveCount(2);
+            var cControl = contextualMetric.Variations.First(v => v.VariationId == Guid.Empty);
+            var cTreatment = contextualMetric.Variations.First(v => v.VariationId != Guid.Empty);
+            cControl.Exposures.Should().Be(50);
+            cControl.Conversions.Should().Be(5);
+            cTreatment.Exposures.Should().Be(49);
+            cTreatment.Conversions.Should().Be(12);
+            cTreatment.ExpectedUplift.Should().NotBe(0);
+            cTreatment.ProbabilityToBeatBaseline.Should().NotBe(0);
         }
     }
 
@@ -317,7 +322,7 @@ public class ExperimentLifecycleTests : IAsyncLifetime
             flagKey: flagKey,
             isExperimentActive: false,
             isMabEnabled: false,
-            contextualRollouts: new List<ContextualRollout> { new ContextualRollout { Id = Guid.NewGuid(), ContextSlice = "{\"Country\":\"US\"}", RolloutPercentage = 50 } },
+            contextualRollouts: new List<ContextualRollout> { new ContextualRollout { Id = Guid.NewGuid(), ContextSlice = "{\"Country\":\"US\"}", Rollout = new List<ToggleMesh.API.Features.Flags.Domain.VariationWeight> { new ToggleMesh.API.Features.Flags.Domain.VariationWeight { VariationId = Guid.Empty, Weight = 50 * 100 } } } },
             rolloutPercentage: 50);
 
         using (var scope = _factory.Services.CreateScope())
@@ -328,7 +333,7 @@ public class ExperimentLifecycleTests : IAsyncLifetime
                 EnvironmentId = envId,
                 FlagKey = flagKey,
                 EventName = "click",
-                Variant = false,
+                VariationId = Guid.Empty,
                 TotalExposures = 50,
                 TotalConversions = 5,
                 LastCalculatedAt = DateTimeOffset.UtcNow
@@ -338,7 +343,7 @@ public class ExperimentLifecycleTests : IAsyncLifetime
                 EnvironmentId = envId,
                 FlagKey = flagKey,
                 EventName = "click",
-                Variant = false,
+                VariationId = Guid.Empty,
                 ContextSlice = "{\"Country\":\"US\"}",
                 TotalExposures = 25,
                 TotalConversions = 2,
@@ -349,7 +354,7 @@ public class ExperimentLifecycleTests : IAsyncLifetime
                 EnvironmentId = envId,
                 FlagKey = flagKey,
                 Identity = "user_1",
-                Variant = false,
+                VariationId = Guid.Empty,
                 Timestamp = DateTimeOffset.UtcNow
             });
             await db.SaveChangesAsync();
@@ -394,7 +399,7 @@ public class ExperimentLifecycleTests : IAsyncLifetime
     {
         // Arrange
         var flagKey = "stopped_worker_flag";
-        var contextRollouts = new List<ContextualRollout> { new ContextualRollout { Id = Guid.NewGuid(), ContextSlice = "{\"Country\":\"US\"}", RolloutPercentage = 50 } };
+        var contextRollouts = new List<ContextualRollout> { new ContextualRollout { Id = Guid.NewGuid(), ContextSlice = "{\"Country\":\"US\"}", Rollout = new List<ToggleMesh.API.Features.Flags.Domain.VariationWeight> { new ToggleMesh.API.Features.Flags.Domain.VariationWeight { VariationId = Guid.Empty, Weight = 50 * 100 } } } };
         var (projectId, envId, _, _) = await SeedExperimentScenarioAsync(
             flagKey: flagKey,
             isExperimentActive: false,
@@ -412,7 +417,7 @@ public class ExperimentLifecycleTests : IAsyncLifetime
                     EnvironmentId = envId,
                     FlagKey = flagKey,
                     EventName = "video_played",
-                    Variant = false,
+                    VariationId = Guid.Empty,
                     TotalExposures = 100,
                     TotalConversions = 10,
                     LastCalculatedAt = DateTimeOffset.UtcNow
@@ -422,7 +427,7 @@ public class ExperimentLifecycleTests : IAsyncLifetime
                     EnvironmentId = envId,
                     FlagKey = flagKey,
                     EventName = "video_played",
-                    Variant = true,
+                    VariationId = Guid.NewGuid(),
                     TotalExposures = 100,
                     TotalConversions = 95,
                     LastCalculatedAt = DateTimeOffset.UtcNow
@@ -435,7 +440,7 @@ public class ExperimentLifecycleTests : IAsyncLifetime
                     EnvironmentId = envId,
                     FlagKey = flagKey,
                     EventName = "video_played",
-                    Variant = false,
+                    VariationId = Guid.Empty,
                     ContextSlice = "{\"Country\":\"US\"}",
                     TotalExposures = 100,
                     TotalConversions = 10,
@@ -446,7 +451,7 @@ public class ExperimentLifecycleTests : IAsyncLifetime
                     EnvironmentId = envId,
                     FlagKey = flagKey,
                     EventName = "video_played",
-                    Variant = true,
+                    VariationId = Guid.NewGuid(),
                     ContextSlice = "{\"Country\":\"US\"}",
                     TotalExposures = 100,
                     TotalConversions = 95,
@@ -472,11 +477,12 @@ public class ExperimentLifecycleTests : IAsyncLifetime
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
             var state = await db.FlagEnvironmentStates
+                .Include(x => x.ContextualRollouts)
                 .FirstAsync(x => x.EnvironmentId == envId && x.FeatureFlag.Key == flagKey);
 
-            state.RolloutPercentage.Should().Be(50, "rollout percentage should remain unchanged for stopped experiment");
+            (state.FallthroughRollout!.First().Weight / 100).Should().Be(50, "rollout percentage should remain unchanged for stopped experiment");
             state.ContextualRollouts.Should().NotBeNull();
-            state.ContextualRollouts!.FirstOrDefault(c => c.ContextSlice == "{\"Country\":\"US\"}")?.RolloutPercentage.Should().Be(50, "contextual rollouts should remain unchanged for stopped experiment");
+            (state.ContextualRollouts!.FirstOrDefault(c => c.ContextSlice == "{\"Country\":\"US\"}")?.Rollout!.First().Weight).Should().Be(5000, "contextual rollouts should remain unchanged for stopped experiment");
         }
     }
 
@@ -561,25 +567,18 @@ public class ExperimentLifecycleTests : IAsyncLifetime
 
     private record ExperimentResultDto(
         string EventName,
-        long ControlExposures,
-        long ControlConversions,
-        long TreatmentExposures,
-        long TreatmentConversions,
-        double ControlTotalValue,
-        double TreatmentTotalValue,
+        List<VariationResultDto> Variations);
+
+    private record VariationResultDto(
+        Guid VariationId,
+        long Exposures,
+        long Conversions,
         double ExpectedUplift,
         double ProbabilityToBeatBaseline);
 
     private record ContextualExperimentResultDto(
         string ContextSlice,
         string EventName,
-        long ControlExposures,
-        long ControlConversions,
-        long TreatmentExposures,
-        long TreatmentConversions,
-        double ControlTotalValue,
-        double TreatmentTotalValue,
-        double ExpectedUplift,
-        double ProbabilityToBeatBaseline,
+        List<VariationResultDto> Variations,
         int? CurrentRollout);
 }

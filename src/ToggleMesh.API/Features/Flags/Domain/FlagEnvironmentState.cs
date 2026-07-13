@@ -12,10 +12,14 @@ public class FlagEnvironmentState : AuditableEntity
     public ProjectEnvironment Environment { get; set; } = null!;
     
     public bool IsEnabled { get; set; }
-    public int? RolloutPercentage { get; set; }
+    public Guid? OffVariationId { get; set; }
+    public ICollection<VariationWeight> FallthroughRollout { get; set; } = new List<VariationWeight>();
+    public ICollection<FlagIndividualTarget> IndividualTargets { get; set; } = new List<FlagIndividualTarget>();
+    
     public bool IsMabEnabled { get; set; }
     public string? MabGoalEvent { get; set; }
     public MabOptimizationType MabOptimizationType { get; set; } = MabOptimizationType.Conversion;
+    public int MabExplorationFloor { get; set; } = 5;
     public string[] ContextPartitionKeys { get; set; } = [];
     
     public ICollection<ContextualRollout> ContextualRollouts { get; set; } = new List<ContextualRollout>();
@@ -23,7 +27,10 @@ public class FlagEnvironmentState : AuditableEntity
     public bool IsExperimentActive { get; set; }
     public DateTimeOffset? ExperimentStartedAt { get; set; }
     
-
-    
     public ICollection<FlagRule> Rules { get; set; } = new List<FlagRule>();
+    
+    public bool IsSrmAlertSent { get; set; }
+    public double? SrmPValue { get; set; }
+    
+    public uint Version { get; set; }
 }

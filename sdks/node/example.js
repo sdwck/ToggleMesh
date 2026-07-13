@@ -1,35 +1,41 @@
-import { ToggleMeshClient } from './dist/index.js';
+import { ToggleMeshClient } from "./dist/index.js";
 
-const client = new ToggleMeshClient({
-    baseUrl: 'http://localhost:5264',
-    serverKey: 'tm_server_w9pYCQFCJj3DdXuzsQfWvZNSIjE1x0zrMSv5PHvrW8'
-});
-
-async function main() {
-    await client.start();
-    console.log("Starting flag evaluation loop (press Ctrl+C to exit)...");
-
-    setInterval(() => {
-        const email = "nirawolker@gmail.com";
-        const uid = "123456";
-        const context = { Email: email, UserId: uid };
-
-        const isEnabled = client.isEnabled("gmail-20percent", { identity: uid, context });
-
-        if (isEnabled) {
-            const eventProperties = { loadTimeMs: 120, buttonColor: "red" };
-            client.track("node_gmail_checked", { identity: uid, context }, eventProperties, 1.0);
-            console.log(`[Gmail 20%] ${email} -> ENABLED!`);
-        } else {
-            console.log(`[Gmail 20%] ${email} -> DISABLED.`);
-        }
-    }, 3000);
+const API_KEY = process.env.TOGGLEMESH_API_KEY;
+if (!API_KEY) {
+    console.error("TOGGLEMESH_API_KEY environment variable is required.");
+    process.exit(1);
 }
 
-main().catch(console.error);
-
-process.on('SIGINT', () => {
-    console.log("Stopping...");
-    client.stop();
-    process.exit(0);
+const client = new ToggleMeshClient({
+    baseUrl: "http://localhost:5264",
+    serverKey: API_KEY
 });
+
+async function run() {
+    await client.start();
+    console.log("Node SDK started. Simulating traffic...");
+
+    while (true) {
+        const userId = "user_node_1";
+        const uid = userId;
+
+        const variation = client.getStringValue("mab-string-test", "default-variant", {
+            identity: uid,
+            context: { Browser: "Safari" }
+        });
+        console.log(`[Node SDK] Evaluated mab-string-test for ${uid}: ${variation}`);
+
+        if (Date.now() % 3 === 0) {
+            client.track("purchase", {
+                identity: uid,
+                context: { sdk: "node" },
+                value: 15.0
+            });
+            console.log(`[Node SDK] Tracked 'purchase' for ${userId}`);
+        }
+
+        await new Promise(r => setTimeout(r, 1500));
+    }
+}
+
+run().catch(console.error);

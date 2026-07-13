@@ -43,6 +43,7 @@ public class StopExperimentEndpoint : ToggleEndpointWithoutRequest<GetFlagRespon
 
         var state = await _db.FlagEnvironmentStates
             .Include(x => x.FeatureFlag)
+                .ThenInclude(x => x.Variations)
             .Include(x => x.Rules)
             .Include(x => x.ContextualRollouts)
             .AsSplitQuery()
@@ -77,7 +78,7 @@ public class StopExperimentEndpoint : ToggleEndpointWithoutRequest<GetFlagRespon
         await _db.SaveChangesAsync(ct);
 
         var response = state.ToDto();
-        await new NotifyFlagUpdatedCommand(environmentId, flagKey, response).ExecuteAsync(ct);
+        await new NotifyFlagUpdatedCommand(environmentId, flagKey, response, state.ToSdkDto()).ExecuteAsync(ct);
         await Send.OkAsync(response, ct);
     }
 }

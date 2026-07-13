@@ -1,4 +1,4 @@
-﻿namespace ToggleMesh.API.Features.Analytics.DeleteContextualRollout;
+namespace ToggleMesh.API.Features.Analytics.DeleteContextualRollout;
 
 public class DeleteContextualRolloutRequest
 {

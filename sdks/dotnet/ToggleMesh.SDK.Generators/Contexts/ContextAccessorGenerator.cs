@@ -123,9 +123,13 @@ public class ContextAccessorGenerator : IIncrementalGenerator
             {
                 if (type.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T)
                 {
+                    var underType = ((INamedTypeSymbol)type).TypeArguments[0];
                     sb.AppendLine($"{indentation}            if (this.{prop.Name}.HasValue)");
                     sb.AppendLine($"{indentation}            {{");
-                    sb.AppendLine($"{indentation}                value = this.{prop.Name}.Value.ToString();");
+                    if (underType.SpecialType == SpecialType.System_Int32)
+                        sb.AppendLine($"{indentation}                value = ToggleMesh.Common.Utils.StringCache.GetIntString(this.{prop.Name}.Value);");
+                    else
+                        sb.AppendLine($"{indentation}                value = this.{prop.Name}.Value.ToString();");
                     sb.AppendLine($"{indentation}                return true;");
                     sb.AppendLine($"{indentation}            }}");
                     sb.AppendLine($"{indentation}            value = null;");
@@ -133,7 +137,10 @@ public class ContextAccessorGenerator : IIncrementalGenerator
                 }
                 else
                 {
-                    sb.AppendLine($"{indentation}            value = this.{prop.Name}.ToString();");
+                    if (type.SpecialType == SpecialType.System_Int32)
+                        sb.AppendLine($"{indentation}            value = ToggleMesh.Common.Utils.StringCache.GetIntString(this.{prop.Name});");
+                    else
+                        sb.AppendLine($"{indentation}            value = this.{prop.Name}.ToString();");
                     sb.AppendLine($"{indentation}            return true;");
                 }
             }

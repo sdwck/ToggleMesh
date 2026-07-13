@@ -8,7 +8,7 @@ public sealed class FlagMetricBucketConfiguration : IEntityTypeConfiguration<Fla
 {
     public void Configure(EntityTypeBuilder<FlagMetricBucket> entity)
     {
-        entity.HasKey(x => new { x.EnvironmentId, x.FlagKey, x.TimestampBucket });
+        entity.HasKey(x => new { x.EnvironmentId, x.FlagKey, x.TimestampBucket, x.VariationId });
 
         entity.HasOne(x => x.Environment)
             .WithMany()

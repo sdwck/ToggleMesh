@@ -16,9 +16,16 @@ npm install togglemesh-node
 - **Zero Network Latency Evaluation:** Rules are evaluated locally in-memory without blocking I/O.
 - **Real-Time Synchronizations:** Subscribes to Server-Sent Events (SSE) to update flags instantly when changed.
 - **Contextual Rollouts & Segments:** Full support for evaluating complex audience segments and A/B test splits.
+  ```javascript
+  const isEnabled = client.isEnabled("new-feature", false, { identity: "user_123", context: { plan: "enterprise" } });
+  
+  // You can also evaluate typed configurations:
+  const color = client.getStringValue("button-color", "blue", { identity: "user_123" });
+  const config = client.getJsonValue("ui-config", { header: "default" }, { identity: "user_123" });
+  ```
 - **Analytics Event Tracking:** Easily track experiment conversions and application telemetry:
   ```javascript
-  client.track("signup_completed", { plan: "enterprise" }, 1.0, "user_123");
+  client.track("signup_completed", { context: { plan: "enterprise" }, value: 1.0, identity: "user_123" });
   ```
 
 ## 📄 License

@@ -6,5 +6,6 @@ public class CreateSegmentRequest
 {
     public string Name { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
-    public List<RuleDto> Rules { get; set; } = [];
+    public List<RuleInput> Rules { get; set; } = [];
 }
+

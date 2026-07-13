@@ -57,14 +57,16 @@ public class UpdateSegmentEndpoint : Endpoint<UpdateSegmentRequest, SegmentDto>
 
         var affectedStates = await _db.FlagEnvironmentStates
             .Include(x => x.FeatureFlag)
+                .ThenInclude(x => x.Variations)
             .Include(x => x.Rules)
             .Where(x => x.Rules.Any(r => r.Operator == "InSegment" && r.Value == segmentId.ToString()))
+            .AsSplitQuery()
             .ToListAsync(ct);
 
         foreach (var state in affectedStates)
         {
             var response = state.ToDto();
-            await new NotifyFlagUpdatedCommand(state.EnvironmentId, state.FeatureFlag.Key, response).ExecuteAsync(ct);
+            await new NotifyFlagUpdatedCommand(state.EnvironmentId, state.FeatureFlag.Key, response, state.ToSdkDto()).ExecuteAsync(ct);
         }
 
         var dto = new SegmentDto(
@@ -72,10 +74,11 @@ public class UpdateSegmentEndpoint : Endpoint<UpdateSegmentRequest, SegmentDto>
             segment.EnvironmentId,
             segment.Name,
             segment.Description,
-            segment.Rules.Select(r => new RuleDto(r.GroupId, r.Attribute, r.Operator, r.Value)),
+            segment.Rules.Select(r => new RuleInput(r.GroupId, r.Attribute, r.Operator, r.Value)),
             segment.CreatedAt
         );
 
         await Send.OkAsync(dto, ct);
     }
 }
+

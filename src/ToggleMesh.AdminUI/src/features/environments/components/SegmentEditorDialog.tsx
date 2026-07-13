@@ -33,7 +33,7 @@ export function SegmentEditorDialog({ segment, open, onOpenChange, onSave, isSav
     const operators = (dynamicOperators || []).filter(op => op !== 'InSegment' && op !== 'IN_SEGMENT');
 
     const form = useForm<FormValues>({
-        resolver: zodResolver(formSchema),
+        resolver: zodResolver(formSchema) as any,
         defaultValues: {
             name: '',
             description: '',
@@ -78,10 +78,10 @@ export function SegmentEditorDialog({ segment, open, onOpenChange, onSave, isSav
                 </DialogHeader>
 
                 <Form {...form}>
-                    <form onSubmit={onSubmit} className="space-y-6">
+                    <form onSubmit={form.handleSubmit(onSubmit as any)} className="space-y-6">
                         <div className="space-y-4">
                             <FormField
-                                control={form.control}
+                                control={form.control as any}
                                 name="name"
                                 render={({ field }) => (
                                     <FormItem>
@@ -94,7 +94,7 @@ export function SegmentEditorDialog({ segment, open, onOpenChange, onSave, isSav
                             />
                             
                             <FormField
-                                control={form.control}
+                                control={form.control as any}
                                 name="description"
                                 render={({ field }) => (
                                     <FormItem>
@@ -107,10 +107,11 @@ export function SegmentEditorDialog({ segment, open, onOpenChange, onSave, isSav
                             />
 
                             <RulesConfigList 
-                                form={form}
+                                form={form as any}
                                 control={form.control as any}
                                 operators={operators}
                                 isLoadingOperators={isLoadingOperators}
+                                variations={[]}
                                 canEditEnv={mode !== 'view'}
                                 disabled={mode === 'view'}
                                 emptyMessage="No rules defined. This segment will match everyone."

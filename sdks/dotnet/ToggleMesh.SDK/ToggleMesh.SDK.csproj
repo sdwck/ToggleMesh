@@ -6,7 +6,7 @@
         <Nullable>enable</Nullable>
         <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
         <PackageId>ToggleMesh.SDK</PackageId>
-        <Version>0.2.4</Version>
+        <Version>0.3.0</Version>
         <Authors>sdwck</Authors>
         <Company>ToggleMesh</Company>
         <Description>Official high-performance, zero-allocation real-time C# Client SDK for ToggleMesh Feature Flag Engine.</Description>
@@ -36,6 +36,9 @@
         </AssemblyAttribute>
         <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
             <_Parameter1>ToggleMesh.Benchmarks</_Parameter1>
+        </AssemblyAttribute>
+        <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+            <_Parameter1>ToggleMesh.SDK.Tests</_Parameter1>
         </AssemblyAttribute>
     </ItemGroup>
 

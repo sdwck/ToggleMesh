@@ -9,7 +9,8 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "declaration": true
+    "declaration": true,
+    "types": ["node", "vitest"]
   },
   "include": ["src/**/*"],
   "exclude": ["src/**/*.test.ts"]

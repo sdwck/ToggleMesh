@@ -67,8 +67,8 @@ public class AnomalyWorker : BackgroundService
 
             var activeExperiments = await db.FlagEnvironmentStates
                 .Include(f => f.FeatureFlag)
-                .Where(f => f.IsExperimentActive && f.MabGoalEvent != null)
-                .Select(f => new { f.EnvironmentId, f.FeatureFlag.Key, f.FeatureFlag.ProjectId, f.MabGoalEvent })
+                .Where(f => f.IsExperimentActive && f.MabGoalEvent != null && f.OffVariationId != null)
+                .Select(f => new { f.EnvironmentId, f.FeatureFlag.Key, f.FeatureFlag.ProjectId, f.MabGoalEvent, f.OffVariationId })
                 .ToListAsync(ct);
 
             if (activeExperiments.Count == 0) 
@@ -82,8 +82,8 @@ public class AnomalyWorker : BackgroundService
                              && m.EventName == exp.MabGoalEvent)
                     .ToListAsync(ct);
 
-                var control = metrics.FirstOrDefault(m => !m.Variant);
-                var treatments = metrics.Where(m => m.Variant).ToList();
+                var control = metrics.FirstOrDefault(m => m.VariationId == exp.OffVariationId);
+                var treatments = metrics.Where(m => m.VariationId != exp.OffVariationId).ToList();
 
                 if (control == null || control.TotalExposures < 100) 
                     continue;

@@ -103,7 +103,7 @@ public class KafkaAnalyticsConsumerWorker : BackgroundService
                                     EnvironmentId = payload.EnvironmentId,
                                     FlagKey = e.FlagKey!,
                                     Identity = e.Identity,
-                                    Variant = e.Result,
+                                    VariationId = e.VariationId.GetValueOrDefault(),
                                     Properties = e.Properties != null ? JsonDocument.Parse(JsonSerializer.Serialize(e.Properties)) : null,
                                     Timestamp = timestamp
                                 });

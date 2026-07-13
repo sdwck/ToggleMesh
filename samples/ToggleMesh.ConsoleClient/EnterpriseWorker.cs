@@ -3,11 +3,11 @@ using ToggleMesh.SDK.Clients;
 
 namespace ToggleMesh.ConsoleClient;
 
-public class EnterpriseSimulationWorker : BackgroundService
+public class EnterpriseWorker : BackgroundService
 {
     private readonly IToggleMeshClient _toggleMeshClient;
 
-    public EnterpriseSimulationWorker(IToggleMeshClient toggleMeshClient)
+    public EnterpriseWorker(IToggleMeshClient toggleMeshClient)
     {
         _toggleMeshClient = toggleMeshClient;
     }

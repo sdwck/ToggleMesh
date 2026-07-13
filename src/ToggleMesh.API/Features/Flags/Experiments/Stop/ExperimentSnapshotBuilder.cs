@@ -36,36 +36,114 @@ public class ExperimentSnapshotBuilder
     {
         var metrics = await _db.ExperimentMetrics
             .AsNoTracking()
-            .Where(x => x.EnvironmentId == environmentId && x.FlagKey == flagKey)
+            .Where(x => 
+                x.EnvironmentId == environmentId && x.FlagKey == flagKey)
             .ToListAsync(ct);
 
-        var events = metrics.Select(x => x.EventName).Distinct().ToList();
+        var events = metrics
+            .Select(x => x.EventName)
+            .Distinct()
+            .ToList();
         var results = new List<ExperimentResultDto>();
 
         foreach (var evt in events)
         {
-            var control = metrics.FirstOrDefault(x => x.EventName == evt && !x.Variant);
-            var treatment = metrics.FirstOrDefault(x => x.EventName == evt && x.Variant);
-
-            if (control == null || treatment == null) continue;
+            var eventMetrics = metrics
+                .Where(x => x.EventName == evt)
+                .ToList();
+            if (eventMetrics.Count == 0) 
+                continue;
 
             var result = new ExperimentResultDto
             {
                 EventName = evt,
-                ControlExposures = control.TotalExposures,
-                ControlConversions = control.TotalConversions,
-                TreatmentExposures = treatment.TotalExposures,
-                TreatmentConversions = treatment.TotalConversions,
-                ControlTotalValue = control.TotalValue,
-                TreatmentTotalValue = treatment.TotalValue,
-                LastCalculatedAt = control.LastCalculatedAt > treatment.LastCalculatedAt ? control.LastCalculatedAt : treatment.LastCalculatedAt,
-                ExpectedUplift = _math.CalculateExpectedUplift(
-                    control.TotalExposures, control.TotalConversions,
-                    treatment.TotalExposures, treatment.TotalConversions),
-                ProbabilityToBeatBaseline = _math.CalculateProbabilityBBeatsA(
-                    control.TotalExposures, control.TotalConversions,
-                    treatment.TotalExposures, treatment.TotalConversions)
+                IsRevenueBased = state.MabOptimizationType == MabOptimizationType.Revenue,
+                LastCalculatedAt = eventMetrics.Max(m => m.LastCalculatedAt)
             };
+
+            var variations = eventMetrics
+                .Select(m => m.VariationId)
+                .Distinct()
+                .OrderBy(x => x)
+                .ToList();
+
+            if (variations.Count >= 2)
+            {
+                var exposures = new long[variations.Count];
+                var conversions = new long[variations.Count];
+                var values = new double[variations.Count];
+                var sumSquared = new double[variations.Count];
+
+                for (var i = 0; i < variations.Count; i++)
+                {
+                    var m = eventMetrics
+                        .First(x => x.VariationId == variations[i]);
+                    exposures[i] = m.TotalExposures;
+                    conversions[i] = m.TotalConversions;
+                    values[i] = m.TotalValue;
+                    sumSquared[i] = m.SumOfSquaredValues;
+                }
+
+                var probs = !result.IsRevenueBased 
+                    ? _math.CalculateDirichletProbabilities(exposures, conversions) 
+                    : _math.CalculateDirichletProbabilities_Revenue(
+                        exposures, values, sumSquared);
+
+                const int baselineIdx = 0;
+
+                for (var i = 0; i < variations.Count; i++)
+                {
+                    double uplift = 0;
+                    if (i != baselineIdx)
+                    {
+                        if (!result.IsRevenueBased)
+                            uplift = _math.CalculateExpectedUplift(
+                                exposures[baselineIdx], conversions[baselineIdx],
+                                exposures[i], conversions[i]);
+                        else
+                        {
+                            var bArpu = 
+                                exposures[baselineIdx] > 0 
+                                    ? values[baselineIdx] / exposures[baselineIdx] 
+                                    : 0;
+                            var vArpu = 
+                                exposures[i] > 0 
+                                    ? values[i] / exposures[i] 
+                                    : 0;
+                            uplift = 
+                                bArpu > 0 
+                                    ? (vArpu - bArpu) / bArpu 
+                                    : 0;
+                        }
+                    }
+
+                    result.Variations.Add(new ExperimentVariationResultDto
+                    {
+                        VariationId = variations[i],
+                        Exposures = exposures[i],
+                        Conversions = conversions[i],
+                        TotalValue = values[i],
+                        ProbabilityToBeatBaseline = probs[i],
+                        ExpectedUplift = uplift,
+                        RolloutWeight = state.FallthroughRollout?
+                            .FirstOrDefault(x => 
+                                x.VariationId == variations[i])?.Weight ?? 0
+                    });
+                }
+            }
+            else if (variations.Count == 1)
+            {
+                var m = eventMetrics.First();
+                result.Variations.Add(new ExperimentVariationResultDto
+                {
+                    VariationId = m.VariationId,
+                    Exposures = m.TotalExposures,
+                    Conversions = m.TotalConversions,
+                    TotalValue = m.TotalValue,
+                    ProbabilityToBeatBaseline = 1.0,
+                    ExpectedUplift = 0
+                });
+            }
 
             results.Add(result);
         }
@@ -75,7 +153,9 @@ public class ExperimentSnapshotBuilder
             .Where(x => x.EnvironmentId == environmentId && x.FlagKey == flagKey)
             .ToListAsync(ct);
 
-        var slices = contextualMetrics.Select(x => x.ContextSlice).Distinct();
+        var slices = contextualMetrics
+            .Select(x => x.ContextSlice)
+            .Distinct();
         var contextualResults = new List<ContextualExperimentResultDto>();
 
         foreach (var slice in slices)
@@ -86,42 +166,125 @@ public class ExperimentSnapshotBuilder
 
             foreach (var evt in sliceEvents)
             {
-                var control = contextualMetrics.FirstOrDefault(x => x.ContextSlice == slice && x.EventName == evt && !x.Variant);
-                var treatment = contextualMetrics.FirstOrDefault(x => x.ContextSlice == slice && x.EventName == evt && x.Variant);
+                var eventMetrics = contextualMetrics
+                    .Where(x => 
+                        x.ContextSlice == slice && x.EventName == evt)
+                    .ToList();
+                if (eventMetrics.Count == 0) 
+                    continue;
 
-                if (control == null || treatment == null) continue;
-
-                int? currentRollout = null;
                 var isAutoManaged = true;
                 var r = state.ContextualRollouts?
                     .FirstOrDefault(x => x.ContextSlice == slice);
-                
                 if (r != null)
-                {
-                    currentRollout = r.RolloutPercentage;
                     isAutoManaged = r.IsAutoManaged;
-                }
 
                 var result = new ContextualExperimentResultDto
                 {
                     ContextSlice = slice,
                     EventName = evt,
-                    ControlExposures = control.TotalExposures,
-                    ControlConversions = control.TotalConversions,
-                    TreatmentExposures = treatment.TotalExposures,
-                    TreatmentConversions = treatment.TotalConversions,
-                    ControlTotalValue = control.TotalValue,
-                    TreatmentTotalValue = treatment.TotalValue,
-                    LastCalculatedAt = control.LastCalculatedAt > treatment.LastCalculatedAt ? control.LastCalculatedAt : treatment.LastCalculatedAt,
-                    CurrentRollout = currentRollout,
-                    IsAutoManaged = isAutoManaged,
-                    ExpectedUplift = _math.CalculateExpectedUplift(
-                        control.TotalExposures, control.TotalConversions,
-                        treatment.TotalExposures, treatment.TotalConversions),
-                    ProbabilityToBeatBaseline = _math.CalculateProbabilityBBeatsA(
-                        control.TotalExposures, control.TotalConversions,
-                        treatment.TotalExposures, treatment.TotalConversions)
+                    IsRevenueBased = state.MabOptimizationType == MabOptimizationType.Revenue,
+                    LastCalculatedAt = eventMetrics
+                        .Max(m => m.LastCalculatedAt),
+                    IsAutoManaged = isAutoManaged
                 };
+
+                var variations = eventMetrics
+                    .Select(m => m.VariationId)
+                    .Distinct()
+                    .OrderBy(x => x)
+                    .ToList();
+
+                if (variations.Count >= 2)
+                {
+                    var exposures = new long[variations.Count];
+                    var conversions = new long[variations.Count];
+                    var values = new double[variations.Count];
+                    var sumSquared = new double[variations.Count];
+
+                    for (var i = 0; i < variations.Count; i++)
+                    {
+                        var m = eventMetrics
+                            .First(x => x.VariationId == variations[i]);
+                        exposures[i] = m.TotalExposures;
+                        conversions[i] = m.TotalConversions;
+                        values[i] = m.TotalValue;
+                        sumSquared[i] = m.SumOfSquaredValues;
+                    }
+
+                    var probs = !result.IsRevenueBased 
+                        ? _math.CalculateDirichletProbabilities(exposures, conversions) 
+                        : _math.CalculateDirichletProbabilities_Revenue(
+                            exposures, values, sumSquared);
+
+                    const int baselineIdx = 0;
+
+                    for (var i = 0; i < variations.Count; i++)
+                    {
+                        double uplift = 0;
+                        if (i != baselineIdx)
+                        {
+                            if (!result.IsRevenueBased)
+                                uplift = _math.CalculateExpectedUplift(
+                                    exposures[baselineIdx], 
+                                    conversions[baselineIdx],
+                                    exposures[i], 
+                                    conversions[i]);
+                            else
+                            {
+                                var bArpu = 
+                                    exposures[baselineIdx] > 0 
+                                        ? values[baselineIdx] / exposures[baselineIdx] 
+                                        : 0;
+                                var vArpu = 
+                                    exposures[i] > 0 
+                                        ? values[i] / exposures[i] 
+                                        : 0;
+                                uplift = 
+                                    bArpu > 0 
+                                        ? (vArpu - bArpu) / bArpu 
+                                        : 0;
+                            }
+                        }
+
+                        result.Variations.Add(new ContextualExperimentVariationResultDto
+                        {
+                            VariationId = variations[i],
+                            Exposures = exposures[i],
+                            Conversions = conversions[i],
+                            TotalValue = values[i],
+                            ProbabilityToBeatBaseline = probs[i],
+                            ExpectedUplift = uplift,
+                            RolloutWeight = state.ContextualRollouts?
+                                .FirstOrDefault(x => 
+                                    x.ContextSlice == slice)?
+                                .Rollout
+                                .FirstOrDefault(x => 
+                                    x.VariationId == variations[i])?
+                                .Weight ?? 0
+                        });
+                    }
+                }
+                else if (variations.Count == 1)
+                {
+                    var m = eventMetrics.First();
+                    result.Variations.Add(new ContextualExperimentVariationResultDto
+                    {
+                        VariationId = m.VariationId,
+                        Exposures = m.TotalExposures,
+                        Conversions = m.TotalConversions,
+                        TotalValue = m.TotalValue,
+                        ProbabilityToBeatBaseline = 1.0,
+                        ExpectedUplift = 0,
+                        RolloutWeight = state.ContextualRollouts?
+                            .FirstOrDefault(x => 
+                                x.ContextSlice == slice)?
+                            .Rollout
+                            .FirstOrDefault(x => 
+                                x.VariationId == m.VariationId)?
+                            .Weight ?? 0
+                    });
+                }
 
                 contextualResults.Add(result);
             }
@@ -144,7 +307,7 @@ public class ExperimentSnapshotBuilder
                     .Select(object (x) => new
                 {
                     Time = x.TimeBucket.ToString("o"),
-                    x.Variant,
+                    x.VariationId,
                     x.Exposures,
                     x.Conversions,
                     ConversionRate = x.Exposures > 0 ? (double)x.Conversions / x.Exposures : 0
@@ -167,13 +330,14 @@ public class ExperimentSnapshotBuilder
 
         var configSnapshotObj = new {
             state.IsEnabled,
-            state.RolloutPercentage,
+            state.FallthroughRollout,
             state.IsMabEnabled,
             state.MabGoalEvent,
             state.MabOptimizationType,
+            state.MabExplorationFloor,
             ContextualRollouts = state.ContextualRollouts?.Select(cr => new {
                 cr.ContextSlice,
-                cr.RolloutPercentage
+                cr.Rollout
             }).ToList(),
             state.ContextPartitionKeys,
             Rules = state.Rules.Select(r => new {

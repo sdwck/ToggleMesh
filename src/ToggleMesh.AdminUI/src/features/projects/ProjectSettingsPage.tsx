@@ -2,15 +2,15 @@ import { useParams, useSearchParams } from 'react-router-dom';
 import {
     useProjectDetails,
     useProjectWebhooks,
-    useProjectFlags,
-    useProjectMembers
+    useProjectIntegrations
 } from '@/api/queries';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Settings } from 'lucide-react';
+import { Settings, Cable } from 'lucide-react';
 import { ProjectSettingsGeneralTab } from './components/ProjectSettingsGeneralTab';
 import { ProjectSettingsWebhooksTab } from './components/ProjectSettingsWebhooksTab';
+import { ProjectSettingsIntegrationsTab } from './components/ProjectSettingsIntegrationsTab';
 
 export function ProjectSettingsPage() {
     const { projectId } = useParams<{ projectId: string }>();
@@ -21,8 +21,7 @@ export function ProjectSettingsPage() {
     const canManageProject = project?.userRole === 0 || project?.userRole === 1;
 
     const { data: webhooks, isLoading: isWebhooksLoading } = useProjectWebhooks(projectId!);
-    const { data: flags, isLoading: isFlagsLoading } = useProjectFlags(projectId!);
-    const { data: members, isLoading: isMembersLoading } = useProjectMembers(projectId!);
+    const { data: integrations } = useProjectIntegrations(projectId!);
 
     const handleTabChange = (tab: string) => {
         setSearchParams({ tab });
@@ -41,14 +40,20 @@ export function ProjectSettingsPage() {
                 <TabsList className="bg-zinc-950 border border-border/40 p-1">
                     <TabsTrigger value="general" className="text-xs">General</TabsTrigger>
                     {canManageProject && (
-                        <TabsTrigger value="webhooks" className="text-xs gap-1.5">
-                            <Settings className="h-3.5 w-3.5" /> Webhooks
-                            {!isWebhooksLoading && (
+                        <>
+                            <TabsTrigger value="webhooks" className="text-xs gap-1.5">
+                                <Settings className="h-3.5 w-3.5" /> Webhooks
                                 <Badge variant="outline" className="px-1 py-0 text-[10px] bg-zinc-900 border-zinc-800">
                                     {webhooks?.length ?? 0}
                                 </Badge>
-                            )}
-                        </TabsTrigger>
+                            </TabsTrigger>
+                            <TabsTrigger value="integrations" className="text-xs gap-1.5">
+                                <Cable className="h-3.5 w-3.5" /> Integrations
+                                <Badge variant="outline" className="px-1 py-0 text-[10px] bg-zinc-900 border-zinc-800">
+                                    {integrations?.length ?? 0}
+                                </Badge>
+                            </TabsTrigger>
+                        </>
                     )}
                 </TabsList>
 
@@ -56,12 +61,8 @@ export function ProjectSettingsPage() {
                     <ProjectSettingsGeneralTab
                         project={project}
                         isProjectLoading={isProjectLoading}
-                        flagsCount={flags?.length || 0}
-                        isFlagsLoading={isFlagsLoading}
                         webhooksCount={webhooks?.length || 0}
                         isWebhooksLoading={isWebhooksLoading}
-                        membersCount={members?.length || 0}
-                        isMembersLoading={isMembersLoading}
                         canManageProject={canManageProject}
                         onTabChange={handleTabChange}
                     />
@@ -69,6 +70,10 @@ export function ProjectSettingsPage() {
 
                 <TabsContent value="webhooks" className="space-y-6 m-0">
                     <ProjectSettingsWebhooksTab projectId={projectId!} />
+                </TabsContent>
+
+                <TabsContent value="integrations" className="space-y-6 m-0">
+                    <ProjectSettingsIntegrationsTab projectId={projectId!} />
                 </TabsContent>
             </Tabs>
         </div>

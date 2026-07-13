@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useExperimentDetails, useStartExperiment, useStopExperiment, useExperimentIterations, useDeleteExperimentIteration, useContextualExperimentDetails, useDeleteContextualRollout, useSetContextualRollout } from '@/api/queries';
+import { useExperimentDetails, useStartExperiment, useStopExperiment, useExperimentIterations, useDeleteExperimentIteration, useContextualExperimentDetails, useDeleteContextualRollout, useSetContextualRollout, useFeatureFlag } from '@/api/queries';
 import type { ExperimentIterationDto } from '@/api/types';
 import { InsightsWidget } from './InsightsWidget';
 import { StartExperimentModal } from './StartExperimentModal';
@@ -8,7 +8,7 @@ import { MetricCard } from './MetricCard';
 import { TimeSeriesChart, SnapshotTimeSeriesChart } from './TimeSeriesChart';
 import { ContextualRolloutManager } from './ContextualRolloutManager';
 import { ExperimentHistoryTable } from './ExperimentHistoryTable';
-import { Zap, Beaker, ChevronDown, ChevronUp, Square, History, Loader2, Download, Undo2 } from 'lucide-react';
+import { Zap, Beaker, ChevronDown, ChevronUp, Square, History, Loader2, Download, Undo2, AlertTriangle } from 'lucide-react';
 import { ToggleMeshIcon } from '@/components/icons/ToggleMeshIcon';
 import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
@@ -37,7 +37,7 @@ interface Props {
     mabOptimizationType?: number;
     contextPartitionKeys?: string[];
     rolloutPercentage?: number;
-    hasRules?: boolean;
+    rulesCount?: number;
     disableScroll?: boolean;
     onStopSuccess?: () => void;
     canEditEnv?: boolean;
@@ -46,10 +46,14 @@ interface Props {
 }
 
 
-export function ExperimentResults({ projectId, envId, flagKey, mabGoalEvent, highlightTrack, isExperimentActive, isMabEnabled, mabOptimizationType, contextPartitionKeys, rolloutPercentage, hasRules, disableScroll, onStopSuccess, canEditEnv = true, isHistoricalView = false, initialHistoricalSnapshot = null }: Props) {
+export function ExperimentResults({ projectId, envId, flagKey, mabGoalEvent, highlightTrack, isExperimentActive, isMabEnabled, mabOptimizationType, contextPartitionKeys, rolloutPercentage, rulesCount = 0, disableScroll, onStopSuccess, canEditEnv = true, isHistoricalView = false, initialHistoricalSnapshot = null }: Props) {
     const { data: results, isLoading } = useExperimentDetails(projectId, envId, flagKey);
     const { data: contextualResults } = useContextualExperimentDetails(projectId, envId, flagKey);
     const { data: iterations, isLoading: isLoadingIterations } = useExperimentIterations(projectId, envId, flagKey);
+    const { data: flagState } = useFeatureFlag(projectId, envId, flagKey);
+
+    const variationsConfig = flagState?.variations || [];
+    const isBoolean = flagState?.type === 0;
 
     const startMutation = useStartExperiment(projectId, envId, flagKey);
     const stopMutation = useStopExperiment(projectId, envId, flagKey);
@@ -92,10 +96,15 @@ export function ExperimentResults({ projectId, envId, flagKey, mabGoalEvent, hig
         }
     }, [isLoading, results, highlightTrack, mabGoalEvent, disableScroll]);
 
-    let displayResults = results;
-    let displayContextual = contextualResults;
+    let displayResults = results ? results.filter((m: any) => {
+        const name = m.eventName || m.EventName;
+        return name && !name.startsWith('$');
+    }) : results;
+    let displayContextual = contextualResults ? contextualResults.filter((m: any) => {
+        const name = m.eventName || m.EventName;
+        return name && !name.startsWith('$');
+    }) : contextualResults;
     let snapshotTimeSeries: Record<string, any[]> | null = null;
-    let displayRolloutPercentage = rolloutPercentage;
 
     if (historicalSnapshot) {
         try {
@@ -112,8 +121,14 @@ export function ExperimentResults({ projectId, envId, flagKey, mabGoalEvent, hig
             const snapshot = JSON.parse(historicalSnapshot.finalMetricsSnapshot);
             const global = Array.isArray(snapshot?.Global) ? snapshot.Global : Array.isArray(snapshot) ? snapshot : [];
             const contextual = snapshot?.Contextual || [];
-            displayResults = normalizeKeys(global);
-            displayContextual = normalizeKeys(contextual);
+            displayResults = normalizeKeys(global).filter((m: any) => {
+                const name = m.eventName || m.EventName;
+                return name && !name.startsWith('$');
+            });
+            displayContextual = normalizeKeys(contextual).filter((m: any) => {
+                const name = m.eventName || m.EventName;
+                return name && !name.startsWith('$');
+            });
 
             const rawTs = snapshot?.TimeSeries || snapshot?.timeSeries;
             if (rawTs && typeof rawTs === 'object') {
@@ -122,20 +137,67 @@ export function ExperimentResults({ projectId, envId, flagKey, mabGoalEvent, hig
                     snapshotTimeSeries[eventName] = normalizeKeys(points);
                 }
             }
-            if (historicalSnapshot.flagConfigSnapshot) {
-                const config = JSON.parse(historicalSnapshot.flagConfigSnapshot);
-                if (config && typeof config.RolloutPercentage === 'number') {
-                    displayRolloutPercentage = config.RolloutPercentage;
-                } else if (config && typeof config.rolloutPercentage === 'number') {
-                    displayRolloutPercentage = config.rolloutPercentage;
-                }
-            }
         } catch (e) {
             console.error("Failed to parse historical snapshot", e);
         }
     }
 
-    const primaryGoal = mabGoalEvent && displayResults ? displayResults.find((r: any) => (r.eventName || r.EventName) === mabGoalEvent) : null;
+    const synthesizeZeroMetric = (metric: any, newName: string) => {
+        const synth = JSON.parse(JSON.stringify(metric));
+        synth.eventName = newName;
+        synth.EventName = newName;
+        const vars = synth.variations || synth.Variations;
+        if (vars && vars.length > 0) {
+            for (const v of vars) {
+                if (v.conversions !== undefined) v.conversions = 0;
+                if (v.conversionRate !== undefined) v.conversionRate = 0;
+                if (v.expectedUplift !== undefined) v.expectedUplift = 0;
+                if (v.winProbability !== undefined) v.winProbability = 0;
+            }
+        } else {
+            if (synth.controlConversions !== undefined) synth.controlConversions = 0;
+            if (synth.treatmentConversions !== undefined) synth.treatmentConversions = 0;
+            if (synth.controlConversionRate !== undefined) synth.controlConversionRate = 0;
+            if (synth.treatmentConversionRate !== undefined) synth.treatmentConversionRate = 0;
+            if (synth.expectedUplift !== undefined) synth.expectedUplift = 0;
+            if (synth.winProbability !== undefined) synth.winProbability = 0;
+        }
+        return synth;
+    };
+
+    let primaryGoal = mabGoalEvent && displayResults ? displayResults.find((r: any) => (r.eventName || r.EventName) === mabGoalEvent) : null;
+
+    if (!primaryGoal && mabGoalEvent && displayResults) {
+        const rawGlobal = historicalSnapshot
+            ? (() => { try { const s = JSON.parse(historicalSnapshot.finalMetricsSnapshot); return Array.isArray(s?.Global) ? s.Global : Array.isArray(s) ? s : []; } catch { return []; } })()
+            : (results || []);
+        const exposureMetric = rawGlobal.find((m: any) => (m.eventName || m.EventName) === '$exposure');
+
+        if (exposureMetric) {
+            const isHistorical = !!historicalSnapshot;
+            const toCamelCase = (str: string) => str.charAt(0).toLowerCase() + str.slice(1);
+            const normalizeKeys = (obj: any): any => {
+                if (Array.isArray(obj)) return obj.map(normalizeKeys);
+                if (obj && typeof obj === 'object') return Object.fromEntries(Object.entries(obj).map(([k, v]) => [toCamelCase(k), normalizeKeys(v)]));
+                return obj;
+            };
+
+            const synth = isHistorical ? normalizeKeys(synthesizeZeroMetric(exposureMetric, mabGoalEvent)) : synthesizeZeroMetric(exposureMetric, mabGoalEvent);
+            primaryGoal = synth;
+            displayResults.unshift(synth);
+
+            if (displayContextual) {
+                const rawCtx = historicalSnapshot
+                    ? (() => { try { return JSON.parse(historicalSnapshot.finalMetricsSnapshot)?.Contextual || []; } catch { return []; } })()
+                    : (contextualResults || []);
+                const exposureCtxs = rawCtx.filter((m: any) => (m.eventName || m.EventName) === '$exposure');
+                for (const ctx of exposureCtxs) {
+                    displayContextual.unshift(isHistorical ? normalizeKeys(synthesizeZeroMetric(ctx, mabGoalEvent)) : synthesizeZeroMetric(ctx, mabGoalEvent));
+                }
+            }
+        }
+    }
+
     const secondaryMetrics = displayResults ? displayResults.filter((r: any) => (r.eventName || r.EventName) !== mabGoalEvent) : [];
 
     return (
@@ -170,6 +232,7 @@ export function ExperimentResults({ projectId, envId, flagKey, mabGoalEvent, hig
                     <div className="flex flex-wrap items-center gap-2">
                         {!isHistoricalView && (
                             <Button
+                                type="button"
                                 variant="outline"
                                 size="sm"
                                 className="bg-amber-500/10 border-amber-500/20 text-amber-500 hover:bg-amber-500/20 hover:text-amber-400"
@@ -179,6 +242,7 @@ export function ExperimentResults({ projectId, envId, flagKey, mabGoalEvent, hig
                             </Button>
                         )}
                         <Button
+                            type="button"
                             variant="default"
                             size="sm"
                             className="bg-emerald-800 hover:bg-emerald-700 text-emerald-50 border border-emerald-700/50"
@@ -188,6 +252,23 @@ export function ExperimentResults({ projectId, envId, flagKey, mabGoalEvent, hig
                             <Undo2 className="h-4 w-4 mr-2" />
                             Restore Snapshot
                         </Button>
+                    </div>
+                </div>
+            )}
+
+            {!isHistoricalView && isExperimentActive && flagState?.isSrmAlertSent && flagState?.srmPValue !== undefined && flagState.srmPValue !== null && (
+                <div className="bg-rose-950/30 border border-rose-500/50 p-4 rounded-lg flex items-start gap-3">
+                    <div className="mt-0.5">
+                        <AlertTriangle className="h-5 w-5 text-rose-500" />
+                    </div>
+                    <div>
+                        <h4 className="text-sm font-semibold text-rose-500 flex items-center gap-2">
+                            Sample Ratio Mismatch (SRM) Detected!
+                        </h4>
+                        <p className="text-xs text-rose-400/90 mt-1 leading-relaxed">
+                            The distribution of traffic significantly deviates from the configured weights (p-value: <span className="font-mono">{flagState.srmPValue.toExponential(2)}</span>).
+                            This indicates a potential integration issue, hashing bug, or tracking drop.
+                        </p>
                     </div>
                 </div>
             )}
@@ -215,6 +296,7 @@ export function ExperimentResults({ projectId, envId, flagKey, mabGoalEvent, hig
                     </div>
                     <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-3 sm:mt-0 w-full sm:w-auto">
                         <Button
+                            type="button"
                             variant="outline"
                             size="sm"
                             className="bg-zinc-950/20 border-border/40 hover:bg-muted/20 text-xs h-9"
@@ -229,6 +311,7 @@ export function ExperimentResults({ projectId, envId, flagKey, mabGoalEvent, hig
                                 <AlertDialog>
                                     <AlertDialogTrigger asChild>
                                         <Button
+                                            type="button"
                                             variant="destructive"
                                             size="sm"
                                             className="bg-rose-500/20 text-rose-500 hover:bg-rose-500/30 border border-rose-500/20 h-9"
@@ -258,8 +341,9 @@ export function ExperimentResults({ projectId, envId, flagKey, mabGoalEvent, hig
                                     envId={envId}
                                     flagKey={flagKey}
                                     currentRolloutPercentage={rolloutPercentage ?? null}
+                                    variationsCount={variationsConfig.length}
                                     isLoading={startMutation.isPending}
-                                    hasRules={hasRules}
+                                    rulesCount={rulesCount}
                                     onStart={(values) => startMutation.mutate(values)}
                                     canEditEnv={canEditEnv}
                                 />
@@ -296,7 +380,7 @@ export function ExperimentResults({ projectId, envId, flagKey, mabGoalEvent, hig
                 )}
             </div>
 
-            <div className="relative">
+            <div className="relative min-h-[300px]">
                 {(!isHistoricalView && !isExperimentActive && !historicalSnapshot) && (
                     <div className="absolute inset-0 z-10 bg-background/50 backdrop-blur-[1px] rounded-lg border border-dashed border-border flex items-center justify-center print:hidden">
                         <div className="bg-zinc-950/90 border border-border/40 px-6 py-4 rounded-lg shadow-xl text-center max-w-sm">
@@ -325,14 +409,15 @@ export function ExperimentResults({ projectId, envId, flagKey, mabGoalEvent, hig
                             {primaryGoal ? (
                                 <>
                                     {historicalSnapshot
-                                        ? snapshotTimeSeries && snapshotTimeSeries[primaryGoal.eventName] && <SnapshotTimeSeriesChart data={snapshotTimeSeries[primaryGoal.eventName]} />
-                                        : <TimeSeriesChart projectId={projectId} envId={envId} flagKey={flagKey} eventName={primaryGoal.eventName} />
+                                        ? snapshotTimeSeries && snapshotTimeSeries[primaryGoal.eventName] && <SnapshotTimeSeriesChart data={snapshotTimeSeries[primaryGoal.eventName]} variationsConfig={variationsConfig} />
+                                        : <TimeSeriesChart projectId={projectId} envId={envId} flagKey={flagKey} eventName={primaryGoal.eventName} variationsConfig={variationsConfig} />
                                     }
-                                    <MetricCard exp={primaryGoal} isPrimary />
+                                    <MetricCard exp={primaryGoal} isPrimary variationsConfig={variationsConfig} isBoolean={flagState?.type === 0} />
 
                                     {secondaryMetrics.length > 0 && (
                                         <div className="pt-4 border-t border-border/40 print:border-none print:pt-0">
                                             <Button
+                                                type="button"
                                                 variant="ghost"
                                                 className="w-full text-muted-foreground hover:text-foreground mb-4 print:hidden"
                                                 onClick={() => setShowOthers(!showOthers)}
@@ -344,7 +429,7 @@ export function ExperimentResults({ projectId, envId, flagKey, mabGoalEvent, hig
                                             {showOthers && (
                                                 <div className="space-y-6">
                                                     {secondaryMetrics.map((exp, i) => (
-                                                        <MetricCard key={i} exp={exp} />
+                                                        <MetricCard key={i} exp={exp} variationsConfig={variationsConfig} isBoolean={flagState?.type === 0} />
                                                     ))}
                                                 </div>
                                             )}
@@ -354,7 +439,7 @@ export function ExperimentResults({ projectId, envId, flagKey, mabGoalEvent, hig
                             ) : (
                                 <div className="space-y-6">
                                     {displayResults.map((exp: any, i: number) => (
-                                        <MetricCard key={i} exp={exp} />
+                                        <MetricCard key={i} exp={exp} variationsConfig={variationsConfig} isBoolean={flagState?.type === 0} />
                                     ))}
                                 </div>
                             )}
@@ -369,10 +454,11 @@ export function ExperimentResults({ projectId, envId, flagKey, mabGoalEvent, hig
                 displayContextual={displayContextual || []}
                 isMabEnabled={isMabEnabled}
                 canEditEnv={canEditEnv}
-                displayRolloutPercentage={displayRolloutPercentage}
                 historicalSnapshot={historicalSnapshot}
-                setContextualRollout={setContextualRollout}
                 deleteContextualRollout={deleteContextualRollout}
+                setContextualRollout={setContextualRollout}
+                variationsConfig={variationsConfig}
+                isBoolean={isBoolean}
             />
 
             <ExperimentHistoryTable
@@ -380,8 +466,9 @@ export function ExperimentResults({ projectId, envId, flagKey, mabGoalEvent, hig
                 isLoadingIterations={isLoadingIterations}
                 isHistoricalView={isHistoricalView}
                 canEditEnv={canEditEnv}
-                setHistoricalSnapshot={setHistoricalSnapshot}
+                setHistoricalSnapshot={(s) => { setHistoricalSnapshot(s); setShowOthers(false); }}
                 deleteMutation={deleteMutation}
+                currentHistoricalSnapshotId={historicalSnapshot?.id}
             />
             {restoreSnapshot && (
                 <RestoreSnapshotModal

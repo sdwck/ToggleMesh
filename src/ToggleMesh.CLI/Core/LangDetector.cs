@@ -1,4 +1,4 @@
-﻿namespace ToggleMesh.CLI.Core;
+namespace ToggleMesh.CLI.Core;
 
 public static class LangDetector
 {

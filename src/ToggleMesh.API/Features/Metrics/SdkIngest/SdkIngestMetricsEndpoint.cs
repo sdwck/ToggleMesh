@@ -38,17 +38,23 @@ public class SdkIngestMetricsEndpoint : ToggleEndpoint<SdkIngestMetricsRequest>
         
         foreach (var metric in req.Metrics)
         {
-            if (metric.TrueCount < 0 || metric.FalseCount < 0)
-                ThrowError("Metric counts cannot be negative.", 400);
-
-            var item = new MetricQueueItem(
-                req.EnvId, 
-                metric.Key, 
-                req.KeyType == KeyType.Client,
-                metric.TrueCount, 
-                metric.FalseCount);
+            if (metric.Variations == null || metric.Variations.Count == 0) 
+                continue;
             
-            await _channel.Writer.WriteAsync(item, ct);
+            foreach (var variation in metric.Variations)
+            {
+                if (variation.Count <= 0) 
+                    continue;
+                
+                var item = new MetricQueueItem(
+                    req.EnvId, 
+                    metric.Key, 
+                    req.KeyType == KeyType.Client,
+                    variation.VariationId,
+                    variation.Count);
+                
+                await _channel.Writer.WriteAsync(item, ct);
+            }
         }
 
         await Send.ResponseAsync(null, 202, ct);

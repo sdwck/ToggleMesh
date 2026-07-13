@@ -1,4 +1,4 @@
-﻿using FastEndpoints;
+using FastEndpoints;
 using FluentValidation;
 
 namespace ToggleMesh.API.Features.Flags.Update;
@@ -7,9 +7,9 @@ public class UpdateFlagValidator : Validator<UpdateFlagRequest>
 {
     public UpdateFlagValidator()
     {
-        RuleFor(x => x.RolloutPercentage)
-            .InclusiveBetween(0, 100).WithMessage("Rollout percentage must be between 0 and 100.")
-            .When(x => x.RolloutPercentage.HasValue);
+        RuleFor(x => x.FallthroughRollout)
+            .Must(rollout => rollout == null || rollout.Count == 0 || rollout.Sum(r => r.Weight) == 10000)
+            .WithMessage("Rollout weights must sum to exactly 100%.");
 
         RuleForEach(x => x.Rules)
             .ChildRules(r =>

@@ -1,37 +1,15 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Box, Tag, Edit } from 'lucide-react';
-import { useProjectFlags, useToggleFeatureFlag, useProjectDetails, useUpdateFlagMetadata, useFlagStats } from '@/api/queries';
+import { useProjectFlags, useToggleFeatureFlag, useProjectDetails, useFlagStats } from '@/api/queries';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { ProjectRole } from '@/api/types';
-import { FeatureFlagEditor } from './FeatureFlagEditor';
-
-import { zodResolver } from '@hookform/resolvers/zod';
-import { useForm } from 'react-hook-form';
-import * as z from 'zod';
-import {
-    Form,
-    FormControl,
-    FormField,
-    FormItem,
-    FormLabel,
-    FormMessage,
-} from '@/components/ui/form';
-import { handleApiError } from '@/api/errorUtils';
-
-const flagMetaSchema = z.object({
-    name: z.string().optional(),
-    description: z.string().optional(),
-    tags: z.string().optional()
-});
-type FlagMetaValues = z.infer<typeof flagMetaSchema>;
+import { FlagSettingsModal } from './FlagSettingsModal';
 
 const formatNumber = (num: number) => {
     if (num === 0) return '0';
@@ -52,7 +30,6 @@ export function ProjectFlagDetailsPage() {
     const { data: project, isLoading: isProjectLoading } = useProjectDetails(projectId!);
     const { data: flags, isLoading: isFlagsLoading } = useProjectFlags(projectId!);
     const toggleFlag = useToggleFeatureFlag(projectId!);
-    const updateMetadata = useUpdateFlagMetadata(projectId!, flagKey!);
 
     const { data: stats } = useFlagStats(projectId!, flagKey!);
 
@@ -61,13 +38,6 @@ export function ProjectFlagDetailsPage() {
     const [searchParams] = window.location.search ? [new URLSearchParams(window.location.search)] : [new URLSearchParams()];
     const initialEnvId = searchParams.get('envId');
     const [editingEnvId, setEditingEnvId] = useState<string | null>(initialEnvId);
-
-    const [isMetaOpen, setIsMetaOpen] = useState(false);
-
-    const metaForm = useForm<FlagMetaValues>({
-        resolver: zodResolver(flagMetaSchema),
-        defaultValues: { name: '', description: '', tags: '' }
-    });
 
     const handleToggle = async (envId: string, targetValue: boolean) => {
         try {
@@ -78,34 +48,7 @@ export function ProjectFlagDetailsPage() {
         }
     };
 
-    const handleOpenMeta = () => {
-        if (flag) {
-            metaForm.reset({
-                name: flag.name || '',
-                description: flag.description || '',
-                tags: flag.tags?.join(', ') || ''
-            });
-            setIsMetaOpen(true);
-        }
-    };
-
-    const handleSaveMeta = async (values: FlagMetaValues) => {
-        try {
-            const parsedTags = values.tags
-                ? values.tags.split(',').map(t => t.trim()).filter(Boolean)
-                : [];
-
-            await updateMetadata.mutateAsync({
-                name: values.name || '',
-                description: values.description || '',
-                tags: parsedTags
-            });
-            setIsMetaOpen(false);
-            toast.success('Metadata updated successfully');
-        } catch (error: any) {
-            handleApiError(error, metaForm.setError, 'Failed to update metadata');
-        }
-    };
+    const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
     if (isProjectLoading || isFlagsLoading) return <div className="p-8 text-center text-muted-foreground">Loading...</div>;
     if (!flag) return <div className="p-8 text-center text-muted-foreground">Flag not found</div>;
@@ -147,8 +90,8 @@ export function ProjectFlagDetailsPage() {
                         </div>
                     </div>
                     {canEditMeta && (
-                        <Button variant="outline" size="sm" onClick={handleOpenMeta} className="cursor-pointer shrink-0">
-                            <Edit className="mr-1.5 h-3.5 w-3.5" /> Edit Info
+                        <Button variant="outline" size="sm" onClick={() => setIsSettingsOpen(true)} className="cursor-pointer shrink-0">
+                            <Edit className="mr-1.5 h-3.5 w-3.5" /> Edit
                         </Button>
                     )}
                 </CardContent>
@@ -170,8 +113,15 @@ export function ProjectFlagDetailsPage() {
                             if (!state) return null;
 
                             const envStats = stats?.find(s => s.environmentId === env.id);
-                            const trueCount = envStats?.trueCount || 0;
-                            const falseCount = envStats?.falseCount || 0;
+                            const trueVarId = flag.variations?.find(v => v.value === 'true')?.id;
+                            const falseVarId = flag.variations?.find(v => v.value === 'false')?.id;
+
+                            const trueCount = (trueVarId && envStats?.variationsCount?.[trueVarId]) || 0;
+                            const falseCount = (falseVarId && envStats?.variationsCount?.[falseVarId]) || 0;
+                            const isBoolean = flag.type === 0 || !flag.type;
+
+                            const totalMultiCount = flag.variations?.reduce((acc, v) => acc + (envStats?.variationsCount?.[v.id] || 0), 0) || 0;
+                            const multiColors = ['bg-blue-500', 'bg-purple-500', 'bg-amber-500', 'bg-emerald-500', 'bg-rose-500'];
 
                             const canEditEnv = env.userRole === ProjectRole.Owner || env.userRole === ProjectRole.Admin || env.userRole === ProjectRole.Editor;
 
@@ -189,32 +139,63 @@ export function ProjectFlagDetailsPage() {
                                     </TableCell>
                                     <TableCell>
                                         <div className="flex flex-col gap-1.5 w-[140px] pr-4">
-                                            <div className="flex items-center justify-between font-mono text-[13px] leading-none">
-                                                <span className={trueCount > 0 ? "text-emerald-500/90 font-medium" : "text-muted-foreground/40"}>
-                                                    <span className="text-[10px] text-muted-foreground/50 mr-1">T</span>
-                                                    {formatNumber(trueCount)}
-                                                </span>
-                                                <span className={falseCount > 0 ? "text-rose-500/90 font-medium" : "text-muted-foreground/40"}>
-                                                    {formatNumber(falseCount)}
-                                                    <span className="text-[10px] text-muted-foreground/50 ml-1">F</span>
-                                                </span>
-                                            </div>
-                                            <div className="h-1 w-full bg-secondary/40 rounded-full overflow-hidden flex">
-                                                {(trueCount > 0 || falseCount > 0) ? (
-                                                    <>
-                                                        <div
-                                                            className="h-full bg-emerald-500/60 transition-all"
-                                                            style={{ width: `${calculatePercent(trueCount, trueCount + falseCount)}%` }}
-                                                        />
-                                                        <div
-                                                            className="h-full bg-rose-500/60 transition-all"
-                                                            style={{ width: `${calculatePercent(falseCount, trueCount + falseCount)}%` }}
-                                                        />
-                                                    </>
-                                                ) : (
-                                                    <div className="h-full w-full bg-muted-foreground/10" />
-                                                )}
-                                            </div>
+                                            {isBoolean ? (
+                                                <>
+                                                    <div className="flex items-center justify-between font-mono text-[13px] leading-none">
+                                                        <span className={trueCount > 0 ? "text-emerald-500/90 font-medium" : "text-muted-foreground/40"}>
+                                                            <span className="text-[10px] text-muted-foreground/50 mr-1">T</span>
+                                                            {formatNumber(trueCount)}
+                                                        </span>
+                                                        <span className={falseCount > 0 ? "text-rose-500/90 font-medium" : "text-muted-foreground/40"}>
+                                                            {formatNumber(falseCount)}
+                                                            <span className="text-[10px] text-muted-foreground/50 ml-1">F</span>
+                                                        </span>
+                                                    </div>
+                                                    <div className="h-1 w-full bg-secondary/40 rounded-full overflow-hidden flex">
+                                                        {(trueCount > 0 || falseCount > 0) ? (
+                                                            <>
+                                                                <div
+                                                                    className="h-full bg-emerald-500/60 transition-all"
+                                                                    style={{ width: `${calculatePercent(trueCount, trueCount + falseCount)}%` }}
+                                                                />
+                                                                <div
+                                                                    className="h-full bg-rose-500/60 transition-all"
+                                                                    style={{ width: `${calculatePercent(falseCount, trueCount + falseCount)}%` }}
+                                                                />
+                                                            </>
+                                                        ) : (
+                                                            <div className="h-full w-full bg-muted-foreground/10" />
+                                                        )}
+                                                    </div>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <div className="flex items-center justify-between font-mono text-[13px] leading-none">
+                                                        <span className={totalMultiCount > 0 ? "text-primary/90 font-medium" : "text-muted-foreground/40"}>
+                                                            <span className="text-[10px] text-muted-foreground/50 mr-1">ALL</span>
+                                                            {formatNumber(totalMultiCount)}
+                                                        </span>
+                                                    </div>
+                                                    <div className="h-1 w-full bg-secondary/40 rounded-full overflow-hidden flex">
+                                                        {totalMultiCount > 0 ? (
+                                                            flag.variations?.map((v, i) => {
+                                                                const count = envStats?.variationsCount?.[v.id] || 0;
+                                                                if (count === 0) return null;
+                                                                return (
+                                                                    <div
+                                                                        key={v.id}
+                                                                        className={`h-full ${multiColors[i % multiColors.length]}/60 transition-all`}
+                                                                        style={{ width: `${calculatePercent(count, totalMultiCount)}%` }}
+                                                                        title={`${v.value}: ${formatNumber(count)}`}
+                                                                    />
+                                                                );
+                                                            })
+                                                        ) : (
+                                                            <div className="h-full w-full bg-muted-foreground/10" />
+                                                        )}
+                                                    </div>
+                                                </>
+                                            )}
                                         </div>
                                     </TableCell>
                                     <TableCell>
@@ -224,12 +205,7 @@ export function ProjectFlagDetailsPage() {
                                                     {state.rulesCount} {state.rulesCount === 1 ? 'Rule' : 'Rules'}
                                                 </Badge>
                                             )}
-                                            {state.rolloutPercentage !== null && (
-                                                <Badge variant="secondary" className="bg-accent text-accent-foreground">
-                                                    {state.rolloutPercentage}% Rollout
-                                                </Badge>
-                                            )}
-                                            {state.rulesCount === 0 && state.rolloutPercentage === null && (
+                                            {state.rulesCount === 0 && (
                                                 <span className="text-xs text-muted-foreground">Default</span>
                                             )}
                                         </div>
@@ -253,65 +229,12 @@ export function ProjectFlagDetailsPage() {
                 </Table>
             </Card>
 
-            <Dialog open={isMetaOpen} onOpenChange={setIsMetaOpen}>
-                <DialogContent className="border-border/40 bg-zinc-950">
-                    <DialogHeader>
-                        <DialogTitle>Edit Flag Metadata</DialogTitle>
-                        <DialogDescription>Update global settings for this feature flag.</DialogDescription>
-                    </DialogHeader>
-                    <Form {...metaForm}>
-                        <form onSubmit={metaForm.handleSubmit(handleSaveMeta)}>
-                            <div className="space-y-4 py-4">
-                                <FormField
-                                    control={metaForm.control}
-                                    name="name"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>Friendly Name</FormLabel>
-                                            <FormControl>
-                                                <Input placeholder="e.g. New Checkout System" {...field} />
-                                            </FormControl>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-                                <FormField
-                                    control={metaForm.control}
-                                    name="description"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>Description</FormLabel>
-                                            <FormControl>
-                                                <Input placeholder="Describe what this flag controls..." {...field} />
-                                            </FormControl>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-                                <FormField
-                                    control={metaForm.control}
-                                    name="tags"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel className="flex items-center gap-1">
-                                                <Tag className="h-3.5 w-3.5" /> Tags <span className="text-[10px] text-muted-foreground font-normal">(Global, comma-separated)</span>
-                                            </FormLabel>
-                                            <FormControl>
-                                                <Input placeholder="e.g. billing, staging-only, stale" {...field} />
-                                            </FormControl>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-                            </div>
-                            <DialogFooter>
-                                <Button type="button" variant="outline" onClick={() => setIsMetaOpen(false)}>Cancel</Button>
-                                <Button type="submit" disabled={updateMetadata.isPending}>Save</Button>
-                            </DialogFooter>
-                        </form>
-                    </Form>
-                </DialogContent>
-            </Dialog>
+            <FlagSettingsModal
+                open={isSettingsOpen}
+                onOpenChange={setIsSettingsOpen}
+                projectId={projectId!}
+                flag={flag}
+            />
 
             {editingEnvId && (
                 <EnvironmentFlagEditorWrapper
@@ -327,11 +250,12 @@ export function ProjectFlagDetailsPage() {
 }
 
 import { useFeatureFlag } from '@/api/queries';
+import { FeatureFlagEditor } from './FeatureFlagEditor';
 
 function EnvironmentFlagEditorWrapper({ projectId, envId, flagKey, open, onOpenChange }: any) {
     const { data: flag } = useFeatureFlag(projectId, envId, flagKey);
     const { data: project } = useProjectDetails(projectId);
-    
+
     const env = project?.environments?.find(e => e.id === envId);
     const canEditEnv = env ? (env.userRole === ProjectRole.Owner || env.userRole === ProjectRole.Admin || env.userRole === ProjectRole.Editor) : false;
 

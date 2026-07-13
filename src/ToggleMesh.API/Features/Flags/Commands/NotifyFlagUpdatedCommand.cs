@@ -4,12 +4,13 @@ using StackExchange.Redis;
 using ToggleMesh.API.Features.Flags.Get;
 using ToggleMesh.API.Infrastructure.Caching;
 using ToggleMesh.API.Infrastructure.Streaming;
+using ToggleMesh.Common;
 using Polly;
 using Polly.Retry;
 
 namespace ToggleMesh.API.Features.Flags.Commands;
 
-public record NotifyFlagUpdatedCommand(Guid EnvironmentId, string FlagKey, GetFlagResponse Response) : ICommand;
+public record NotifyFlagUpdatedCommand(Guid EnvironmentId, string FlagKey, GetFlagResponse Response, FeatureFlagDto SdkDto) : ICommand;
 
 public class NotifyFlagUpdatedCommandHandler : ICommandHandler<NotifyFlagUpdatedCommand>
 {
@@ -67,6 +68,11 @@ public class NotifyFlagUpdatedCommandHandler : ICommandHandler<NotifyFlagUpdated
                 cmd.EnvironmentId.ToString(),
                 "FlagUpdated",
                 cmd.Response);
+                
+            await _publisher.PublishEventAsync(
+                cmd.EnvironmentId.ToString(),
+                "SdkFlagUpdated",
+                cmd.SdkDto);
         }, ct);
     }
 }

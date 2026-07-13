@@ -5,6 +5,7 @@ using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using ToggleMesh.API.Features.Flags.Create;
+using ToggleMesh.API.Features.Flags.Domain;
 using ToggleMesh.API.Features.Projects.Domain;
 using ToggleMesh.API.Features.Webhooks.CreateWebhook;
 using ToggleMesh.API.Features.Webhooks.Domain;
@@ -115,6 +116,83 @@ public class WebhooksTests : IAsyncLifetime
         evt!.EventName.Should().Be("flag.created");
         evt.FlagKey.Should().Be("webhook_trigger_flag");
         evt.ProjectId.Should().Be(project.Id);
+    }
+
+    [Fact]
+    public async Task WebhookDispatcher_ShouldGenerateCorrectPayload_ForMultivariateFlag()
+    {
+        // Arrange
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        var project = new Project { Name = "Webhook Payload Project" };
+        db.Projects.Add(project);
+        db.ProjectMembers.Add(new ProjectMember { Project = project, UserId = Guid.Parse(TestAuthHandler.TestUserId), Role = ProjectRole.Owner });
+        
+        var env = new ProjectEnvironment { Name = "Prod", Project = project };
+        db.Environments.Add(env);
+
+        var hook = new Webhook
+        {
+            Id = Guid.CreateVersion7(),
+            ProjectId = project.Id,
+            Name = "Payload Hook",
+            Url = "https://example.com/payload",
+            Events = ["flag.updated"],
+            SecretKey = "whsec_123"
+        };
+        db.Webhooks.Add(hook);
+
+        var flag = new FeatureFlag
+        {
+            Id = Guid.CreateVersion7(),
+            ProjectId = project.Id,
+            Key = "multi_flag",
+            Type = FlagType.String
+        };
+        
+        var var1 = new FlagVariation { Id = Guid.CreateVersion7(), FeatureFlagId = flag.Id, Key = "red_v", Name = "Red Variation", Value = "red", Sequence = 1 };
+        var var2 = new FlagVariation { Id = Guid.CreateVersion7(), FeatureFlagId = flag.Id, Key = "blue_v", Name = "Blue Variation", Value = "blue", Sequence = 2 };
+        flag.Variations = [var1, var2];
+        db.FeatureFlags.Add(flag);
+
+        var state = new FlagEnvironmentState
+        {
+            Id = Guid.CreateVersion7(),
+            EnvironmentId = env.Id,
+            FeatureFlagId = flag.Id,
+            IsEnabled = true,
+            FallthroughRollout = [
+                new VariationWeight { VariationId = var1.Id, Weight = 5000 },
+                new VariationWeight { VariationId = var2.Id, Weight = 5000 }
+            ]
+        };
+        db.FlagEnvironmentStates.Add(state);
+        await db.SaveChangesAsync();
+
+        // Act
+        var channel = scope.ServiceProvider.GetRequiredService<Channel<WebhookEvent>>();
+        var logger = scope.ServiceProvider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<ToggleMesh.API.Features.Webhooks.Workers.WebhookDispatcherService>>();
+        var timeProvider = scope.ServiceProvider.GetRequiredService<TimeProvider>();
+        
+        var dispatcher = new ToggleMesh.API.Features.Webhooks.Workers.WebhookDispatcherService(channel, scope.ServiceProvider, logger, timeProvider);
+        var webhookEvent = new WebhookEvent(project.Id, env.Id, "flag.updated", flag.Key);
+
+        var method = dispatcher.GetType().GetMethod("QueueDeliveriesAsync", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        await (Task)method!.Invoke(dispatcher, [webhookEvent, CancellationToken.None])!;
+
+        // Assert
+        var delivery = await db.WebhookDeliveries.FirstOrDefaultAsync(d => d.WebhookId == hook.Id);
+        delivery.Should().NotBeNull("Webhook delivery should have been created by manually invoking QueueDeliveriesAsync.");
+        
+        var payload = System.Text.Json.JsonDocument.Parse(delivery.Payload);
+        var data = payload.RootElement.GetProperty("data");
+        
+        data.GetProperty("key").GetString().Should().Be("multi_flag");
+        data.GetProperty("type").GetString().Should().Be("String");
+        data.GetProperty("variations").GetArrayLength().Should().Be(2);
+        data.GetProperty("variations")[0].GetProperty("Value").GetString().Should().Be("red");
+        data.GetProperty("defaultRollout").GetArrayLength().Should().Be(2);
     }
 
     [Fact]

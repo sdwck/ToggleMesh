@@ -45,6 +45,7 @@ public class RestoreExperimentSnapshotEndpoint : ToggleEndpointWithoutRequest<Ge
 
         var state = await _db.FlagEnvironmentStates
             .Include(x => x.FeatureFlag)
+                .ThenInclude(x => x.Variations)
             .Include(x => x.Rules)
             .Include(x => x.ContextualRollouts)
             .AsSplitQuery()
@@ -68,11 +69,6 @@ public class RestoreExperimentSnapshotEndpoint : ToggleEndpointWithoutRequest<Ge
         if (root.TryGetProperty("IsEnabled", out var isEnabledProp))
             state.IsEnabled = isEnabledProp.GetBoolean();
             
-        if (root.TryGetProperty("RolloutPercentage", out var rolloutProp) && rolloutProp.ValueKind != JsonValueKind.Null)
-            state.RolloutPercentage = rolloutProp.GetInt32();
-        else
-            state.RolloutPercentage = null;
-
         if (root.TryGetProperty("IsMabEnabled", out var isMabEnabledProp))
             state.IsMabEnabled = isMabEnabledProp.GetBoolean();
 
@@ -85,33 +81,45 @@ public class RestoreExperimentSnapshotEndpoint : ToggleEndpointWithoutRequest<Ge
         else
             state.ContextPartitionKeys = [];
 
-        if (state.ContextualRollouts != null && state.ContextualRollouts.Count != 0)
+        if (root.TryGetProperty("FallthroughRollout", out var fallthroughProp) && fallthroughProp.ValueKind == JsonValueKind.Array)
+        {
+            state.FallthroughRollout.Clear();
+            foreach (var r in fallthroughProp.EnumerateArray())
+                state.FallthroughRollout.Add(new VariationWeight { 
+                    VariationId = r.GetProperty("VariationId").GetGuid(), 
+                    Weight = r.GetProperty("Weight").GetInt32() 
+                });
+        }
+
+        if (state.ContextualRollouts.Count > 0)
         {
             _db.ContextualRollouts.RemoveRange(state.ContextualRollouts);
             state.ContextualRollouts.Clear();
         }
 
-        if (root.TryGetProperty("ContextualRollouts", out var contextualRolloutsProp))
-        {
-            state.ContextualRollouts ??= new List<ContextualRollout>();
-
-            if (contextualRolloutsProp.ValueKind == JsonValueKind.Object)
-                foreach (var prop in contextualRolloutsProp.EnumerateObject())
-                    state.ContextualRollouts.Add(new ContextualRollout
-                    {
-                        ContextSlice = prop.Name,
-                        RolloutPercentage = prop.Value.GetInt32()
+        if (root.TryGetProperty("ContextualRollouts", out var contextualRolloutsProp) && 
+            contextualRolloutsProp.ValueKind == JsonValueKind.Array)
+            foreach (var prop in contextualRolloutsProp.EnumerateArray())
+            {
+                if (!prop.TryGetProperty("ContextSlice", out var sliceProp) 
+                    || !prop.TryGetProperty("Rollout", out var rolloutProp) 
+                    || rolloutProp.ValueKind != JsonValueKind.Array) 
+                    continue;
+                    
+                var cr = new ContextualRollout
+                {
+                    ContextSlice = sliceProp.GetString() ?? "",
+                    IsAutoManaged = prop.TryGetProperty("IsAutoManaged", out var mProp) && mProp.GetBoolean()
+                };
+                        
+                foreach (var r in rolloutProp.EnumerateArray())
+                    cr.Rollout.Add(new VariationWeight { 
+                        VariationId = r.GetProperty("VariationId").GetGuid(), 
+                        Weight = r.GetProperty("Weight").GetInt32() 
                     });
-            else if (contextualRolloutsProp.ValueKind == JsonValueKind.Array)
-                foreach (var prop in contextualRolloutsProp.EnumerateArray())
-                    if (prop.TryGetProperty("ContextSlice", out var sliceProp) && 
-                        prop.TryGetProperty("RolloutPercentage", out var pctProp))
-                        state.ContextualRollouts.Add(new ContextualRollout
-                        {
-                            ContextSlice = sliceProp.GetString() ?? "",
-                            RolloutPercentage = pctProp.GetInt32()
-                        });
-        }
+                        
+                state.ContextualRollouts.Add(cr);
+            }
 
         if (state.Rules.Count != 0)
         {
@@ -126,21 +134,28 @@ public class RestoreExperimentSnapshotEndpoint : ToggleEndpointWithoutRequest<Ge
                 {
                     Id = Guid.Empty,
                     FlagEnvironmentStateId = state.Id,
+                    Priority = ruleElement.TryGetProperty("Priority", out var pProp) ? pProp.GetInt32() : 0,
                     GroupId = ruleElement.GetProperty("GroupId").GetInt32(),
                     Attribute = ruleElement.GetProperty("Attribute").GetString() ?? "",
                     Operator = ruleElement.GetProperty("Operator").GetString() ?? "",
                     Value = ruleElement.GetProperty("Value").GetString() ?? ""
                 };
+                
+                if (ruleElement.TryGetProperty("Rollout", out var rProp) && rProp.ValueKind == JsonValueKind.Array)
+                    foreach (var r in rProp.EnumerateArray())
+                        newRule.Rollout.Add(new VariationWeight { 
+                            VariationId = r.GetProperty("VariationId").GetGuid(), 
+                            Weight = r.GetProperty("Weight").GetInt32() 
+                        });
 
                 state.Rules.Add(newRule);
             }
 
         state.IsExperimentActive = false;
-        
         await _db.SaveChangesAsync(ct);
 
         var response = state.ToDto();
-        await new NotifyFlagUpdatedCommand(environmentId, flagKey, response)
+        await new NotifyFlagUpdatedCommand(environmentId, flagKey, response, state.ToSdkDto())
             .ExecuteAsync(ct);
         await Send.OkAsync(response, ct);
     }

@@ -20,19 +20,17 @@ from togglemesh import ToggleMeshClient, ToggleMeshOptions
 
 client = ToggleMeshClient(ToggleMeshOptions(
     base_url="http://localhost:5000",
-    client_key="YOUR_API_KEY"
+    server_key="YOUR_API_KEY"
 ))
 
-# 1. Identify the user
-client.identify("user-123", {"tenant": "acme_corp", "plan": "enterprise"})
-
-# 2. Check a flag locally (Zero network latency!)
-if client.is_enabled("new-feature", default_value=False):
+# 1. Check a flag locally (Zero network latency!)
+# Pass identity and context per-evaluation, since the server handles multiple users concurrently.
+if client.is_enabled("new-feature", default_value=False, identity="user-123", tenant="sample_corp"):
     print("Feature is ON")
 else:
     print("Feature is OFF")
 
-# 3. Stop background threads when the app shuts down
+# 2. Stop background threads when the app shuts down
 client.stop()
 ```
 
@@ -42,9 +40,10 @@ client.stop()
 - Real-time SSE updates
 - Contextual Rollouts
 - Segment Evaluation
+- JSON Parsing `client.get_json(...)`
 - Analytics Event Tracking (A/B testing conversions):
   ```python
-  client.track("checkout_completed", properties={"cart_size": 3}, value=150.0, identity="user-123")
+  client.track("checkout_completed", value=150.0, identity="user-123", cart_size=3)
   ```
 
 ---
@@ -71,5 +70,5 @@ from flags import Flags
 from togglemesh import ToggleMeshClient, ToggleMeshOptions
 
 # ...
-client.is_enabled(Flags.NEW_CHECKOUT_FLOW, default_value=False)
+client.is_enabled(Flags.NEW_CHECKOUT_FLOW, default_value=False, identity="user-123")
 ```

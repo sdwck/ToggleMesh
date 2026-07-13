@@ -22,7 +22,7 @@ public class PostgresAnalyticsSink : IAnalyticsStorageSink
 
         if (exposures.Count > 0)
         {
-            await using var writer = await conn.BeginBinaryImportAsync("COPY \"AnalyticsExposures\" (\"Id\", \"EnvironmentId\", \"FlagKey\", \"Identity\", \"Variant\", \"Properties\", \"Timestamp\") FROM STDIN (FORMAT BINARY)", ct);
+            await using var writer = await conn.BeginBinaryImportAsync("COPY \"AnalyticsExposures\" (\"Id\", \"EnvironmentId\", \"FlagKey\", \"Identity\", \"VariationId\", \"Properties\", \"Timestamp\") FROM STDIN (FORMAT BINARY)", ct);
             foreach (var e in exposures)
             {
                 await writer.StartRowAsync(ct);
@@ -30,7 +30,7 @@ public class PostgresAnalyticsSink : IAnalyticsStorageSink
                 await writer.WriteAsync(e.EnvironmentId, NpgsqlTypes.NpgsqlDbType.Uuid, ct);
                 await writer.WriteAsync(e.FlagKey, NpgsqlTypes.NpgsqlDbType.Text, ct);
                 await writer.WriteAsync(e.Identity, NpgsqlTypes.NpgsqlDbType.Text, ct);
-                await writer.WriteAsync(e.Variant, NpgsqlTypes.NpgsqlDbType.Boolean, ct);
+                await writer.WriteAsync(e.VariationId, NpgsqlTypes.NpgsqlDbType.Uuid, ct);
                 
                 if (e.Properties != null)
                     await writer.WriteAsync(e.Properties, NpgsqlTypes.NpgsqlDbType.Jsonb, ct);

@@ -85,7 +85,7 @@ public class AnalyticsWorker : BackgroundService
                         EnvironmentId = msg.EnvironmentId,
                         Identity = evt.Identity,
                         FlagKey = evt.FlagKey ?? string.Empty,
-                        Variant = evt.Result,
+                        VariationId = evt.VariationId.GetValueOrDefault(),
                         Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(evt.Timestamp),
                         Properties = evt.Properties != null ? JsonSerializer.SerializeToDocument(evt.Properties) : null
                     });

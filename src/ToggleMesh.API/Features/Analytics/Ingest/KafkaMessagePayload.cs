@@ -1,4 +1,4 @@
-﻿namespace ToggleMesh.API.Features.Analytics.Ingest;
+namespace ToggleMesh.API.Features.Analytics.Ingest;
 
 public class KafkaMessagePayload
 {

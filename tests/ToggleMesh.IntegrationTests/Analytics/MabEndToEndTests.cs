@@ -33,7 +33,7 @@ public class MabEndToEndTests : IAsyncLifetime
         _client = factory.CreateClient();
     }
 
-    private async Task<(Guid ProjectId, Guid EnvironmentId, string FlagKey)> SeedDataAsync(string flagKey, bool isMabEnabled, string[]? contextPartitionKeys)
+    private async Task<(Guid ProjectId, Guid EnvironmentId, string FlagKey, Guid ControlId, Guid TreatmentId)> SeedDataAsync(string flagKey, bool isMabEnabled, string[]? contextPartitionKeys)
     {
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -52,7 +52,19 @@ public class MabEndToEndTests : IAsyncLifetime
         var environment = new ProjectEnvironment { Name = "Production", Project = project };
         db.Environments.Add(environment);
 
-        var flag = new FeatureFlag { Project = project, Key = flagKey };
+        var controlId = Guid.NewGuid();
+        var treatmentId = Guid.NewGuid();
+
+        var flag = new FeatureFlag 
+        { 
+            Project = project, 
+            Key = flagKey,
+            Variations = new List<FlagVariation>
+            {
+                new() { Id = controlId, Key = "control", Name = "Control", Value = "false" },
+                new() { Id = treatmentId, Key = "treatment", Name = "Treatment", Value = "true" }
+            }
+        };
         db.FeatureFlags.Add(flag);
 
         var state = new FlagEnvironmentState
@@ -62,24 +74,32 @@ public class MabEndToEndTests : IAsyncLifetime
             IsEnabled = true,
             IsMabEnabled = isMabEnabled,
             IsExperimentActive = true,
+            ExperimentStartedAt = DateTimeOffset.UtcNow.AddDays(-1),
             MabGoalEvent = "mab_conversion",
             ContextPartitionKeys = contextPartitionKeys ?? [],
-            RolloutPercentage = 50
+            FallthroughRollout = new List<VariationWeight> 
+            { 
+                new() { VariationId = controlId, Weight = 5000 },
+                new() { VariationId = treatmentId, Weight = 5000 }
+            }
         };
         db.FlagEnvironmentStates.Add(state);
 
         await db.SaveChangesAsync();
-        return (project.Id, environment.Id, flagKey);
+        return (project.Id, environment.Id, flagKey, controlId, treatmentId);
     }
 
-    private async Task RunSimulationAsync(Guid projectId, Guid environmentId, string flagKey)
+    private async Task RunSimulationAsync(Guid projectId, Guid environmentId, string flagKey, Guid controlId, Guid treatmentId)
     {
         var req = new SimulateExperimentRequest
         {
             EventName = "mab_conversion",
             ParticipantsCount = 500,
-            ControlConversionRate = 0.05,
-            TreatmentConversionRate = 0.25
+            Variations = new List<SimulationVariantDto>
+            {
+                new() { VariationId = controlId, ConversionRate = 0.05 },
+                new() { VariationId = treatmentId, ConversionRate = 0.25 }
+            }
         };
 
         var response = await _client.PostAsJsonAsync($"/api/v1/projects/{projectId}/environments/{environmentId}/flags/{flagKey}/experiments/simulate", req);
@@ -129,10 +149,10 @@ public class MabEndToEndTests : IAsyncLifetime
     public async Task CaseA_MabOff_ShouldAggregateButNotUpdateRollouts()
     {
         // Arrange
-        var (projectId, environmentId, flagKey) = await SeedDataAsync("flag_mab_off", isMabEnabled: false, null);
+        var (projectId, environmentId, flagKey, controlId, treatmentId) = await SeedDataAsync("flag_srm_test", isMabEnabled: false, null);
 
         // Act
-        await RunSimulationAsync(projectId, environmentId, flagKey);
+        await RunSimulationAsync(projectId, environmentId, flagKey, controlId, treatmentId);
 
         using var scope = _factory.Services.CreateScope();
         var queryEngine = scope.ServiceProvider.GetRequiredService<IAnalyticsQueryEngine>();
@@ -144,7 +164,7 @@ public class MabEndToEndTests : IAsyncLifetime
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var state = await db.FlagEnvironmentStates.AsNoTracking().SingleAsync(s => s.EnvironmentId == environmentId && s.FeatureFlag.Key == flagKey);
 
-        state.RolloutPercentage.Should().Be(50, "MAB is off, base rollout should not change");
+        state.FallthroughRollout!.First().Weight.Should().Be(5000, "MAB is off, base rollout should not change");
         state.ContextualRollouts.Should().BeNullOrEmpty("No contextual MAB was enabled");
     }
 
@@ -152,10 +172,8 @@ public class MabEndToEndTests : IAsyncLifetime
     public async Task CaseB_GlobalMab_ShouldUpdateBaseRollout()
     {
         // Arrange
-        var (projectId, environmentId, flagKey) = await SeedDataAsync("flag_global_mab", isMabEnabled: true, null);
-
-        // Act
-        await RunSimulationAsync(projectId, environmentId, flagKey);
+        var (projectId, environmentId, flagKey, controlId, treatmentId) = await SeedDataAsync("global-mab-flag", true, null);
+        await RunSimulationAsync(projectId, environmentId, flagKey, controlId, treatmentId);
 
         using var scope = _factory.Services.CreateScope();
         var queryEngine = scope.ServiceProvider.GetRequiredService<IAnalyticsQueryEngine>();
@@ -166,7 +184,7 @@ public class MabEndToEndTests : IAsyncLifetime
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var state = await db.FlagEnvironmentStates.AsNoTracking().SingleAsync(s => s.EnvironmentId == environmentId && s.FeatureFlag.Key == flagKey);
 
-        state.RolloutPercentage.Should().BeGreaterThan(50, "Treatment won significantly, so MAB should shift traffic towards 100%");
+        state.FallthroughRollout!.Last().Weight.Should().BeGreaterThan(5000, "Treatment won significantly, so MAB should shift traffic towards 100%");
         state.ContextualRollouts.Should().BeNullOrEmpty("No contextual partition keys were provided");
     }
 
@@ -174,10 +192,10 @@ public class MabEndToEndTests : IAsyncLifetime
     public async Task CaseC_ContextualMab_ShouldUpdateContextualRollouts()
     {
         // Arrange
-        var (projectId, environmentId, flagKey) = await SeedDataAsync("flag_contextual_mab", isMabEnabled: true, ["Country"]);
+        var (projectId, environmentId, flagKey, controlId, treatmentId) = await SeedDataAsync("contextual-mab-flag", true, ["country"]);
 
         // Act
-        await RunSimulationAsync(projectId, environmentId, flagKey);
+        await RunSimulationAsync(projectId, environmentId, flagKey, controlId, treatmentId);
 
         using var scope = _factory.Services.CreateScope();
         var queryEngine = scope.ServiceProvider.GetRequiredService<IAnalyticsQueryEngine>();
@@ -189,13 +207,13 @@ public class MabEndToEndTests : IAsyncLifetime
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var state = await db.FlagEnvironmentStates.AsNoTracking().Include(x => x.ContextualRollouts).SingleAsync(s => s.EnvironmentId == environmentId && s.FeatureFlag.Key == flagKey);
 
-        state.RolloutPercentage.Should().BeGreaterThan(50, "Base rollout should also shift based on overall global traffic");
+        state.FallthroughRollout!.Last().Weight.Should().BeGreaterThan(5000, "Base rollout should also shift based on overall global traffic");
         state.ContextualRollouts.Should().NotBeNullOrEmpty();
 
         var keys = state.ContextualRollouts!.Select(x => x.ContextSlice).ToList();
         keys.Should().Contain(k => k.Contains("US") || k.Contains("CA") || k.Contains("GB") || k.Contains("AU"));
 
-        foreach (var value in state.ContextualRollouts.Select(x => x.RolloutPercentage))
-            value.Should().BeGreaterThan(50, "Treatment CR is uniformly higher in our simulator, so all countries should shift to treatment");
+        foreach (var value in state.ContextualRollouts.Select(x => x.Rollout!.Last().Weight))
+            value.Should().BeGreaterThan(5000, "Treatment CR is uniformly higher in our simulator, so all countries should shift to treatment");
     }
 }

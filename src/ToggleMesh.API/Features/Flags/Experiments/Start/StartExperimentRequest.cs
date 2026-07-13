@@ -8,5 +8,6 @@ public class StartExperimentRequest
     public string GoalEvent { get; set; } = string.Empty;
     public MabOptimizationType OptimizationType { get; set; } = MabOptimizationType.Conversion;
     public string[] ContextPartitionKeys { get; set; } = [];
-    public int? InitialRolloutPercentage { get; set; }
+    public int MabExplorationFloor { get; set; } = 5;
+    public bool BalanceWeights { get; set; }
 }

@@ -5,11 +5,9 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using ToggleMesh.API.Features.Flags.Domain;
 using ToggleMesh.API.Features.Analytics.Domain;
-using ToggleMesh.API.Features.Flags.SetContextualRollout;
 using ToggleMesh.API.Features.Projects.Domain;
 using ToggleMesh.API.Infrastructure.Data;
 using ToggleMesh.IntegrationTests.Infrastructure;
-using Xunit;
 
 namespace ToggleMesh.IntegrationTests.Flags;
 
@@ -52,7 +50,7 @@ public class ContextualRolloutTests : IClassFixture<TestWebApplicationFactory>
         };
         db.Environments.Add(testEnv);
         
-        var flag = new ToggleMesh.API.Features.Flags.Domain.FeatureFlag
+        var flag = new FeatureFlag
         {
             Id = Guid.NewGuid(),
             ProjectId = testProject.Id,
@@ -62,13 +60,13 @@ public class ContextualRolloutTests : IClassFixture<TestWebApplicationFactory>
         };
         db.FeatureFlags.Add(flag);
 
-        var state = new ToggleMesh.API.Features.Flags.Domain.FlagEnvironmentState
+        var state = new FlagEnvironmentState
         {
             Id = Guid.NewGuid(),
             FeatureFlagId = flag.Id,
             EnvironmentId = testEnv.Id,
             IsEnabled = true,
-            ContextualRollouts = new List<ContextualRollout> { new ContextualRollout { Id = Guid.NewGuid(), ContextSlice = "country=US", RolloutPercentage = 50 } }
+            ContextualRollouts = new List<ContextualRollout> { new() { Id = Guid.NewGuid(), ContextSlice = "country=US", Rollout = new List<ToggleMesh.API.Features.Flags.Domain.VariationWeight> { new() { VariationId = Guid.Empty, Weight = 5000 } } } }
         };
         db.FlagEnvironmentStates.Add(state);
 

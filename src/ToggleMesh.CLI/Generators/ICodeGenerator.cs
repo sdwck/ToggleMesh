@@ -1,4 +1,4 @@
-﻿namespace ToggleMesh.CLI.Generators;
+namespace ToggleMesh.CLI.Generators;
 
 public interface ICodeGenerator
 {

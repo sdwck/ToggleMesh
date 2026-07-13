@@ -35,6 +35,117 @@ public class BayesianMathService
         return (double)bBeatsA / iterations;
     }
 
+    public double[] CalculateDirichletProbabilities(
+        long[] exposures, 
+        long[] conversions, 
+        int iterations = 10000)
+    {
+        int n = exposures.Length;
+        if (n == 0) return [];
+        if (n == 1) return [1.0];
+
+        double priorAlpha = 1.0;
+        double priorBeta = 1.0;
+
+        var dists = new Beta[n];
+
+        for (int i = 0; i < n; i++)
+        {
+            double alpha = Math.Max(priorAlpha + conversions[i], 1e-9);
+            double beta = Math.Max(priorBeta + (exposures[i] - conversions[i]), 1e-9);
+            dists[i] = new Beta(alpha, beta);
+        }
+
+        var wins = new int[n];
+
+        for (int i = 0; i < iterations; i++)
+        {
+            int bestIdx = 0;
+            double maxSample = -1;
+
+            for (int j = 0; j < n; j++)
+            {
+                double sample = dists[j].Sample();
+                if (sample > maxSample)
+                {
+                    maxSample = sample;
+                    bestIdx = j;
+                }
+            }
+
+            wins[bestIdx]++;
+        }
+
+        var probs = new double[n];
+        for (int i = 0; i < n; i++)
+        {
+            probs[i] = (double)wins[i] / iterations;
+        }
+
+        return probs;
+    }
+
+    public double[] CalculateDirichletProbabilities_Revenue(
+        long[] exposures, double[] values, double[] sumSquareds,
+        int iterations = 10000)
+    {
+        int n = exposures.Length;
+        if (n == 0) return [];
+        if (n == 1) return [1.0];
+
+        var means = new double[n];
+        var vars = new double[n];
+
+        for (int i = 0; i < n; i++)
+        {
+            if (exposures[i] < 2)
+            {
+                means[i] = 0;
+                vars[i] = 1e-9;
+                continue;
+            }
+
+            double mean = values[i] / exposures[i];
+            double variance = (sumSquareds[i] / exposures[i]) - (mean * mean);
+            
+            means[i] = mean;
+            vars[i] = Math.Max(variance / exposures[i], 1e-9);
+        }
+
+        var dists = new Normal[n];
+        for (int i = 0; i < n; i++)
+        {
+            dists[i] = new Normal(means[i], Math.Sqrt(vars[i]));
+        }
+
+        var wins = new int[n];
+        for (int i = 0; i < iterations; i++)
+        {
+            int bestIdx = 0;
+            double maxSample = double.MinValue;
+
+            for (int j = 0; j < n; j++)
+            {
+                double sample = dists[j].Sample();
+                if (sample > maxSample)
+                {
+                    maxSample = sample;
+                    bestIdx = j;
+                }
+            }
+
+            wins[bestIdx]++;
+        }
+
+        var probs = new double[n];
+        for (int i = 0; i < n; i++)
+        {
+            probs[i] = (double)wins[i] / iterations;
+        }
+
+        return probs;
+    }
+
     public double CalculateExpectedUplift(
         long exposuresA, long conversionsA, 
         long exposuresB, long conversionsB)

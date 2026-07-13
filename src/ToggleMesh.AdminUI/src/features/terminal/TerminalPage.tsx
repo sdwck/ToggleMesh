@@ -30,7 +30,7 @@ interface LogEntry {
     flagKey?: string;
     eventName?: string;
     identity: string;
-    result?: boolean;
+    result?: string | boolean | any;
     properties?: any;
     value?: number;
 }
@@ -85,7 +85,7 @@ export function TerminalPage() {
                 flagKey: data.FlagKey,
                 eventName: data.EventName,
                 identity: data.Identity,
-                result: data.Result,
+                result: data.VariationValue,
                 properties: data.Properties,
                 value: data.Value
             };
@@ -277,8 +277,18 @@ export function TerminalPage() {
                                             <span className="text-zinc-600">for</span>
                                             <span className="text-zinc-400">{log.identity || 'anonymous'}</span>
                                             <span className="text-zinc-600">→</span>
-                                            <span className={log.result ? "text-emerald-400 font-medium" : "text-rose-400 font-medium"}>
-                                                {log.result ? 'TRUE' : 'FALSE'}
+                                            <span className={
+                                                log.result === 'true' || log.result === 'True' || log.result === true 
+                                                    ? "text-emerald-400 font-medium" 
+                                                    : log.result === 'false' || log.result === 'False' || log.result === false 
+                                                        ? "text-rose-400 font-medium" 
+                                                        : "text-blue-400 font-medium"
+                                            }>
+                                                {typeof log.result === 'boolean' 
+                                                    ? (log.result ? 'TRUE' : 'FALSE') 
+                                                    : (log.result === 'true' || log.result === 'True') ? 'TRUE'
+                                                    : (log.result === 'false' || log.result === 'False') ? 'FALSE'
+                                                    : String(log.result)}
                                             </span>
                                         </div>
                                     ) : (

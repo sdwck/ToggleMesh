@@ -39,10 +39,11 @@ public class GetAllSegmentsEndpoint : EndpointWithoutRequest<IEnumerable<Segment
             s.EnvironmentId,
             s.Name,
             s.Description,
-            s.Rules.Select(r => new RuleDto(r.GroupId, r.Attribute, r.Operator, r.Value)),
+            s.Rules.Select(r => new RuleInput(r.GroupId, r.Attribute, r.Operator, r.Value)),
             s.CreatedAt
         ));
 
         await Send.OkAsync(response, ct);
     }
 }
+

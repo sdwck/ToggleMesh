@@ -37,6 +37,7 @@ public class StartExperimentEndpoint : ToggleEndpoint<StartExperimentRequest, Ge
 
         var state = await _db.FlagEnvironmentStates
             .Include(x => x.FeatureFlag)
+                .ThenInclude(x => x.Variations)
             .Include(x => x.Rules)
             .Include(x => x.ContextualRollouts)
             .AsSplitQuery()
@@ -49,10 +50,10 @@ public class StartExperimentEndpoint : ToggleEndpoint<StartExperimentRequest, Ge
         }
 
         if (state.IsExperimentActive)
-        {
             ThrowError("Experiment is already active.");
-            return;
-        }
+
+        if (req.MabExplorationFloor is < 0 or > 10)
+            ThrowError("Exploration floor must be between 0 and 10.");
 
         await _db.ExperimentMetrics
             .Where(x => x.EnvironmentId == environmentId && x.FlagKey == flagKey)
@@ -66,11 +67,16 @@ public class StartExperimentEndpoint : ToggleEndpoint<StartExperimentRequest, Ge
             .Where(x => x.EnvironmentId == environmentId && x.FlagKey == flagKey)
             .ExecuteDeleteAsync(ct);
 
-        state.ContextualRollouts.Clear();
+        if (state.ContextualRollouts.Count > 0)
+        {
+            _db.ContextualRollouts.RemoveRange(state.ContextualRollouts);
+            state.ContextualRollouts.Clear();
+        }
 
         state.IsMabEnabled = req.Mode == "mab";
         state.MabGoalEvent = req.GoalEvent;
         state.MabOptimizationType = req.OptimizationType;
+        state.MabExplorationFloor = req.MabExplorationFloor;
         if (req.ContextPartitionKeys is { Length: > 0 })
             state.ContextPartitionKeys = req.ContextPartitionKeys;
         else if (req.Mode == "mab")
@@ -84,9 +90,27 @@ public class StartExperimentEndpoint : ToggleEndpoint<StartExperimentRequest, Ge
         else
             state.ContextPartitionKeys = [];
 
-        if (req.InitialRolloutPercentage.HasValue)
-            state.RolloutPercentage = req.InitialRolloutPercentage.Value;
-
+        if (req.BalanceWeights)
+        {
+            const int totalWeight = 10000;
+            var variationsCount = state.FeatureFlag.Variations.Count;
+            if (variationsCount > 0)
+            {
+                var baseWeight = totalWeight / variationsCount;
+                var remainder = totalWeight % variationsCount;
+                state.FallthroughRollout.Clear();
+                var varList = state.FeatureFlag.Variations.ToList();
+                for (var i = 0; i < varList.Count; i++)
+                    state.FallthroughRollout.Add(new VariationWeight
+                    {
+                        VariationId = varList[i].Id,
+                        Weight = baseWeight + (i < remainder ? 1 : 0)
+                    });
+            }
+        }
+        
+        state.IsSrmAlertSent = false;
+        state.SrmPValue = null;
         state.IsExperimentActive = true;
         state.ExperimentStartedAt = DateTimeOffset.UtcNow;
 
@@ -96,7 +120,8 @@ public class StartExperimentEndpoint : ToggleEndpoint<StartExperimentRequest, Ge
         await new NotifyFlagUpdatedCommand(
             environmentId, 
             flagKey, 
-            response
+            response,
+            state.ToSdkDto()
         ).ExecuteAsync(ct);
         await Send.OkAsync(response, ct);
     }

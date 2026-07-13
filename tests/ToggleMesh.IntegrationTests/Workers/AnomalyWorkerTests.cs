@@ -64,7 +64,8 @@ public class AnomalyWorkerTests : IAsyncLifetime
             FeatureFlagId = flagId,
             EnvironmentId = envId,
             IsExperimentActive = true,
-            MabGoalEvent = "checkout"
+            MabGoalEvent = "checkout",
+            OffVariationId = Guid.Empty
         };
 
         await _db.Projects.AddAsync(project);
@@ -78,7 +79,7 @@ public class AnomalyWorkerTests : IAsyncLifetime
             EnvironmentId = envId,
             FlagKey = "test-flag",
             EventName = "checkout",
-            Variant = false,
+            VariationId = Guid.Empty,
             TotalExposures = 1000,
             TotalConversions = 200
         };
@@ -89,7 +90,7 @@ public class AnomalyWorkerTests : IAsyncLifetime
             EnvironmentId = envId,
             FlagKey = "test-flag",
             EventName = "checkout",
-            Variant = true,
+            VariationId = Guid.NewGuid(),
             TotalExposures = 1000,
             TotalConversions = 10
         };

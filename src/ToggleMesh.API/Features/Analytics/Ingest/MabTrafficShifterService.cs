@@ -21,9 +21,11 @@ public class MabTrafficShifterService : IMabTrafficShifterService
         NotifyFlagUpdatedCommandHandler notifyHandler,
         CancellationToken ct)
     {
+        db.SystemActorEmail = "mab-automation@togglemesh.com";
         var stateIds = await db.FlagEnvironmentStates
             .AsNoTracking()
-            .Where(x => x.IsEnabled && x.IsMabEnabled && x.IsExperimentActive && x.RolloutPercentage.HasValue)
+            .Where(x => 
+                x.IsEnabled && x.IsMabEnabled && x.IsExperimentActive)
             .Select(x => x.Id)
             .ToListAsync(ct);
 
@@ -34,6 +36,7 @@ public class MabTrafficShifterService : IMabTrafficShifterService
         {
             var states = await db.FlagEnvironmentStates
                 .Include(x => x.FeatureFlag)
+                    .ThenInclude(x => x.Variations)
                 .Include(x => x.Rules)
                 .Include(x => x.ContextualRollouts)
                 .Where(x => chunk.Contains(x.Id))
@@ -44,55 +47,159 @@ public class MabTrafficShifterService : IMabTrafficShifterService
 
             foreach (var state in states)
             {
-                if (!state.IsExperimentActive || !state.IsMabEnabled) continue;
+                if (!state.IsExperimentActive 
+                    || !state.IsMabEnabled 
+                    || state.FallthroughRollout.Count == 0) 
+                    continue;
 
                 var metrics = await db.ExperimentMetrics
-                    .Where(x => x.EnvironmentId == state.EnvironmentId && x.FlagKey == state.FeatureFlag.Key)
+                    .Where(x => 
+                        x.EnvironmentId == state.EnvironmentId 
+                        && x.FlagKey == state.FeatureFlag.Key 
+                        && x.EventName == state.MabGoalEvent)
                     .ToListAsync(ct);
+                
+                var variations = state.FeatureFlag.Variations
+                    .Select(v => v.Id)
+                    .ToList();
+                if (state.OffVariationId != null && 
+                    !variations.Contains(state.OffVariationId.Value))
+                    variations.Add(state.OffVariationId.Value);
 
-                var control = metrics.FirstOrDefault(x => !x.Variant && x.EventName == state.MabGoalEvent);
-                var treatment = metrics.FirstOrDefault(x => x.Variant && x.EventName == state.MabGoalEvent);
+                if (variations.Count < 2) 
+                    continue;
 
-                if (control == null || treatment == null) continue;
-                if (control.TotalExposures < 50 || treatment.TotalExposures < 50) continue;
-
-                double probBBeatsA = math.CalculateProbabilityBBeatsA(
-                    control.TotalExposures, control.TotalConversions,
-                    treatment.TotalExposures, treatment.TotalConversions);
-
-                int targetRollout = (int)Math.Round(probBBeatsA * 100);
-                targetRollout = Math.Clamp(targetRollout, 5, 95);
-
-                int maxStep = 10;
-                int currentRollout = state.RolloutPercentage ?? 50;
-                int newRollout = targetRollout;
-
-                if (newRollout > currentRollout + maxStep) newRollout = currentRollout + maxStep;
-                if (newRollout < currentRollout - maxStep) newRollout = currentRollout - maxStep;
-
-                if (state.RolloutPercentage != newRollout)
+                var exposures = new long[variations.Count];
+                var conversions = new long[variations.Count];
+                var values = new double[variations.Count];
+                var sumSquared = new double[variations.Count];
+                
+                var validIndices = new List<int>();
+                for (var i = 0; i < variations.Count; i++)
                 {
+                    var metric = metrics
+                        .Where(x => x.VariationId == variations[i])
+                        .OrderByDescending(x => x.LastCalculatedAt)
+                        .FirstOrDefault();
+                    exposures[i] = metric?.TotalExposures ?? 0;
+                    conversions[i] = metric?.TotalConversions ?? 0;
+                    values[i] = metric?.TotalValue ?? 0;
+                    sumSquared[i] = metric?.SumOfSquaredValues ?? 0;
+                    
+                    if (exposures[i] >= 50) 
+                        validIndices.Add(i);
+                }
+
+                if (validIndices.Count == 0) continue;
+
+                double[] probs;
+                if (state.MabOptimizationType == MabOptimizationType.Conversion)
+                    probs = math.CalculateDirichletProbabilities(exposures, conversions);
+                else
+                    probs = math.CalculateDirichletProbabilities_Revenue(
+                        exposures, values, sumSquared);
+
+                double validProbsSum = 0;
+                for (var i = 0; i < variations.Count; i++)
+                {
+                    if (!validIndices.Contains(i)) 
+                        probs[i] = 0;
+                    validProbsSum += probs[i];
+                }
+
+                if (validProbsSum > 0)
+                    for (var i = 0; i < variations.Count; i++) 
+                        probs[i] /= validProbsSum;
+                else
+                    for (var i = 0; i < variations.Count; i++) 
+                        probs[i] = validIndices.Contains(i) ? 1.0 / validIndices.Count : 0;
+
+                var changed = false;
+                
+                var floor = state.MabExplorationFloor / 100.0;
+                var n = variations.Count;
+                if (floor * n > 1.0) 
+                    floor = 1.0 / n;
+
+                var newRollout = new List<VariationWeight>();
+                var remainingWeight = 10000;
+                
+                for (var i = 0; i < n; i++)
+                {
+                    if (i == n - 1)
+                        newRollout.Add(new VariationWeight
+                        {
+                            VariationId = variations[i], 
+                            Weight = remainingWeight
+                        });
+                    else
+                    {
+                        var newP = floor + probs[i] * (1.0 - n * floor);
+                        var weight = (int)Math.Round(newP * 10000);
+                        if (weight > remainingWeight) 
+                            weight = remainingWeight;
+                        newRollout.Add(new VariationWeight { VariationId = variations[i], Weight = weight });
+                        remainingWeight -= weight;
+                    }
+                }
+
+                var shouldUpdate = state.FallthroughRollout.Count != newRollout.Count;
+                if (!shouldUpdate)
+                {
+                    foreach (var r in state.FallthroughRollout)
+                    {
+                        var nr = newRollout
+                            .FirstOrDefault(x => x.VariationId == r.VariationId);
+                        if (nr != null && Math.Abs(nr.Weight - r.Weight) <= 50) 
+                            continue;
+                        
+                        shouldUpdate = true;
+                        break;
+                    }
+                }
+
+                if (shouldUpdate)
+                {
+                    state.FallthroughRollout.Clear();
+                    foreach (var item in newRollout) 
+                        state.FallthroughRollout.Add(item);
+                    changed = true;
+                    
                     _logger.LogInformation(
-                        "[MAB] Shifting traffic for Flag {Flag} in Env {Env}: {Old}% -> {New}% (Prob: {Prob})",
-                        state.FeatureFlag.Key, state.EnvironmentId, state.RolloutPercentage, newRollout, probBBeatsA);
+                        "[MAB] Shifting traffic for Flag {Flag} in Env {Env}",
+                        state.FeatureFlag.Key,
+                        state.EnvironmentId);
+                }
 
-                    await db.FlagEnvironmentStates
-                        .Where(x => x.Id == state.Id)
-                        .ExecuteUpdateAsync(s => s.SetProperty(p => p.RolloutPercentage, newRollout), ct);
-
-                    state.RolloutPercentage = newRollout;
+                if (!changed) 
+                    continue;
+                
+                try
+                {
+                    db.FlagEnvironmentStates.Update(state);
+                    await db.SaveChangesAsync(ct);
                     statesToNotify.Add(state);
+                }
+                catch (DbUpdateConcurrencyException)
+                {
+                    _logger.LogWarning("[MAB] Concurrency conflict detected while shifting traffic for Flag {Flag} in Env {Env}. Discarding update.", state.FeatureFlag.Key, state.EnvironmentId);
+                    db.Entry(state).State = EntityState.Detached;
                 }
             }
 
-            if (statesToNotify.Count > 0)
+            if (statesToNotify.Count <= 0) 
+                continue;
+            
+            foreach (var state in statesToNotify)
             {
-                foreach (var state in statesToNotify)
-                {
-                    var response = state.ToDto();
-                    await notifyHandler.ExecuteAsync(
-                        new NotifyFlagUpdatedCommand(state.EnvironmentId, state.FeatureFlag.Key, response), ct);
-                }
+                var response = state.ToDto();
+                await notifyHandler.ExecuteAsync(
+                    new NotifyFlagUpdatedCommand(
+                        state.EnvironmentId, 
+                        state.FeatureFlag.Key, 
+                        response, 
+                        state.ToSdkDto()), 
+                    ct);
             }
         }
     }
@@ -103,9 +210,10 @@ public class MabTrafficShifterService : IMabTrafficShifterService
         NotifyFlagUpdatedCommandHandler notifyHandler,
         CancellationToken ct)
     {
+        db.SystemActorEmail = "mab-automation@togglemesh.com";
         var stateIds = await db.FlagEnvironmentStates
             .AsNoTracking()
-            .Where(x => x.IsEnabled && x.IsMabEnabled && x.IsExperimentActive && x.ContextPartitionKeys.Length > 0)
+            .Where(x => x.IsEnabled && x.IsMabEnabled && x.IsExperimentActive)
             .Select(x => x.Id)
             .ToListAsync(ct);
 
@@ -116,6 +224,7 @@ public class MabTrafficShifterService : IMabTrafficShifterService
         {
             var states = await db.FlagEnvironmentStates
                 .Include(x => x.FeatureFlag)
+                    .ThenInclude(x => x.Variations)
                 .Include(x => x.Rules)
                 .Include(x => x.ContextualRollouts)
                 .Where(x => chunk.Contains(x.Id))
@@ -127,79 +236,159 @@ public class MabTrafficShifterService : IMabTrafficShifterService
             foreach (var state in states)
             {
                 var metrics = await db.ContextualExperimentMetrics
-                    .Where(x => x.EnvironmentId == state.EnvironmentId && x.FlagKey == state.FeatureFlag.Key)
+                    .Where(x => x.EnvironmentId == state.EnvironmentId && x.FlagKey == state.FeatureFlag.Key && x.EventName == state.MabGoalEvent)
                     .ToListAsync(ct);
 
                 var slices = metrics.Select(x => x.ContextSlice).Distinct().ToList();
                 var hasChanges = false;
+                
+                if (state.ContextPartitionKeys.Length == 0) 
+                    continue;
+                
+                var variations = state.FeatureFlag.Variations.Select(v => v.Id).ToList();
+                if (state.OffVariationId != null && !variations.Contains(state.OffVariationId.Value))
+                    variations.Add(state.OffVariationId.Value);
+
+                if (variations.Count < 2) 
+                    continue;
 
                 foreach (var slice in slices)
                 {
-                    var control = metrics.FirstOrDefault(x => !x.Variant && x.EventName == state.MabGoalEvent && x.ContextSlice == slice);
-                    var treatment = metrics.FirstOrDefault(x => x.Variant && x.EventName == state.MabGoalEvent && x.ContextSlice == slice);
+                    var exposures = new long[variations.Count];
+                    var conversions = new long[variations.Count];
+                    var values = new double[variations.Count];
+                    var sumSquared = new double[variations.Count];
+                    
+                    var validIndices = new List<int>();
+                    for (var i = 0; i < variations.Count; i++)
+                    {
+                        var metric = metrics.Where(x => x.VariationId == variations[i] && x.ContextSlice == slice).OrderByDescending(x => x.LastCalculatedAt).FirstOrDefault();
+                        exposures[i] = metric?.TotalExposures ?? 0;
+                        conversions[i] = metric?.TotalConversions ?? 0;
+                        values[i] = metric?.TotalValue ?? 0;
+                        sumSquared[i] = metric?.SumOfSquaredValues ?? 0;
+                        
+                        if (exposures[i] >= 50) 
+                            validIndices.Add(i);
+                    }
 
-                    if (control == null || treatment == null) continue;
-                    if (control.TotalExposures < 50 || treatment.TotalExposures < 50) continue;
-
-                    double probBBeatsA;
-                    if (state.MabOptimizationType == MabOptimizationType.Conversion)
-                        probBBeatsA = math.CalculateProbabilityBBeatsA(
-                            control.TotalExposures, control.TotalConversions,
-                            treatment.TotalExposures, treatment.TotalConversions);
-                    else
-                        probBBeatsA = math.CalculateProbabilityBBeatsA_Revenue(
-                            control.TotalExposures, control.TotalValue, control.SumOfSquaredValues,
-                            treatment.TotalExposures, treatment.TotalValue, treatment.SumOfSquaredValues);
-
-                    int calculatedRollout = (int)Math.Round(probBBeatsA * 100);
-                    calculatedRollout = Math.Clamp(calculatedRollout, 0, 100);
-
-                    state.ContextualRollouts ??= new List<ContextualRollout>();
-
-                    var existingRollout = state.ContextualRollouts.FirstOrDefault(r => r.ContextSlice == slice);
-
-                    if (existingRollout != null && !existingRollout.IsAutoManaged)
+                    if (validIndices.Count == 0) 
                         continue;
 
-                    if (existingRollout == null || existingRollout.RolloutPercentage != calculatedRollout)
+                    var probs = state.MabOptimizationType == MabOptimizationType.Conversion 
+                        ? math.CalculateDirichletProbabilities(exposures, conversions) 
+                        : math.CalculateDirichletProbabilities_Revenue(
+                            exposures, values, sumSquared);
+
+                    double validProbsSum = 0;
+                    for (var i = 0; i < variations.Count; i++)
                     {
-                        if (existingRollout == null)
-                        {
-                            state.ContextualRollouts.Add(new ContextualRollout
-                            {
-                                ContextSlice = slice,
-                                RolloutPercentage = calculatedRollout,
-                                IsAutoManaged = true
-                            });
-                        }
+                        if (!validIndices.Contains(i)) probs[i] = 0;
+                        validProbsSum += probs[i];
+                    }
+
+                    if (validProbsSum > 0)
+                        for (var i = 0; i < variations.Count; i++) probs[i] /= validProbsSum;
+                    else
+                        for (var i = 0; i < variations.Count; i++) 
+                            probs[i] = validIndices.Contains(i) 
+                                ? 1.0 / validIndices.Count 
+                                : 0;
+                    
+                    var floor = state.MabExplorationFloor / 100.0;
+                    var n = variations.Count;
+                    if (floor * n > 1.0) floor = 1.0 / n;
+
+                    var newRollout = new List<VariationWeight>();
+                    var remainingWeight = 10000;
+                    
+                    for (var i = 0; i < n; i++)
+                    {
+                        if (i == n - 1)
+                            newRollout.Add(
+                                new VariationWeight
+                                {
+                                    VariationId = variations[i], 
+                                    Weight = remainingWeight
+                                });
                         else
                         {
-                            existingRollout.RolloutPercentage = calculatedRollout;
+                            var newP = floor + probs[i] * (1.0 - n * floor);
+                            var weight = (int)Math.Round(newP * 10000);
+                            if (weight > remainingWeight) weight = remainingWeight;
+                            newRollout.Add(new VariationWeight { VariationId = variations[i], Weight = weight });
+                            remainingWeight -= weight;
+                        }
+                    }
+
+                    var existingRollout = state.ContextualRollouts
+                        .FirstOrDefault(r => r.ContextSlice == slice);
+
+                    if (existingRollout is { IsAutoManaged: false })
+                        continue;
+
+                    var shouldUpdate = existingRollout == null || 
+                                       existingRollout.Rollout.Count != newRollout.Count;
+                    if (!shouldUpdate)
+                        foreach (var r in existingRollout!.Rollout)
+                        {
+                            var nr = newRollout.FirstOrDefault(x => x.VariationId == r.VariationId);
+                            if (nr != null && Math.Abs(nr.Weight - r.Weight) <= 50) 
+                                continue;
+                            
+                            shouldUpdate = true;
+                            break;
                         }
 
-                        _logger.LogInformation("[Contextual MAB] Flag {Flag} Context {Slice} rollout adjusted to {Rollout}%", state.FeatureFlag.Key, slice, calculatedRollout);
-                        hasChanges = true;
+                    if (!shouldUpdate) 
+                        continue;
+                    
+                    if (existingRollout != null)
+                    {
+                        state.ContextualRollouts.Remove(existingRollout);
+                        db.ContextualRollouts.Remove(existingRollout);
                     }
+
+                    state.ContextualRollouts.Add(new ContextualRollout
+                    {
+                        FlagEnvironmentStateId = state.Id,
+                        ContextSlice = slice,
+                        Rollout = newRollout,
+                        IsAutoManaged = true
+                    });
+
+                    _logger.LogDebug("[Contextual MAB] Flag {Flag} Context {Slice} rollout adjusted", state.FeatureFlag.Key, slice);
+                    hasChanges = true;
                 }
 
-                if (hasChanges)
+                if (!hasChanges) 
+                    continue;
+                
+                try
                 {
+                    db.FlagEnvironmentStates.Update(state);
                     await db.SaveChangesAsync(ct);
                     statesToNotify.Add(state);
                 }
+                catch (DbUpdateConcurrencyException)
+                {
+                    _logger.LogWarning("[Contextual MAB] Concurrency conflict detected while shifting traffic for Flag {Flag} in Env {Env}. Discarding update.", state.FeatureFlag.Key, state.EnvironmentId);
+                    db.Entry(state).State = EntityState.Detached;
+                }
             }
 
-            if (statesToNotify.Count > 0)
+            if (statesToNotify.Count <= 0) 
+                continue;
+            
+            foreach (var state in statesToNotify)
             {
-                foreach (var state in statesToNotify)
-                {
-                    var response = state.ToDto();
-                    await notifyHandler.ExecuteAsync(new NotifyFlagUpdatedCommand(
-                        state.EnvironmentId,
-                        state.FeatureFlag.Key,
-                        response
-                    ), ct);
-                }
+                var response = state.ToDto();
+                await notifyHandler.ExecuteAsync(new NotifyFlagUpdatedCommand(
+                    state.EnvironmentId,
+                    state.FeatureFlag.Key,
+                    response,
+                    state.ToSdkDto()
+                ), ct);
             }
         }
     }

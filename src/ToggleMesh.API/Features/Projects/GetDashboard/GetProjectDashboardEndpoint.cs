@@ -114,7 +114,7 @@ public class GetProjectDashboardEndpoint : ToggleEndpointWithoutRequest<ProjectD
             .GroupBy(b => new { b.TimestampBucket.Year, b.TimestampBucket.Month, b.TimestampBucket.Day, b.TimestampBucket.Hour })
             .Select(g => new { 
                 Time = new DateTime(g.Key.Year, g.Key.Month, g.Key.Day, g.Key.Hour, 0, 0, DateTimeKind.Utc), 
-                Count = g.Sum(b => b.TrueCount + b.FalseCount) 
+                Count = g.Sum(b => b.Count) 
             })
             .ToListAsync(ct);
 
@@ -134,12 +134,31 @@ public class GetProjectDashboardEndpoint : ToggleEndpointWithoutRequest<ProjectD
 
         var insights = new List<DashboardExperimentInsightDto>();
 
+        var activeStates = await _db.FlagEnvironmentStates
+            .Include(x => x.FeatureFlag)
+                .ThenInclude(x => x.Variations)
+            .Where(x => environmentIds.Contains(x.EnvironmentId) && x.IsExperimentActive)
+            .ToListAsync(ct);
+
         foreach (var group in metrics)
         {
-            var control = group.FirstOrDefault(g => !g.Variant);
-            var treatment = group.FirstOrDefault(g => g.Variant);
+            if (group.Count() < 2) 
+                continue;
 
-            if (control != null && treatment != null && control.TotalExposures > 50 && treatment.TotalExposures > 50)
+            var state = activeStates.FirstOrDefault(x => x.EnvironmentId == group.Key.EnvironmentId && x.FeatureFlag.Key == group.Key.FlagKey);
+            if (state == null || state.FeatureFlag.Variations.Count < 2) 
+                continue;
+
+            var baselineVariationId = state.FeatureFlag.Variations.First().Id;
+            var control = group.FirstOrDefault(g => g.VariationId == baselineVariationId);
+            
+            var treatments = group.Where(g => g.VariationId != baselineVariationId).ToList();
+            if (control == null || treatments.Count == 0) 
+                continue;
+            
+            var treatment = treatments.OrderByDescending(g => g.TotalExposures).First();
+
+            if (control.TotalExposures > 50 && treatment.TotalExposures > 50)
             {
                 var prob = _math.CalculateProbabilityBBeatsA(
                     control.TotalExposures, control.TotalConversions,
@@ -150,7 +169,6 @@ public class GetProjectDashboardEndpoint : ToggleEndpointWithoutRequest<ProjectD
                     treatment.TotalExposures, treatment.TotalConversions);
 
                 if (prob is >= 0.70 or <= 0.30)
-                {
                     insights.Add(new DashboardExperimentInsightDto(
                         group.Key.FlagKey,
                         group.Key.EventName,
@@ -159,7 +177,6 @@ public class GetProjectDashboardEndpoint : ToggleEndpointWithoutRequest<ProjectD
                         prob,
                         uplift
                     ));
-                }
             }
         }
 

@@ -64,8 +64,8 @@ public class FlagRulesApiTests : IAsyncLifetime
             Key = "rule_flag_1",
             Rules =
             [
-                new RuleDto(0, "Region", "InList", "EU,US"),
-                new RuleDto(0, "Plan", "Equals", "Premium")
+                new RuleInput(0, "Region", "InList", "EU,US"),
+                new RuleInput(0, "Plan", "Equals", "Premium")
             ]
         };
 
@@ -91,17 +91,16 @@ public class FlagRulesApiTests : IAsyncLifetime
         var createRequest = new CreateFlagRequest
         {
             Key = "rule_flag_update",
-            Rules = [new RuleDto(0, "Age", "GreaterThan", "18")]
+            Rules = [new RuleInput(0, "Age", "GreaterThan", "18")]
         };
         await _client.PostAsJsonAsync($"/api/v1/projects/{projectId}/flags", createRequest);
 
         var updateRequest = new UpdateFlagRequest
         {
-            IsEnabled = true,
             Rules =
             [
-                new RuleDto(0, "Country", "Equals", "CA"),
-                new RuleDto(0, "Device", "StartsWith", "Mobile")
+                new RuleInput(0, "Country", "Equals", "CA"),
+                new RuleInput(0, "Device", "StartsWith", "Mobile")
             ]
         };
 
@@ -113,7 +112,7 @@ public class FlagRulesApiTests : IAsyncLifetime
 
         var result = await updateResponse.Content.ReadFromJsonAsync<GetFlagResponse>();
         result.Should().NotBeNull();
-        result.IsEnabled.Should().BeTrue();
+        result.IsEnabled.Should().BeFalse();
         result.Rules.Should().HaveCount(2);
         result.Rules.Should().NotContain(r => r.Attribute == "Age");
         result.Rules.Should().Contain(r => r.Attribute == "Country" && r.Value == "CA");

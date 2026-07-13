@@ -135,7 +135,7 @@ export function ProjectExperimentsPage() {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {(!experiments || experiments.length === 0) ? (
+                                {(!experiments || experiments.filter(e => e.eventName && !e.eventName.startsWith('$')).length === 0) ? (
                                     <TableRow>
                                         <TableCell colSpan={6} className="p-0">
                                             <EmptyState
@@ -146,7 +146,7 @@ export function ProjectExperimentsPage() {
                                         </TableCell>
                                     </TableRow>
                                 ) : (
-                                    experiments.map((exp, index) => {
+                                    experiments.filter(e => e.eventName && !e.eventName.startsWith('$')).map((exp, index) => {
                                         const prob = Math.round(exp.probabilityToBeatBaseline * 100);
                                         const uplift = exp.isRevenueBased
                                             ? Math.round(exp.expectedValueUplift * 100)
@@ -260,14 +260,61 @@ export function ProjectExperimentsPage() {
                                     const iterationGoalEvent = configSnapshot.MabGoalEvent || configSnapshot.mabGoalEvent;
 
                                     const metrics = Array.isArray(snapshot?.Global) ? snapshot.Global : Array.isArray(snapshot) ? snapshot : [];
-                                    let primary = null;
+                                    let primary: any = null;
+                                    let baseCr = 0, topCr = 0, uplift = 0, baseName = 'A', topName = 'B';
 
                                     if (Array.isArray(metrics) && metrics.length > 0) {
                                         if (iterationGoalEvent) {
                                             primary = metrics.find((m: any) => (m.EventName || m.eventName) === iterationGoalEvent);
+                                            if (!primary) {
+                                                const exposureMetric = metrics.find((m: any) => (m.EventName || m.eventName) === '$exposure');
+                                                if (exposureMetric) {
+                                                    primary = JSON.parse(JSON.stringify(exposureMetric));
+                                                    if (primary.EventName !== undefined) primary.EventName = iterationGoalEvent;
+                                                    if (primary.eventName !== undefined) primary.eventName = iterationGoalEvent;
+                                                }
+                                            }
                                         }
                                         if (!primary) {
-                                            primary = [...metrics].sort((a: any, b: any) => (b.ControlExposures || 0) - (a.ControlExposures || 0))[0];
+                                            const nonSystem = metrics.filter((m: any) => !(m.EventName || m.eventName).startsWith('$'));
+                                            const sortByExp = (arr: any[]) => [...arr].sort((a: any, b: any) => {
+                                                const varsA = a.variations || a.Variations;
+                                                const expA = varsA && varsA.length ? varsA.reduce((s: number, v: any) => s + (v.exposures ?? v.Exposures ?? 0), 0) : (a.ControlExposures || a.controlExposures || 0) + (a.TreatmentExposures || a.treatmentExposures || 0);
+                                                const varsB = b.variations || b.Variations;
+                                                const expB = varsB && varsB.length ? varsB.reduce((s: number, v: any) => s + (v.exposures ?? v.Exposures ?? 0), 0) : (b.ControlExposures || b.controlExposures || 0) + (b.TreatmentExposures || b.treatmentExposures || 0);
+                                                return expB - expA;
+                                            });
+                                            primary = nonSystem.length > 0 ? sortByExp(nonSystem)[0] : sortByExp(metrics)[0];
+                                        }
+
+                                        if (primary) {
+                                            const variations = primary.variations || primary.Variations || [];
+                                            if (variations.length > 0) {
+                                                const baseline = [...variations].sort((a: any, b: any) => (b.exposures ?? b.Exposures ?? 0) - (a.exposures ?? a.Exposures ?? 0))[0];
+                                                const others = variations.filter((v: any) => (v.variationId || v.VariationId) !== (baseline.variationId || baseline.VariationId));
+                                                const topPerformer = others.length > 0 ? [...others].sort((a: any, b: any) => (b.expectedUplift ?? b.ExpectedUplift ?? 0) - (a.expectedUplift ?? a.ExpectedUplift ?? 0))[0] : null;
+
+                                                const baseExp = baseline.exposures ?? baseline.Exposures ?? 0;
+                                                const baseConv = baseline.conversions ?? baseline.Conversions ?? 0;
+                                                baseCr = baseExp > 0 ? baseConv / baseExp : 0;
+
+                                                if (topPerformer) {
+                                                    const topExp = topPerformer.exposures ?? topPerformer.Exposures ?? 0;
+                                                    const topConv = topPerformer.conversions ?? topPerformer.Conversions ?? 0;
+                                                    topCr = topExp > 0 ? topConv / topExp : 0;
+                                                    uplift = topPerformer.expectedUplift ?? topPerformer.ExpectedUplift ?? 0;
+                                                }
+                                                baseName = "Baseline";
+                                                topName = "Top";
+                                            } else {
+                                                baseCr = primary.ControlConversionRate ?? primary.controlConversionRate ?? 0;
+                                                topCr = primary.TreatmentConversionRate ?? primary.treatmentConversionRate ?? 0;
+                                                uplift = primary.ExpectedUplift ?? primary.expectedUplift ?? 0;
+                                            }
+
+                                            if (!metrics.find((m: any) => m === primary)) {
+                                                baseCr = 0; topCr = 0; uplift = 0;
+                                            }
                                         }
                                     }
 
@@ -321,15 +368,15 @@ export function ProjectExperimentsPage() {
                                             <TableCell>
                                                 {primary ? (
                                                     <div className="flex flex-col gap-1 text-xs">
-                                                        <span className={`font-bold ${primary.ExpectedUplift > 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                                                            {primary.ExpectedUplift > 0 ? '+' : ''}{(primary.ExpectedUplift * 100).toFixed(1)}% uplift
+                                                        <span className={`font-bold ${uplift > 0 ? 'text-emerald-500' : uplift < 0 ? 'text-rose-500' : 'text-muted-foreground'}`}>
+                                                            {uplift > 0 ? '+' : ''}{(uplift * 100).toFixed(1)}% uplift
                                                         </span>
                                                         <div className="hidden sm:flex items-center gap-2">
                                                             <span className="text-muted-foreground">
-                                                                A: {(primary.ControlConversionRate * 100).toFixed(1)}%
+                                                                {baseName}: {(baseCr * 100).toFixed(1)}%
                                                             </span>
                                                             <span className="text-muted-foreground">
-                                                                B: {(primary.TreatmentConversionRate * 100).toFixed(1)}%
+                                                                {topName}: {(topCr * 100).toFixed(1)}%
                                                             </span>
                                                         </div>
                                                     </div>

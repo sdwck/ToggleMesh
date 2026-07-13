@@ -1,4 +1,4 @@
-﻿using Spectre.Console;
+using Spectre.Console;
 using Spectre.Console.Cli;
 using ToggleMesh.CLI.Core;
 using ToggleMesh.CLI.Core.Parsers;

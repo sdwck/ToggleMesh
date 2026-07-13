@@ -82,9 +82,11 @@ public class DashboardAndMetricsE2ETests : IAsyncLifetime
     {
         var (projectId, environmentId, flagKey, apiKey) = await SeedDataAsync("dashboard_metrics_flag");
         
+        var trueVarId = Guid.NewGuid();
+        var falseVarId = Guid.NewGuid();
         var payload = new List<MetricPayloadDto>
         {
-            new(flagKey, 10, 5)
+            new(flagKey, [new MetricVariationPayloadDto(trueVarId, 10), new MetricVariationPayloadDto(falseVarId, 5)])
         };
 
         for (var i = 0; i < 3; i++)
@@ -107,14 +109,14 @@ public class DashboardAndMetricsE2ETests : IAsyncLifetime
         for (var i = 0; i < 20; i++)
         {
             _factory.TimeProvider.Advance(TimeSpan.FromSeconds(5));
-            var totalTrue = await db.FlagMetricBuckets.Where(b => b.FlagKey == flagKey).SumAsync(b => b.TrueCount);
+            var totalTrue = await db.FlagMetricBuckets.Where(b => b.FlagKey == flagKey && b.VariationId == trueVarId).SumAsync(b => (long?)b.Count) ?? 0;
             if (totalTrue == 30)
                 break;
             await Task.Delay(200);
         }
 
-        var trueCount = await db.FlagMetricBuckets.Where(b => b.FlagKey == flagKey).SumAsync(b => b.TrueCount);
-        var falseCount = await db.FlagMetricBuckets.Where(b => b.FlagKey == flagKey).SumAsync(b => b.FalseCount);
+        var trueCount = await db.FlagMetricBuckets.Where(b => b.FlagKey == flagKey && b.VariationId == trueVarId).SumAsync(b => (long?)b.Count) ?? 0;
+        var falseCount = await db.FlagMetricBuckets.Where(b => b.FlagKey == flagKey && b.VariationId == falseVarId).SumAsync(b => (long?)b.Count) ?? 0;
 
         trueCount.Should().Be(30, "We sent 3 batches of 10 true evaluations");
         falseCount.Should().Be(15, "We sent 3 batches of 5 false evaluations");

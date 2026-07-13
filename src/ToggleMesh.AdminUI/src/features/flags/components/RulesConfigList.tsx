@@ -5,51 +5,64 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { FormControl, FormField, FormItem } from '@/components/ui/form';
 import { useFieldArray } from 'react-hook-form';
 import type { Control, UseFormReturn } from 'react-hook-form';
+import { RolloutConfig } from './RolloutConfig';
+import { getDefaultRollout } from '../utils';
 
 interface RulesConfigListProps {
     form: UseFormReturn<any>;
     control: Control<any>;
     operators: string[];
     isLoadingOperators: boolean;
+    variations: { id: string; value: string }[];
     name?: string;
     canEditEnv: boolean;
     disabled?: boolean;
     emptyMessage?: string;
     showInSegmentSpecialHandling?: boolean;
+    type?: number;
 }
 
-export function RulesConfigList({ 
-    form, 
-    control, 
-    operators, 
-    isLoadingOperators, 
-    name = 'rules', 
+export function RulesConfigList({
+    form,
+    control,
+    operators,
+    isLoadingOperators,
+    variations,
+    name = 'rules',
     canEditEnv,
     disabled = false,
     emptyMessage = "No rules defined.",
-    showInSegmentSpecialHandling = false
+    showInSegmentSpecialHandling = false,
+    type
 }: RulesConfigListProps) {
     const { fields, append, remove } = useFieldArray({
         control,
         name: name,
     });
 
+    const defaultRollout = getDefaultRollout(variations);
+
+    const getNextGroupId = () => {
+        const currentRules = form.getValues(name) || [];
+        const maxId = currentRules.reduce((max: number, rule: any) => Math.max(max, Number(rule.groupId) || 0), 0);
+        return maxId + 1;
+    };
+
     const addConditionOR = () => {
-        const maxGroupId = fields.length > 0 ? Math.max(...fields.map((f: any) => f.groupId)) : -1;
-        append({ groupId: maxGroupId + 1, attribute: '', operator: 'Equals', value: '' });
+        append({ priority: 0, groupId: getNextGroupId(), attribute: '', operator: 'Equals', value: '', rollout: defaultRollout });
     };
 
     const addRuleAND = (groupId: number) => {
-        append({ groupId, attribute: '', operator: 'Equals', value: '' });
+        append({ priority: 0, groupId, attribute: '', operator: 'Equals', value: '', rollout: defaultRollout });
     };
 
     const groupedRules = fields.reduce((acc, field: any, index) => {
         const groupId = form.getValues(`${name}.${index}.groupId`);
-        if (groupId === undefined) return acc;
+        if (!groupId) return acc;
         if (!acc[groupId]) acc[groupId] = [];
         acc[groupId].push({ ...field, index });
         return acc;
-    }, {} as Record<number, any[]>);
+    }, {} as Record<string, any[]>);
 
     const isFullyDisabled = !canEditEnv || disabled;
 
@@ -65,8 +78,7 @@ export function RulesConfigList({
             </div>
 
             <div className="space-y-6 mt-4">
-                {Object.entries(groupedRules).map(([groupIdStr, groupFields], groupIndex) => {
-                    const groupId = parseInt(groupIdStr);
+                {Object.entries(groupedRules).map(([groupId, groupFields], groupIndex) => {
                     return (
                         <div key={groupId} className="relative">
                             {groupIndex > 0 && (
@@ -139,58 +151,86 @@ export function RulesConfigList({
                                                 />
                                             </div>
 
-                                            <div className="flex-1 w-full space-y-2">
-                                                <FormField
-                                                    control={control}
-                                                    name={`${name}.${field.index}.value`}
-                                                    render={({ field: inputField }) => (
-                                                        <FormItem>
-                                                            <FormControl>
-                                                                <Input
-                                                                    placeholder="Value"
-                                                                    disabled={isFullyDisabled}
-                                                                    onKeyDown={(e) => {
-                                                                        if (e.key === 'Enter') e.preventDefault();
-                                                                    }}
-                                                                    {...inputField}
-                                                                />
-                                                            </FormControl>
-                                                        </FormItem>
-                                                    )}
-                                                />
-                                            </div>
+                                            <div className="flex gap-2 w-full flex-col sm:flex-row sm:w-auto flex-1 items-start">
+                                                <div className="flex-1 w-full space-y-2">
+                                                    <FormField
+                                                        control={control}
+                                                        name={`${name}.${field.index}.value`}
+                                                        render={({ field: inputField }) => (
+                                                            <FormItem>
+                                                                <FormControl>
+                                                                    <Input
+                                                                        placeholder="Value"
+                                                                        disabled={isFullyDisabled}
+                                                                        onKeyDown={(e) => {
+                                                                            if (e.key === 'Enter') e.preventDefault();
+                                                                        }}
+                                                                        {...inputField}
+                                                                    />
+                                                                </FormControl>
+                                                            </FormItem>
+                                                        )}
+                                                    />
+                                                </div>
 
-                                            {!isFullyDisabled && (
-                                                <Button
-                                                    type="button"
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    className="text-muted-foreground hover:text-destructive shrink-0 absolute right-0 top-0 sm:static"
-                                                    onClick={() => remove(field.index)}
-                                                >
-                                                    <Trash2 className="h-4 w-4" />
-                                                </Button>
-                                            )}
+                                                {!isFullyDisabled && (
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="text-muted-foreground hover:text-destructive shrink-0 self-end sm:self-start mt-2 sm:mt-0"
+                                                        onClick={() => remove(field.index)}
+                                                        disabled={isFullyDisabled}
+                                                    >
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </Button>
+                                                )}
+                                            </div>
                                         </div>
-                                        
+
                                         {(form.formState.errors as any)?.[name]?.[field.index] && (
                                             <p className="text-xs text-destructive mt-1">Please fill all fields.</p>
                                         )}
                                     </div>
                                 ))}
-                                
-                                {!isFullyDisabled && (
-                                    <div className="pt-2">
-                                        <Button
-                                            type="button"
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() => addRuleAND(groupId)}
-                                        >
-                                            <Plus className="mr-1 h-3 w-3" /> Add Rule (AND)
-                                        </Button>
+
+                                <div className="pt-2 border-t border-border/40 space-y-4">
+                                    <FormField
+                                        control={control}
+                                        name={`${name}.${groupFields[0].index}.rollout`}
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <RolloutConfig
+                                                    type={type}
+                                                    variations={variations}
+                                                    rollout={field.value || []}
+                                                    onChange={field.onChange}
+                                                    disabled={isFullyDisabled}
+                                                />
+                                            </FormItem>
+                                        )}
+                                    />
+                                    <div className="flex justify-between items-center">
+                                        <div className="flex gap-2">
+                                            {!isFullyDisabled && (
+                                                <Button type="button" variant="secondary" size="sm" onClick={() => addRuleAND(Number(groupId))}>
+                                                    <Plus className="mr-2 h-4 w-4" /> Add Condition (AND)
+                                                </Button>
+                                            )}
+                                        </div>
+                                        {!isFullyDisabled && (
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="sm"
+                                                className="text-muted-foreground hover:text-destructive"
+                                                onClick={() => remove(groupFields.map((f: any) => f.index))}
+                                            >
+                                                <Trash2 className="mr-2 h-4 w-4" /> Delete Block
+                                            </Button>
+                                        )}
                                     </div>
-                                )}
+                                </div>
                             </div>
                         </div>
                     );

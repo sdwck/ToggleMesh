@@ -31,13 +31,13 @@ public class ClickHouseAnalyticsSink : IAnalyticsStorageSink
             
             await bulkCopy.InitAsync();
             
-            var rows = exposures.Select(e => new object[]
+            var rows = exposures.Select(e => new[]
             {
                 e.Id,
                 e.EnvironmentId,
                 e.FlagKey,
                 e.Identity,
-                e.Variant,
+                e.VariationId,
                 e.Properties?.RootElement.ToString() ?? (object)string.Empty,
                 e.Timestamp.UtcDateTime
             }).ToArray();

@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
-import { 
-    useProjectWebhooks, 
-    useCreateWebhook, 
-    useDeleteWebhook, 
-    useUpdateWebhookStatus 
+import {
+    useProjectWebhooks,
+    useCreateWebhook,
+    useDeleteWebhook,
+    useUpdateWebhookStatus
 } from '@/api/queries';
 import { WebhookStatus, type Webhook } from '@/api/types';
 import { Card } from '@/components/ui/card';
@@ -11,7 +11,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Trash2, Plus, Copy, Globe, Activity, Settings, Pause, Play } from 'lucide-react';
@@ -19,6 +18,7 @@ import { toast } from 'sonner';
 import { EmptyState } from "@/components/EmptyState.tsx";
 import { WebhookDeliveriesModal } from './WebhookDeliveriesModal';
 import { EditWebhookModal } from './EditWebhookModal';
+import { EventSelectionCheckboxes } from './EventSelectionCheckboxes';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
@@ -34,6 +34,7 @@ const createWebhookSchema = z.object({
 type CreateWebhookValues = z.infer<typeof createWebhookSchema>;
 
 export function ProjectSettingsWebhooksTab({ projectId }: { projectId: string }) {
+
     const { data: webhooks, isLoading: isWebhooksLoading } = useProjectWebhooks(projectId);
     const createWebhook = useCreateWebhook(projectId);
     const deleteWebhook = useDeleteWebhook(projectId);
@@ -184,51 +185,7 @@ export function ProjectSettingsWebhooksTab({ projectId }: { projectId: string })
                                                 )}
                                             />
                                         </div>
-                                        <div className="space-y-2">
-                                            <label className="text-sm font-medium">Events</label>
-                                            <FormField
-                                                control={webhookForm.control}
-                                                name="events"
-                                                render={() => (
-                                                    <FormItem>
-                                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                                            {['flag.created', 'flag.updated', 'flag.deleted', 'experiment.winner_found', 'experiment.degraded'].map((evt) => (
-                                                                <FormField
-                                                                    key={evt}
-                                                                    control={webhookForm.control}
-                                                                    name="events"
-                                                                    render={({ field }) => {
-                                                                        return (
-                                                                            <FormItem
-                                                                                key={evt}
-                                                                                className="flex flex-row items-start space-x-2 space-y-0"
-                                                                            >
-                                                                                <FormControl>
-                                                                                    <Checkbox
-                                                                                        checked={field.value?.includes(evt)}
-                                                                                        onCheckedChange={(checked) => {
-                                                                                            return checked
-                                                                                                ? field.onChange([...field.value, evt])
-                                                                                                : field.onChange(
-                                                                                                    field.value?.filter((value) => value !== evt)
-                                                                                                )
-                                                                                        }}
-                                                                                    />
-                                                                                </FormControl>
-                                                                                <label className="text-xs font-mono font-normal">
-                                                                                    {evt}
-                                                                                </label>
-                                                                            </FormItem>
-                                                                        )
-                                                                    }}
-                                                                />
-                                                            ))}
-                                                        </div>
-                                                        <FormMessage />
-                                                    </FormItem>
-                                                )}
-                                            />
-                                        </div>
+                                        <EventSelectionCheckboxes form={webhookForm} name="events" title="Events" />
                                     </div>
                                     <DialogFooter className="mt-4">
                                         <Button type="button" variant="outline" onClick={() => setIsWebhookOpen(false)}>Cancel</Button>

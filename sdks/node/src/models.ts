@@ -12,24 +12,43 @@ export interface ToggleMeshOptions {
 
 export interface ToggleMeshUser {
     identity: string;
-    context?: Record<string, string>;
+    context?: Record<string, any>;
+}
+
+export interface EvalOptions {
+    identity?: string;
+    context?: Record<string, any>;
+}
+
+export interface TrackOptions extends EvalOptions {
+    value?: number;
+}
+
+export interface VariationWeight {
+    variationId: string;
+    weight: number;
 }
 
 export interface RuleDto {
+    priority: number;
     groupId: number;
     attribute: string;
     operator: string;
     value: string;
+    rollout: VariationWeight[];
 }
 
 export interface FeatureFlagDto {
     key: string;
     isEnabled: boolean;
     isExperimentActive: boolean;
-    rolloutPercentage?: number;
-    contextPartitionKeys?: string[];
-    contextualRollouts?: Record<string, number>;
     rules: RuleDto[];
+    offVariationId?: string;
+    fallthroughRollout: VariationWeight[];
+    variations: Record<string, string>;
+    contextualRollouts?: Record<string, VariationWeight[]>;
+    contextPartitionKeys?: string[];
+    individualTargets?: Record<string, string>;
 }
 
 export interface SegmentDto {

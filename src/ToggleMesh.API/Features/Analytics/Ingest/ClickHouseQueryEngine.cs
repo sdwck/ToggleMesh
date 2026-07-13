@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using ClickHouse.Client.ADO;
 using Microsoft.EntityFrameworkCore;
@@ -26,13 +27,17 @@ public class ClickHouseQueryEngine : IAnalyticsQueryEngine
         await connection.OpenAsync(ct);
         var activeRollouts = await _db.FlagEnvironmentStates
             .Include(f => f.FeatureFlag)
-            .Select(f => new { f.EnvironmentId, f.FeatureFlag.Key })
+            .Where(f => f.IsExperimentActive)
+            .Select(f => new { f.EnvironmentId, f.FeatureFlag.Key, f.ExperimentStartedAt })
             .ToListAsync(ct);
 
         if (activeRollouts.Count == 0) 
             return;
 
-        var rolloutTuples = string.Join(",", activeRollouts.Select(r => $"('{r.EnvironmentId}', '{r.Key}')"));
+        var conditions = activeRollouts.Select(r => 
+            $"(toString(EnvironmentId) = '{r.EnvironmentId}' AND FlagKey = '{r.Key.Replace("'", "''")}' AND Timestamp >= '{r.ExperimentStartedAt?.ToString("yyyy-MM-dd HH:mm:ss") ?? "1970-01-01 00:00:00"}')"
+        );
+        var whereClause = string.Join(" OR ", conditions);
 
         var query = $@"
             WITH exposed_users AS (
@@ -40,35 +45,36 @@ public class ClickHouseQueryEngine : IAnalyticsQueryEngine
                     EnvironmentId, 
                     FlagKey, 
                     Identity, 
-                    Variant, 
+                    VariationId, 
                     MIN(Timestamp) as FirstExposureTimestamp
                 FROM AnalyticsExposures
-                WHERE (toString(EnvironmentId), FlagKey) IN ({rolloutTuples})
-                GROUP BY EnvironmentId, FlagKey, Identity, Variant
+                WHERE {whereClause}
+                GROUP BY EnvironmentId, FlagKey, Identity, VariationId
             ),
         conversions AS (
             SELECT
                 e.EnvironmentId,
                 e.FlagKey,
                 t.EventName,
-                e.Variant,
-                COUNT(DISTINCT e.Identity) as TotalConversions,
-                SUM(t.Value) as TotalValue
+                e.VariationId,
+                uniqExact(t.Identity) as TotalConversions,
+                SUM(t.Value) as TotalValue,
+                SUM(t.Value * t.Value) as SumOfSquaredValues
             FROM exposed_users e
             JOIN AnalyticsTracks t 
               ON e.EnvironmentId = t.EnvironmentId 
              AND e.Identity = t.Identity
             WHERE t.Timestamp >= e.FirstExposureTimestamp
-            GROUP BY e.EnvironmentId, e.FlagKey, t.EventName, e.Variant
+            GROUP BY e.EnvironmentId, e.FlagKey, t.EventName, e.VariationId
         ),
         exposures_count AS (
             SELECT 
                 EnvironmentId,
                 FlagKey,
-                Variant,
-                COUNT(DISTINCT Identity) as TotalExposures
+                VariationId,
+                uniqExact(Identity) as TotalExposures
             FROM exposed_users
-            GROUP BY EnvironmentId, FlagKey, Variant
+            GROUP BY EnvironmentId, FlagKey, VariationId
         ),
         all_events AS (
             SELECT DISTINCT EnvironmentId, FlagKey, EventName 
@@ -78,7 +84,7 @@ public class ClickHouseQueryEngine : IAnalyticsQueryEngine
             SELECT 
                 e.EnvironmentId, 
                 e.FlagKey, 
-                e.Variant, 
+                e.VariationId, 
                 e.TotalExposures, 
                 ae.EventName
             FROM exposures_count e
@@ -90,21 +96,23 @@ public class ClickHouseQueryEngine : IAnalyticsQueryEngine
             ee.EnvironmentId,
             ee.FlagKey,
             ee.EventName,
-            ee.Variant,
+            ee.VariationId,
             ee.TotalExposures,
-            COALESCE(c.TotalConversions, 0) as TotalConversions,
-            COALESCE(c.TotalValue, 0) as TotalValue
+            COALESCE(c.TotalConversions, toUInt64(0)) as TotalConversions,
+            COALESCE(c.TotalValue, toFloat64(0)) as TotalValue,
+            COALESCE(c.SumOfSquaredValues, toFloat64(0)) as SumOfSquaredValues
         FROM exposures_events ee
         LEFT JOIN conversions c 
           ON ee.EnvironmentId = c.EnvironmentId 
          AND ee.FlagKey = c.FlagKey 
-         AND ee.Variant = c.Variant
+         AND ee.VariationId = c.VariationId
          AND ee.EventName = c.EventName
         ";
 
         await using var command = connection.CreateCommand();
         command.CommandText = query;
 
+        var sw = Stopwatch.StartNew();
         var metrics = new List<ExperimentMetric>();
         await using var reader = await command.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
@@ -114,24 +122,29 @@ public class ClickHouseQueryEngine : IAnalyticsQueryEngine
                 EnvironmentId = reader.GetGuid(0),
                 FlagKey = reader.GetString(1),
                 EventName = reader.GetString(2),
-                Variant = reader.GetBoolean(3),
+                VariationId = reader.GetGuid(3),
                 TotalExposures = Convert.ToInt64(reader.GetValue(4)),
                 TotalConversions = Convert.ToInt64(reader.GetValue(5)),
                 LastCalculatedAt = DateTimeOffset.UtcNow
             });
         }
+        sw.Stop();
+        _logger.LogDebug("[ClickHouseQueryEngine.AggregateMetricsAsync] ClickHouse query and parse took {Ms}ms", sw.ElapsedMilliseconds);
 
         if (metrics.Count > 0)
         {
+            var envIds = metrics.Select(m => m.EnvironmentId).Distinct().ToList();
+            var flagKeys = metrics.Select(m => m.FlagKey).Distinct().ToList();
+
+            var existingMetrics = await _db.ExperimentMetrics
+                .Where(x => envIds.Contains(x.EnvironmentId) && flagKeys.Contains(x.FlagKey))
+                .ToDictionaryAsync(x => $"{x.EnvironmentId}_{x.FlagKey}_{x.EventName}_{x.VariationId}", ct);
+
             foreach (var m in metrics)
             {
-                var existing = await _db.ExperimentMetrics.FirstOrDefaultAsync(x => 
-                    x.EnvironmentId == m.EnvironmentId && 
-                    x.FlagKey == m.FlagKey && 
-                    x.EventName == m.EventName && 
-                    x.Variant == m.Variant, ct);
-
-                if (existing != null)
+                var key = $"{m.EnvironmentId}_{m.FlagKey}_{m.EventName}_{m.VariationId}";
+                
+                if (existingMetrics.TryGetValue(key, out var existing))
                 {
                     existing.TotalExposures = m.TotalExposures;
                     existing.TotalConversions = m.TotalConversions;
@@ -143,7 +156,10 @@ public class ClickHouseQueryEngine : IAnalyticsQueryEngine
                 }
             }
 
+            var pgSw = Stopwatch.StartNew();
             await _db.SaveChangesAsync(ct);
+            pgSw.Stop();
+            _logger.LogDebug("[ClickHouseQueryEngine.AggregateMetricsAsync] Postgres UPSERT took {Ms}ms", pgSw.ElapsedMilliseconds);
         }
 
         _logger.LogInformation("[ClickHouseQueryEngine] Synced {Count} metric variants from ClickHouse to Postgres.", metrics.Count);
@@ -154,188 +170,180 @@ public class ClickHouseQueryEngine : IAnalyticsQueryEngine
         var activeRollouts = await _db.FlagEnvironmentStates
             .Include(f => f.FeatureFlag)
             .Include(f => f.ContextualRollouts)
-            .Where(f => f.ContextPartitionKeys != null && f.ContextPartitionKeys.Length > 0 && f.MabGoalEvent != null)
+            .Where(f => f.ContextPartitionKeys.Length > 0 && f.MabGoalEvent != null)
             .AsSplitQuery()
             .ToListAsync(ct);
 
         if (activeRollouts.Count == 0) return;
 
+        var allMetricsData = new List<(ToggleMesh.API.Features.Flags.Domain.FlagEnvironmentState State, List<(Guid VariationId, long Exposures, long Conversions, double Value, double SumSquared, string Slice)> Results)>();
         await using var connection = new ClickHouseConnection(_connectionString);
         await connection.OpenAsync(ct);
 
         foreach (var state in activeRollouts)
         {
             var keys = state.ContextPartitionKeys;
+            var startedAtStr = state.ExperimentStartedAt?.ToString("yyyy-MM-dd HH:mm:ss") ?? "1970-01-01 00:00:00";
 
-            var exposures = new List<AnalyticsExposure>();
-            var tracks = new List<AnalyticsTrack>();
+            var selectExtracts = string.Join(", ", keys.Select((k, i) => $"if(empty(Properties), 'null', if(JSONHas(Properties, '{k.Replace("'", "''")}'), JSONExtractString(Properties, '{k.Replace("'", "''")}'), 'null')) as Key{i}"));
+            var groupByKeys = string.Join(", ", keys.Select((_, i) => $"Key{i}"));
 
-            var exposureQuery = $"SELECT Id, EnvironmentId, FlagKey, Identity, Variant, Timestamp, Properties FROM AnalyticsExposures WHERE EnvironmentId = '{state.EnvironmentId}' AND FlagKey = '{state.FeatureFlag.Key}'";
-            await using var expCommand = connection.CreateCommand();
-            expCommand.CommandText = exposureQuery;
-            await using var expReader = await expCommand.ExecuteReaderAsync(ct);
-            while (await expReader.ReadAsync(ct))
+            var query = $@"
+                WITH user_exposures AS (
+                    SELECT 
+                        Identity, 
+                        VariationId, 
+                        MIN(Timestamp) as FirstExposure,
+                        anyIf(Properties, Properties != '' AND Properties != 'null') as ExpProps
+                    FROM AnalyticsExposures
+                    WHERE EnvironmentId = {{envId:String}} AND FlagKey = {{flagKey:String}} AND Timestamp >= {{startedAt:String}}
+                    GROUP BY Identity, VariationId
+                ),
+                user_tracks AS (
+                    SELECT 
+                        Identity,
+                        anyIf(Properties, Properties != '' AND Properties != 'null') as TrackProps
+                    FROM AnalyticsTracks
+                    WHERE EnvironmentId = {{envId:String}} AND Properties != '' AND Properties != 'null'
+                    GROUP BY Identity
+                ),
+                user_slices AS (
+                    SELECT 
+                        e.Identity,
+                        e.VariationId,
+                        e.FirstExposure,
+                        if(empty(e.ExpProps), t.TrackProps, e.ExpProps) as Properties
+                    FROM user_exposures e
+                    LEFT JOIN user_tracks t ON e.Identity = t.Identity
+                ),
+                user_slices_extracted AS (
+                    SELECT 
+                        Identity,
+                        VariationId,
+                        FirstExposure,
+                        {selectExtracts}
+                    FROM user_slices
+                ),
+                conversions AS (
+                    SELECT
+                        s.VariationId,
+                        uniqExact(t.Identity) as TotalConversions,
+                        SUM(t.Value) as TotalValue,
+                        SUM(t.Value * t.Value) as SumOfSquaredValues,
+                        {groupByKeys}
+                    FROM user_slices_extracted s
+                    JOIN AnalyticsTracks t 
+                      ON t.Identity = s.Identity 
+                    WHERE t.EnvironmentId = {{envId:String}} 
+                      AND t.EventName = {{goalEvent:String}} 
+                      AND t.Timestamp >= s.FirstExposure
+                    GROUP BY s.VariationId, {groupByKeys}
+                ),
+                exposures_count AS (
+                    SELECT
+                        VariationId,
+                        uniqExact(Identity) as TotalExposures,
+                        {groupByKeys}
+                    FROM user_slices_extracted
+                    GROUP BY VariationId, {groupByKeys}
+                )
+                SELECT 
+                    e.VariationId, 
+                    e.TotalExposures, 
+                    COALESCE(c.TotalConversions, toUInt64(0)) as TotalConversions, 
+                    COALESCE(c.TotalValue, toFloat64(0)) as TotalValue, 
+                    COALESCE(c.SumOfSquaredValues, toFloat64(0)) as SumOfSquaredValues, 
+                    {string.Join(", ", keys.Select((_, i) => $"e.Key{i}"))}
+                FROM exposures_count e
+                LEFT JOIN conversions c ON e.VariationId = c.VariationId AND {string.Join(" AND ", keys.Select((_, i) => $"e.Key{i} = c.Key{i}"))}
+            ";
+
+            var results = new List<(Guid VariationId, long Exposures, long Conversions, double Value, double SumSquared, string Slice)>();
+
+            var sw = Stopwatch.StartNew();
+            await using var command = connection.CreateCommand();
+            command.CommandText = query;
+
+            var pEnv = command.CreateParameter(); pEnv.ParameterName = "envId"; pEnv.Value = state.EnvironmentId.ToString(); command.Parameters.Add(pEnv);
+            var pFlag = command.CreateParameter(); pFlag.ParameterName = "flagKey"; pFlag.Value = state.FeatureFlag.Key; command.Parameters.Add(pFlag);
+            var pEvent = command.CreateParameter(); pEvent.ParameterName = "goalEvent"; pEvent.Value = state.MabGoalEvent ?? ""; command.Parameters.Add(pEvent);
+            var pStartedAt = command.CreateParameter(); pStartedAt.ParameterName = "startedAt"; pStartedAt.Value = startedAtStr; command.Parameters.Add(pStartedAt);
+
+            await using var reader = await command.ExecuteReaderAsync(ct);
+            while (await reader.ReadAsync(ct))
             {
-                var propsStr = expReader.GetString(6);
-                JsonDocument? propsDoc = null;
-                if (!string.IsNullOrEmpty(propsStr))
+                var variationId = reader.GetGuid(0);
+                var totalExposures = Convert.ToInt64(reader.GetValue(1));
+                var totalConversions = Convert.ToInt64(reader.GetValue(2));
+                var totalValue = reader.IsDBNull(3) ? 0.0 : Convert.ToDouble(reader.GetValue(3));
+                var sumOfSquaredValues = reader.IsDBNull(4) ? 0.0 : Convert.ToDouble(reader.GetValue(4));
+
+                var dict = new Dictionary<string, string>();
+                for (int i = 0; i < keys.Length; i++)
                 {
-                    try { propsDoc = JsonDocument.Parse(propsStr); }
-                    catch { /* ignore */ }
+                    var val = reader.IsDBNull(5 + i) ? "null" : reader.GetString(5 + i);
+                    dict[keys[i]] = val;
                 }
 
-                exposures.Add(new AnalyticsExposure
-                {
-                    Id = expReader.GetGuid(0),
-                    EnvironmentId = expReader.GetGuid(1),
-                    FlagKey = expReader.GetString(2),
-                    Identity = expReader.GetString(3),
-                    Variant = expReader.GetBoolean(4),
-                    Timestamp = expReader.GetDateTime(5),
-                    Properties = propsDoc
-                });
+                results.Add((variationId, totalExposures, totalConversions, totalValue, sumOfSquaredValues, JsonSerializer.Serialize(dict)));
             }
+            sw.Stop();
+            _logger.LogDebug("[ClickHouseQueryEngine.AggregateContextualMetricsAsync] ClickHouse query and parse for flag {Flag} took {Ms}ms", state.FeatureFlag.Key, sw.ElapsedMilliseconds);
 
-            var tracksQuery = $@"
-                SELECT t.Id, t.EnvironmentId, t.Identity, t.EventName, t.Value, t.Properties, t.Timestamp 
-                FROM AnalyticsTracks t
-                INNER JOIN (
-                    SELECT DISTINCT Identity 
-                    FROM AnalyticsExposures 
-                    WHERE EnvironmentId = '{state.EnvironmentId}' AND FlagKey = '{state.FeatureFlag.Key}'
-                ) e ON t.Identity = e.Identity
-                WHERE t.EnvironmentId = '{state.EnvironmentId}' AND (t.EventName = '{state.MabGoalEvent}' OR t.Properties IS NOT NULL)";
-            
-            await using var trkCommand = connection.CreateCommand();
-            trkCommand.CommandText = tracksQuery;
-            await using var trkReader = await trkCommand.ExecuteReaderAsync(ct);
-            while (await trkReader.ReadAsync(ct))
+            allMetricsData.Add((state, results));
+        }
+
+        var pgSw = Stopwatch.StartNew();
+        
+        foreach (var data in allMetricsData)
+        {
+            if (data.Results.Count == 0) continue;
+
+            var state = data.State;
+            var existingMetrics = await _db.ContextualExperimentMetrics
+                .Where(x => x.EnvironmentId == state.EnvironmentId && x.FlagKey == state.FeatureFlag.Key && x.EventName == state.MabGoalEvent)
+                .ToDictionaryAsync(x => $"{x.VariationId}_{x.ContextSlice}_{x.RolloutId}", ct);
+
+            foreach (var r in data.Results)
             {
-                var valObj = trkReader.GetValue(4);
-                float? val = valObj == DBNull.Value ? null : Convert.ToSingle(valObj);
-                
-                var propsStr = trkReader.GetString(5);
-                JsonDocument? propsDoc = null;
-                if (!string.IsNullOrEmpty(propsStr))
+                var rolloutId = state.ContextualRollouts?.FirstOrDefault(x => x.ContextSlice == r.Slice)?.Id;
+                var key = $"{r.VariationId}_{r.Slice}_{rolloutId}";
+
+                if (existingMetrics.TryGetValue(key, out var metric))
                 {
-                    try { propsDoc = JsonDocument.Parse(propsStr); }
-                    catch
-                    {
-                        // ignored
-                    }
-                }
-
-                tracks.Add(new AnalyticsTrack
-                {
-                    Id = trkReader.GetGuid(0),
-                    EnvironmentId = trkReader.GetGuid(1),
-                    Identity = trkReader.GetString(2),
-                    EventName = trkReader.GetString(3),
-                    Value = val,
-                    Properties = propsDoc,
-                    Timestamp = trkReader.GetDateTime(6)
-                });
-            }
-
-            var tracksByIdentity = tracks
-                .GroupBy(t => t.Identity)
-                .ToDictionary(g => g.Key, g => g.ToList());
-
-            var userExposures = exposures.GroupBy(e => new { e.Identity, e.Variant })
-                .Select(g => {
-                    var identity = g.Key.Identity;
-                    var identityTracks = tracksByIdentity.TryGetValue(identity, out var list) ? list : new List<AnalyticsTrack>();
-                    
-                    var props = g.FirstOrDefault(e => e.Properties != null)?.Properties 
-                        ?? identityTracks.Where(t => t.Properties != null).OrderBy(t => t.Timestamp).FirstOrDefault()?.Properties;
-
-                    return new { 
-                        g.Key.Identity, 
-                        g.Key.Variant, 
-                        FirstExposure = g.Min(e => e.Timestamp),
-                        Properties = props
-                    };
-                }).ToList();
-
-            var slices = userExposures.Select(e => GetContextSliceString(e.Properties, keys)).Distinct().ToList();
-
-            foreach (var slice in slices)
-            {
-                var sliceUsers = userExposures.Where(e => GetContextSliceString(e.Properties, keys) == slice).ToList();
-                var variants = new[] { false, true };
-
-                foreach (var variant in variants)
-                {
-                    var variantUsers = sliceUsers.Where(u => u.Variant == variant).ToList();
-                    if (variantUsers.Count == 0) continue;
-
-                    var userIdentities = variantUsers.Select(u => u.Identity).ToHashSet();
-                    var firstExposureLookup = variantUsers.ToDictionary(u => u.Identity, u => u.FirstExposure);
-                    
-                    var variantTracks = tracks
-                        .Where(t => userIdentities.Contains(t.Identity) && t.EventName == state.MabGoalEvent)
-                        .Where(t => t.Timestamp >= firstExposureLookup[t.Identity])
-                        .ToList();
-
-                    var totalExposures = variantUsers.Count;
-                    var totalConversions = variantTracks.Select(t => t.Identity).Distinct().Count();
-                    var totalValue = variantTracks.Sum(t => t.Value ?? 0);
-                    var sumOfSquaredValues = variantTracks.Sum(t => (t.Value ?? 0) * (t.Value ?? 0));
-
-                    var rolloutId = state.ContextualRollouts?.FirstOrDefault(r => r.ContextSlice == slice)?.Id;
-
-                    var metric = await _db.ContextualExperimentMetrics.FirstOrDefaultAsync(m => 
-                        m.EnvironmentId == state.EnvironmentId && 
-                        m.FlagKey == state.FeatureFlag.Key && 
-                        m.EventName == state.MabGoalEvent && 
-                        m.Variant == variant && 
-                        m.ContextSlice == slice &&
-                        m.RolloutId == rolloutId, ct);
-
-                    if (metric == null)
-                    {
-                        metric = new ContextualExperimentMetric
-                        {
-                            EnvironmentId = state.EnvironmentId,
-                            FlagKey = state.FeatureFlag.Key,
-                            EventName = state.MabGoalEvent ?? string.Empty,
-                            Variant = variant,
-                            RolloutId = rolloutId,
-                            ContextSlice = slice,
-                            CreatedAt = DateTime.UtcNow
-                        };
-                        _db.ContextualExperimentMetrics.Add(metric);
-                    }
-
-                    metric.TotalExposures = totalExposures;
-                    metric.TotalConversions = totalConversions;
-                    metric.TotalValue = totalValue;
-                    metric.SumOfSquaredValues = sumOfSquaredValues;
+                    metric.TotalExposures = r.Exposures;
+                    metric.TotalConversions = r.Conversions;
+                    metric.TotalValue = r.Value;
+                    metric.SumOfSquaredValues = r.SumSquared;
                     metric.LastCalculatedAt = DateTimeOffset.UtcNow;
                 }
+                else
+                {
+                    metric = new ContextualExperimentMetric
+                    {
+                        EnvironmentId = state.EnvironmentId,
+                        FlagKey = state.FeatureFlag.Key,
+                        EventName = state.MabGoalEvent ?? string.Empty,
+                        VariationId = r.VariationId,
+                        RolloutId = rolloutId,
+                        ContextSlice = r.Slice,
+                        CreatedAt = DateTime.UtcNow,
+                        TotalExposures = r.Exposures,
+                        TotalConversions = r.Conversions,
+                        TotalValue = r.Value,
+                        SumOfSquaredValues = r.SumSquared,
+                        LastCalculatedAt = DateTimeOffset.UtcNow
+                    };
+                    _db.ContextualExperimentMetrics.Add(metric);
+                }
             }
         }
-        
-        await _db.SaveChangesAsync(ct);
-        _logger.LogInformation("[ClickHouseQueryEngine] Synced Contextual Experiment Metrics from ClickHouse to Postgres.");
-    }
 
-    private string GetContextSliceString(JsonDocument? properties, string[] keys)
-    {
-        if (properties == null) return "{}";
-        var dict = new Dictionary<string, string>();
-        foreach (var key in keys)
-        {
-            if (properties.RootElement.TryGetProperty(key, out var el))
-            {
-                dict[key] = el.ToString();
-            }
-            else
-            {
-                dict[key] = "null";
-            }
-        }
-        return JsonSerializer.Serialize(dict);
+        await _db.SaveChangesAsync(ct);
+        pgSw.Stop();
+        _logger.LogDebug("[ClickHouseQueryEngine.AggregateContextualMetricsAsync] Postgres UPSERT for all metrics took {Ms}ms", pgSw.ElapsedMilliseconds);
+
+        _logger.LogInformation("[ClickHouseQueryEngine] Synced Contextual Experiment Metrics from ClickHouse to Postgres.");
     }
 
     public async Task<IEnumerable<(DateTime Time, long Count)>> GetProjectHourlyEvaluationsAsync(Guid projectId, IEnumerable<Guid> environmentIds, TimeSpan duration, CancellationToken ct = default)
@@ -375,43 +383,43 @@ public class ClickHouseQueryEngine : IAnalyticsQueryEngine
             WITH hourly_exposures AS (
                 SELECT 
                     toStartOfMinute(Timestamp) as TimeBucket,
-                    Variant,
+                    VariationId,
                     uniqExact(Identity) as Exposures
                 FROM AnalyticsExposures
-                WHERE EnvironmentId = '{environmentId}' 
-                  AND FlagKey = '{flagKey}' 
+                WHERE EnvironmentId = {{envId:String}} 
+                  AND FlagKey = {{flagKey:String}} 
                   AND Timestamp >= now() - INTERVAL {(int)duration.TotalSeconds} SECOND
-                GROUP BY TimeBucket, Variant
+                GROUP BY TimeBucket, VariationId
             ),
             exposed_users AS (
-                SELECT Identity, Variant, MIN(Timestamp) as FirstExposure
+                SELECT Identity, VariationId, MIN(Timestamp) as FirstExposure
                 FROM AnalyticsExposures
-                WHERE EnvironmentId = '{environmentId}' 
-                  AND FlagKey = '{flagKey}' 
+                WHERE EnvironmentId = {{envId:String}} 
+                  AND FlagKey = {{flagKey:String}} 
                   AND Timestamp >= now() - INTERVAL {(int)duration.TotalSeconds} SECOND
-                GROUP BY Identity, Variant
+                GROUP BY Identity, VariationId
             ),
             hourly_conversions AS (
                 SELECT 
                     toStartOfMinute(t.Timestamp) as TimeBucket,
-                    e.Variant as Variant,
+                    e.VariationId as VariationId,
                     uniqExact(t.Identity) as Conversions
                 FROM AnalyticsTracks t
                 INNER JOIN exposed_users e ON t.Identity = e.Identity
-                WHERE t.EnvironmentId = '{environmentId}' 
-                  AND t.EventName = '{eventName}' 
+                WHERE t.EnvironmentId = {{envId:String}} 
+                  AND t.EventName = {{eventName:String}} 
                   AND t.Timestamp >= e.FirstExposure
-                GROUP BY TimeBucket, Variant
+                GROUP BY TimeBucket, VariationId
             )
             SELECT 
                 if(isNull(e.TimeBucket), c.TimeBucket, e.TimeBucket) as TimeBucket,
-                if(isNull(e.Variant), c.Variant, e.Variant) as Variant,
+                if(isNull(e.VariationId), c.VariationId, e.VariationId) as VariationId,
                 if(isNull(e.Exposures), 0, e.Exposures) as Exposures,
                 if(isNull(c.Conversions), 0, c.Conversions) as Conversions
             FROM hourly_exposures e
             FULL OUTER JOIN hourly_conversions c 
-              ON e.TimeBucket = c.TimeBucket AND e.Variant = c.Variant
-            ORDER BY TimeBucket ASC, Variant ASC
+              ON e.TimeBucket = c.TimeBucket AND e.VariationId = c.VariationId
+            ORDER BY TimeBucket ASC, VariationId ASC
         ";
 
         await using var connection = new ClickHouseConnection(_connectionString);
@@ -420,15 +428,28 @@ public class ClickHouseQueryEngine : IAnalyticsQueryEngine
         await using var command = connection.CreateCommand();
         command.CommandText = query;
 
+        var pEnv = command.CreateParameter(); 
+        pEnv.ParameterName = "envId"; 
+        pEnv.Value = environmentId.ToString(); 
+        command.Parameters.Add(pEnv);
+        var pFlag = command.CreateParameter(); 
+        pFlag.ParameterName = "flagKey"; 
+        pFlag.Value = flagKey; 
+        command.Parameters.Add(pFlag);
+        var pEvent = command.CreateParameter(); 
+        pEvent.ParameterName = "eventName"; 
+        pEvent.Value = eventName; 
+        command.Parameters.Add(pEvent);
+
         var result = new List<ExperimentTimeSeriesPoint>();
         await using var reader = await command.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
         {
             var timeBucket = reader.GetDateTime(0);
-            var variant = reader.GetBoolean(1);
+            var variationId = reader.GetGuid(1);
             var exposures = Convert.ToInt64(reader.GetValue(2));
             var conversions = Convert.ToInt64(reader.GetValue(3));
-            result.Add(new ExperimentTimeSeriesPoint(timeBucket, variant, exposures, conversions));
+            result.Add(new ExperimentTimeSeriesPoint(timeBucket, variationId, exposures, conversions));
         }
 
         return result;

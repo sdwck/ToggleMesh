@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 import { ProjectRole } from '@/api/types';
 import { TableSkeleton } from '@/components/TableSkeleton';
 import { useVirtualizer } from '@tanstack/react-virtual';
+import { toastApiError } from '@/api/errorUtils';
 
 const ROW_HEIGHT = 53;
 
@@ -129,8 +130,11 @@ export function ProjectFlagsTab({ project, search, tags, sortBy, isLoadingProjec
             setIsDeleteOpen(false);
             setFlagToDelete(null);
             toast.success('Feature flag globally deleted');
-        } catch {
-            toast.error('Failed to delete feature flag');
+            setTimeout(() => {
+                document.body.style.pointerEvents = '';
+            }, 100);
+        } catch (err) {
+            toastApiError(err, 'Failed to delete feature flag');
         }
     };
 
@@ -138,8 +142,8 @@ export function ProjectFlagsTab({ project, search, tags, sortBy, isLoadingProjec
         try {
             await toggleFlag.mutateAsync({ envId, flagKey, isEnabled: targetValue });
             toast.success(`Flag ${targetValue ? 'enabled' : 'disabled'} for environment`);
-        } catch {
-            toast.error('Failed to toggle flag');
+        } catch (err) {
+            toastApiError(err, 'Failed to toggle flag');
         }
     }, [toggleFlag]);
 
@@ -147,8 +151,8 @@ export function ProjectFlagsTab({ project, search, tags, sortBy, isLoadingProjec
         try {
             await updatePrivacy.mutateAsync({ flagKey, isClientSideExposed: isExposed });
             toast.success(`Flag is now ${isExposed ? 'exposed to client SDKs' : 'server-side only'}`);
-        } catch {
-            toast.error('Failed to update flag privacy');
+        } catch (err) {
+            toastApiError(err, 'Failed to update flag privacy');
         }
     }, [updatePrivacy]);
 
@@ -387,7 +391,14 @@ export function ProjectFlagsTab({ project, search, tags, sortBy, isLoadingProjec
             </Card>
 
 
-            <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
+            <Dialog open={isDeleteOpen} onOpenChange={(isOpen) => {
+                setIsDeleteOpen(isOpen);
+                if (!isOpen) {
+                    setTimeout(() => {
+                        document.body.style.pointerEvents = '';
+                    }, 100);
+                }
+            }}>
                 <DialogContent className="border-border/40 bg-zinc-950">
                     <DialogHeader>
                         <DialogTitle className="text-destructive">Delete Feature Flag</DialogTitle>

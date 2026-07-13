@@ -8,6 +8,6 @@ public class ContextualRollout : Entity
     public FlagEnvironmentState FlagEnvironmentState { get; set; } = null!;
     
     public string ContextSlice { get; set; } = string.Empty;
-    public int RolloutPercentage { get; set; }
+    public ICollection<VariationWeight> Rollout { get; set; } = new List<VariationWeight>();
     public bool IsAutoManaged { get; set; } = true;
 }

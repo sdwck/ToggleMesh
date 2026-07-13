@@ -60,10 +60,11 @@ public class CreateSegmentEndpoint : Endpoint<CreateSegmentRequest, SegmentDto>
             segment.EnvironmentId,
             segment.Name,
             segment.Description,
-            segment.Rules.Select(r => new RuleDto(r.GroupId, r.Attribute, r.Operator, r.Value)),
+            segment.Rules.Select(r => new RuleInput(r.GroupId, r.Attribute, r.Operator, r.Value)),
             segment.CreatedAt
         );
 
         await Send.CreatedAtAsync($"/projects/{environment.ProjectId}/environments/{envId}/segments/{segment.Id}", null, dto, cancellation: ct);
     }
 }
+

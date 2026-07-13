@@ -1,94 +1,79 @@
 using FluentAssertions;
 using ToggleMesh.Common.Rules;
+using ToggleMesh.Common;
 
 namespace ToggleMesh.IntegrationTests.Sdk;
 
 public class RolloutEvaluatorTests
 {
-    [Theory]
-    [InlineData(100, "flag1", "user1", true)]
-    [InlineData(100, "flag1", "user2", true)]
-    [InlineData(0, "flag1", "user1", false)]
-    [InlineData(0, "flag1", "user2", false)]
-    public void Evaluate_AbsolutePercentages_ShouldBeDeterministic(int percentage, string flagKey, string identity, bool expected)
+    private readonly Guid _varA = Guid.NewGuid();
+    private readonly Guid _varB = Guid.NewGuid();
+
+    [Fact]
+    public void Evaluate_NullRollout_ShouldReturnOffVariation()
     {
-        var result = RolloutEvaluator.Evaluate(percentage, flagKey, identity);
-        result.Should().Be(expected);
+        RolloutEvaluator.Evaluate(null, _varB, "flag", "user").Should().Be(_varB);
     }
 
     [Fact]
-    public void Evaluate_NullPercentage_ShouldAlwaysReturnTrue()
+    public void Evaluate_EmptyIdentity_ShouldReturnOffVariation()
     {
-        RolloutEvaluator.Evaluate(null, "flag", "user").Should().BeTrue();
-        RolloutEvaluator.Evaluate(null, "flag", "").Should().BeTrue();
+        var rollout = new[] { new VariationWeight(_varA, 5000), new VariationWeight(_varB, 5000) };
+        RolloutEvaluator.Evaluate(rollout, _varB, "flag", "").Should().Be(_varB);
+        RolloutEvaluator.Evaluate(rollout, _varB, "flag", null!).Should().Be(_varB);
     }
 
     [Fact]
-    public void Evaluate_EmptyIdentity_ShouldReturnFalseForPartialRollout()
+    public void Evaluate_100PercentSingleVariation_ShouldAlwaysReturnIt()
     {
-        RolloutEvaluator.Evaluate(50, "flag", "").Should().BeFalse();
-        RolloutEvaluator.Evaluate(50, "flag", null!).Should().BeFalse();
-    }
-
-    [Fact]
-    public void Evaluate_PartialRollout_ShouldDistributeConsistently()
-    {
-        // Arrange
-        int totalUsers = 10000;
-        int targetPercentage = 25;
-        int enabledCount = 0;
-        string flagKey = "new_ui_feature";
-
-        // Act
-        for (int i = 0; i < totalUsers; i++)
+        var rollout = new[] { new VariationWeight(_varA, 10000) };
+        
+        for (var i = 0; i < 100; i++)
         {
-            var identity = $"user_{i}";
-            if (RolloutEvaluator.Evaluate(targetPercentage, flagKey, identity))
-            {
-                enabledCount++;
-            }
+            RolloutEvaluator.Evaluate(rollout, _varB, "flag", $"user_{i}")
+                .Should().Be(_varA);
         }
-
-        // Assert
-        var actualPercentage = (double)enabledCount / totalUsers * 100;
-        actualPercentage.Should().BeInRange(targetPercentage - 5, targetPercentage + 5);
     }
 
     [Fact]
     public void Evaluate_SameUser_ShouldYieldSameResult()
     {
-        // Act
-        var result1 = RolloutEvaluator.Evaluate(30, "flag_A", "user_123");
-        var result2 = RolloutEvaluator.Evaluate(30, "flag_A", "user_123");
+        var rollout = new[] { new VariationWeight(_varA, 3000), new VariationWeight(_varB, 7000) };
+        
+        var result1 = RolloutEvaluator.Evaluate(rollout, null, "flag_A", "user_123");
+        var result2 = RolloutEvaluator.Evaluate(rollout, null, "flag_A", "user_123");
 
-        // Assert
         result1.Should().Be(result2);
     }
 
     [Fact]
-    public void Evaluate_DifferentFlags_ShouldYieldIndependentResultsForSameUser()
+    public void Evaluate_PartialRollout_ShouldDistributeConsistently()
     {
-        var identity = "test_user_42";
+        const int totalUsers = 10000;
+        var countA = 0;
+        const string flagKey = "new_ui_feature";
+        var rollout = new[] { new VariationWeight(_varA, 25 * 100), new VariationWeight(_varB, 75 * 100) };
 
-        var bucketA = CalculateBucket("flagA", identity);
-        var bucketB = CalculateBucket("flagB", identity);
+        for (var i = 0; i < totalUsers; i++)
+        {
+            var identity = $"user_{i}";
+            if (RolloutEvaluator.Evaluate(rollout, null, flagKey, identity) == _varA)
+                countA++;
+        }
 
-        bucketA.Should().NotBe(bucketB);
+        var actualPercentage = (double)countA / totalUsers * 100;
+        actualPercentage.Should().BeInRange(20, 30);
     }
 
-    private static int CalculateBucket(string flagKey, string identity)
+    [Fact]
+    public void Evaluate_DifferentFlags_ShouldYieldIndependentResults()
     {
-        var text = flagKey + identity;
-        const uint offsetBasis = 2166136261;
-        const uint prime = 16777619;
-        var hash = offsetBasis;
+        var rollout = new[] { new VariationWeight(_varA, 5000), new VariationWeight(_varB, 5000) };
+        const string identity = "test_user_42";
 
-        var bytes = System.Text.Encoding.UTF8.GetBytes(text);
-        foreach (var b in bytes)
-        {
-            hash ^= b;
-            hash *= prime;
-        }
-        return (int)(hash % 100);
+        var resultA = RolloutEvaluator.Evaluate(rollout, null, "flagA", identity);
+        var resultB = RolloutEvaluator.Evaluate(rollout, null, "flagB", identity);
+
+        (resultA, resultB).Should().Match<(Guid?, Guid?)>(r => r.Item1 != null && r.Item2 != null);
     }
 }

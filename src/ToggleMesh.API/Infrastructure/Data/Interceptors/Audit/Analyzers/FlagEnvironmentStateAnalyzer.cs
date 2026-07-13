@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using ToggleMesh.API.Features.Flags.Domain;
 
 namespace ToggleMesh.API.Infrastructure.Data.Interceptors.Audit.Analyzers;

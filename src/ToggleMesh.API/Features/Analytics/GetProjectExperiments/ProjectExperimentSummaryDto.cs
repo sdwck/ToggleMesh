@@ -1,4 +1,4 @@
-﻿namespace ToggleMesh.API.Features.Analytics.GetProjectExperiments;
+namespace ToggleMesh.API.Features.Analytics.GetProjectExperiments;
 
 public class ProjectExperimentSummaryDto
 {
@@ -15,5 +15,5 @@ public class ProjectExperimentSummaryDto
     public bool IsPrimaryGoal { get; set; }
     public bool IsExperimentActive { get; set; }
     public bool IsMabEnabled { get; set; }
-    public int? RolloutPercentage { get; set; }
+    public bool HasRollout { get; set; }
 }

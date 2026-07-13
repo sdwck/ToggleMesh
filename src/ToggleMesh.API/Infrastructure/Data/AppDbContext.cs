@@ -11,6 +11,7 @@ using ToggleMesh.API.Features.Organizations.Domain;
 using ToggleMesh.API.Features.Projects.Domain;
 using ToggleMesh.API.Features.Segments.Domain;
 using ToggleMesh.API.Features.Webhooks.Domain;
+using ToggleMesh.API.Features.Integrations.Domain;
 using ToggleMesh.API.Infrastructure.Email.Models;
 using ToggleMesh.API.Infrastructure.Security.Authorization.Models;
 
@@ -25,9 +26,11 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
     public DbSet<ProjectEnvironment> Environments { get; set; }
     public DbSet<EnvironmentKey> EnvironmentKeys { get; set; }
     public DbSet<FeatureFlag> FeatureFlags { get; set; }
+    public DbSet<FlagVariation> FlagVariations { get; set; }
     public DbSet<FlagEnvironmentState> FlagEnvironmentStates { get; set; }
     public DbSet<ContextualRollout> ContextualRollouts { get; set; }
     public DbSet<FlagRule> FlagRules { get; set; }
+    public DbSet<FlagIndividualTarget> FlagIndividualTargets { get; set; }
     public DbSet<AuditLog> AuditLogs { get; set; }
     public DbSet<ProjectMember> ProjectMembers { get; set; }
     public DbSet<MemberEnvironmentRole> MemberEnvironmentRoles { get; set; }
@@ -44,10 +47,14 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
     public DbSet<Segment> Segments { get; set; }
     public DbSet<SegmentRule> SegmentRules { get; set; }
     public DbSet<FlagMetricBucket> FlagMetricBuckets { get; set; }
+    public DbSet<Integration> Integrations { get; set; }
 
     public AppDbContext(DbContextOptions<AppDbContext> options) : base(options)
     {
     }
+
+    public bool DisableAuditing { get; set; }
+    public string? SystemActorEmail { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -63,5 +70,4 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
             warnings.Ignore(CoreEventId
                 .PossibleIncorrectRequiredNavigationWithQueryFilterInteractionWarning));
     }
-
 }

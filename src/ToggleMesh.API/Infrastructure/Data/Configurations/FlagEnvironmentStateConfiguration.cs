@@ -9,6 +9,7 @@ public sealed class FlagEnvironmentStateConfiguration : IEntityTypeConfiguration
     public void Configure(EntityTypeBuilder<FlagEnvironmentState> entity)
     {
         entity.HasKey(x => x.Id);
+        entity.Property(x => x.Version).IsRowVersion();
 
         entity.HasIndex(x => new { x.FeatureFlagId, x.EnvironmentId })
             .IsUnique();
@@ -29,6 +30,13 @@ public sealed class FlagEnvironmentStateConfiguration : IEntityTypeConfiguration
             .OnDelete(DeleteBehavior.Cascade);
 
         entity.HasMany(x => x.ContextualRollouts)
+            .WithOne(x => x.FlagEnvironmentState)
+            .HasForeignKey(x => x.FlagEnvironmentStateId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        entity.OwnsMany(x => x.FallthroughRollout, b => b.ToJson());
+        
+        entity.HasMany(x => x.IndividualTargets)
             .WithOne(x => x.FlagEnvironmentState)
             .HasForeignKey(x => x.FlagEnvironmentStateId)
             .OnDelete(DeleteBehavior.Cascade);

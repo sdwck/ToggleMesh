@@ -46,7 +46,7 @@ public class ClickHouseSinkAndQueryTests : IAsyncLifetime
                 EnvironmentId UUID,
                 FlagKey String,
                 Identity String,
-                Variant UInt8,
+                VariationId Nullable(UUID),
                 Properties String,
                 Timestamp DateTime
             ) ENGINE = MergeTree()
@@ -88,8 +88,8 @@ public class ClickHouseSinkAndQueryTests : IAsyncLifetime
         var environmentId = Guid.NewGuid();
         var exposures = new List<AnalyticsExposure>
         {
-            new() { Id = Guid.NewGuid(), EnvironmentId = environmentId, FlagKey = "flag-1", Identity = "user-1", Variant = true, Timestamp = DateTimeOffset.UtcNow },
-            new() { Id = Guid.NewGuid(), EnvironmentId = environmentId, FlagKey = "flag-1", Identity = "user-2", Variant = false, Timestamp = DateTimeOffset.UtcNow }
+            new() { Id = Guid.NewGuid(), EnvironmentId = environmentId, FlagKey = "flag-1", Identity = "user-1", VariationId = Guid.NewGuid(), Timestamp = DateTimeOffset.UtcNow },
+            new() { Id = Guid.NewGuid(), EnvironmentId = environmentId, FlagKey = "flag-1", Identity = "user-2", VariationId = Guid.Empty, Timestamp = DateTimeOffset.UtcNow }
         };
 
         var tracks = new List<AnalyticsTrack>
@@ -109,7 +109,7 @@ public class ClickHouseSinkAndQueryTests : IAsyncLifetime
         var project = new Project { Name = "Test", Organization = org };
         var environment = new ProjectEnvironment { Id = environmentId, Name = "Test Env", Project = project };
         var flag = new FeatureFlag { Key = "flag-1", Project = project };
-        var state = new FlagEnvironmentState { Environment = environment, FeatureFlag = flag, RolloutPercentage = 50, IsEnabled = true };
+        var state = new FlagEnvironmentState { Environment = environment, FeatureFlag = flag, FallthroughRollout = new List<VariationWeight> { new() { VariationId = Guid.Empty, Weight = 5000 } }, IsEnabled = true, IsExperimentActive = true, ExperimentStartedAt = DateTimeOffset.UtcNow.AddHours(-1) };
 
         db.Organizations.Add(org);
         db.Projects.Add(project);
@@ -124,11 +124,11 @@ public class ClickHouseSinkAndQueryTests : IAsyncLifetime
         var metrics = await db.ExperimentMetrics.ToListAsync();
         metrics.Should().HaveCount(2);
 
-        var treatmentMetric = metrics.First(x => x.Variant);
+        var treatmentMetric = metrics.First(x => x.VariationId != Guid.Empty);
         treatmentMetric.TotalExposures.Should().Be(1);
         treatmentMetric.TotalConversions.Should().Be(1);
 
-        var controlMetric = metrics.First(x => !x.Variant);
+        var controlMetric = metrics.First(x => x.VariationId == Guid.Empty);
         controlMetric.TotalExposures.Should().Be(1);
         controlMetric.TotalConversions.Should().Be(0);
     }

@@ -13,7 +13,7 @@ This SDK is specifically designed for **Client-Side (Browser, Mobile/React Nativ
 *   **Automatic Background Polling:** SDK automatically syncs flag states with the API in the background.
 *   **Analytics Event Tracking:** Send custom telemetry and experiment conversions seamlessly:
     ```javascript
-    tmClient.track('button_clicked', { color: 'red' });
+    tmClient.track('button_clicked', { color: 'red' }, 1.0);
     ```
 *   **Dual-Module Export:** Full support for ESM (`import`) and TypeScript definitions.
 *   **Zero Client-Side Rule Leakage:** All targeting rules are evaluated secure-side on the ToggleMesh server, returning only flat boolean results to the client.
@@ -86,8 +86,11 @@ export function CheckoutPage() {
   // Falls back to defaultValue (false) if offline.
   const showPaypal = useFeatureFlag('new-checkout-flow');
 
+  // You can also evaluate typed strings:
+  const buttonColor = useFeatureFlagVariation('checkout-button-color', 'blue');
+
   return (
-    <div className="payment-container">
+    <div className="payment-container" style={{ backgroundColor: buttonColor }}>
       <CreditCardForm />
       {showPaypal && <PayPalButton />}
     </div>
@@ -114,6 +117,10 @@ await client.identify('anonymous_user', { Country: 'US' });
 
 // Synchronous evaluation (0ms latency)
 const isEnabled = client.isEnabled('beta-feature', true);
+
+// Typed evaluation methods are also fully supported:
+const color = client.getVariation('button-color', 'blue');
+const config = client.getJson('ui-config', { header: 'default' });
 ```
 
 You can also subscribe to raw configuration updates:

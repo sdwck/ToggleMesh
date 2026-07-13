@@ -10,7 +10,7 @@ public class ExperimentMetricConfiguration : IEntityTypeConfiguration<Experiment
     {
         builder.HasKey(x => x.Id);
 
-        builder.HasIndex(x => new { x.EnvironmentId, x.FlagKey, x.EventName, x.Variant })
+        builder.HasIndex(x => new { x.EnvironmentId, x.FlagKey, x.EventName, x.VariationId })
             .IsUnique();
     }
 }

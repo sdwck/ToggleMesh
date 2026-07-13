@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
 using StackExchange.Redis;
@@ -99,7 +100,7 @@ builder.Services.AddDbContext<AppDbContext>((serviceProvider, options) =>
 });
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
-var metricCapacity = builder.Configuration.GetValue<int>("Ingestion:MetricQueueCapacity", 100000);
+var metricCapacity = builder.Configuration.GetValue("Ingestion:MetricQueueCapacity", 100000);
 builder.Services.AddSingleton(Channel.CreateBounded<MetricQueueItem>(new BoundedChannelOptions(metricCapacity)
 {
     FullMode = BoundedChannelFullMode.DropOldest
@@ -286,7 +287,7 @@ builder.Services.AddHttpClient("WebhookClient", client =>
     };
 });
 
-var webhookCapacity = builder.Configuration.GetValue<int>("Webhooks:QueueCapacity", 10000);
+var webhookCapacity = builder.Configuration.GetValue("Webhooks:QueueCapacity", 10000);
 builder.Services.AddSingleton(Channel.CreateBounded<WebhookEvent>(
     new BoundedChannelOptions(webhookCapacity)
     {
@@ -301,6 +302,7 @@ builder.Services.AddHostedService<RefreshTokenCleanupService>();
 builder.Services.AddHostedService<EmailOutboxWorker>();
 builder.Services.AddHostedService<MetricsWorker>();
 builder.Services.AddHostedService<AnomalyWorker>();
+builder.Services.AddHostedService<SrmWorker>();
 builder.Services.AddHostedService<WebhookDispatcherService>();
 builder.Services.AddHostedService<WebhookDeliveryWorker>();
 builder.Services.AddHostedService<RollupWorker>();

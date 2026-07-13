@@ -32,12 +32,8 @@ type DeleteProjectValues = z.infer<typeof deleteProjectSchema>;
 interface ProjectSettingsGeneralTabProps {
     project?: ProjectDetails;
     isProjectLoading: boolean;
-    flagsCount: number;
-    isFlagsLoading: boolean;
     webhooksCount: number;
     isWebhooksLoading: boolean;
-    membersCount: number;
-    isMembersLoading: boolean;
     canManageProject: boolean;
     onTabChange: (tab: string) => void;
 }
@@ -45,12 +41,8 @@ interface ProjectSettingsGeneralTabProps {
 export function ProjectSettingsGeneralTab({
     project,
     isProjectLoading,
-    flagsCount,
-    isFlagsLoading,
     webhooksCount,
     isWebhooksLoading,
-    membersCount,
-    isMembersLoading,
     canManageProject,
     onTabChange
 }: ProjectSettingsGeneralTabProps) {
@@ -172,18 +164,14 @@ export function ProjectSettingsGeneralTab({
 
                             <div className="flex justify-between items-center text-xs py-1">
                                 <span className="text-muted-foreground font-medium">Feature Flags</span>
-                                {isFlagsLoading ? (
-                                    <Skeleton className="h-6 w-28 rounded" />
-                                ) : (
-                                    <button
-                                        type="button"
-                                        onClick={() => onTabChange('flags')}
-                                        className="flex items-center gap-1.5 font-mono text-zinc-300 hover:text-purple-400 bg-zinc-900/30 hover:bg-purple-500/10 px-2 py-1 rounded border border-border/10 hover:border-purple-500/20 transition-all text-[11px]"
-                                    >
-                                        <Flag className="h-3.5 w-3.5 text-purple-500" />
-                                        <span>{flagsCount} defined</span>
-                                    </button>
-                                )}
+                                <button
+                                    type="button"
+                                    onClick={() => onTabChange('flags')}
+                                    className="flex items-center gap-1.5 font-mono text-zinc-300 hover:text-purple-400 bg-zinc-900/30 hover:bg-purple-500/10 px-2 py-1 rounded border border-border/10 hover:border-purple-500/20 transition-all text-[11px]"
+                                >
+                                    <Flag className="h-3.5 w-3.5 text-purple-500" />
+                                    <span>Manage Flags</span>
+                                </button>
                             </div>
 
                             <div className={`flex justify-between items-center text-xs py-1 ${canManageProject ? '' : 'invisible pointer-events-none'}`} aria-hidden={!canManageProject}>
@@ -204,18 +192,14 @@ export function ProjectSettingsGeneralTab({
 
                             <div className={`flex justify-between items-center text-xs py-1 ${canManageProject ? '' : 'invisible pointer-events-none'}`} aria-hidden={!canManageProject}>
                                 <span className="text-muted-foreground font-medium">Members</span>
-                                {isMembersLoading ? (
-                                    <Skeleton className="h-6 w-28 rounded" />
-                                ) : (
-                                    <button
-                                        type="button"
-                                        onClick={() => onTabChange('members')}
-                                        className="flex items-center gap-1.5 font-mono text-zinc-300 hover:text-emerald-400 bg-zinc-900/30 hover:bg-emerald-500/10 px-2 py-1 rounded border border-border/10 hover:border-emerald-500/20 transition-all text-[11px]"
-                                    >
-                                        <Users className="h-3.5 w-3.5 text-emerald-500" />
-                                        <span>{membersCount} users</span>
-                                    </button>
-                                )}
+                                <button
+                                    type="button"
+                                    onClick={() => onTabChange('members')}
+                                    className="flex items-center gap-1.5 font-mono text-zinc-300 hover:text-emerald-400 bg-zinc-900/30 hover:bg-emerald-500/10 px-2 py-1 rounded border border-border/10 hover:border-emerald-500/20 transition-all text-[11px]"
+                                >
+                                    <Users className="h-3.5 w-3.5 text-emerald-500" />
+                                    <span>Manage Members</span>
+                                </button>
                             </div>
 
                             <div className="flex justify-between items-center text-xs py-1">

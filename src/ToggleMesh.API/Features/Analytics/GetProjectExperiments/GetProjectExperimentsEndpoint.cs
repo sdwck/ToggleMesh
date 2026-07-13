@@ -1,17 +1,14 @@
 using Microsoft.EntityFrameworkCore;
 using ToggleMesh.API.Extensions;
-using ToggleMesh.API.Features.Analytics.Domain;
 using ToggleMesh.API.Features.Analytics.Services;
-using ToggleMesh.API.Features.Organizations.Domain;
-using ToggleMesh.API.Features.Projects.Domain;
 using ToggleMesh.API.Infrastructure.Data;
 using ToggleMesh.API.Infrastructure.Endpoints;
 using AuthModels = ToggleMesh.API.Infrastructure.Security.Authorization.Models;
+using ToggleMesh.API.Features.Flags.Domain;
 
 namespace ToggleMesh.API.Features.Analytics.GetProjectExperiments;
 
-
-public class GetProjectExperimentsEndpoint : ToggleEndpointWithoutRequest<List<ProjectExperimentSummaryDto>>
+public class GetProjectExperimentsEndpoint : ToggleEndpoint<GetProjectExperimentsRequest, List<ProjectExperimentSummaryDto>>
 {
     private readonly AppDbContext _db;
     private readonly BayesianMathService _math;
@@ -24,90 +21,79 @@ public class GetProjectExperimentsEndpoint : ToggleEndpointWithoutRequest<List<P
 
     public override void Configure()
     {
-        Get("/projects/{projectId:guid}/experiments");
+        Get("/projects/{projectId}/experiments");
         Version(1);
         this.RequirePermission(AuthModels.Permissions.FlagsView);
     }
 
-    public override async Task HandleAsync(CancellationToken ct)
+    public override async Task HandleAsync(GetProjectExperimentsRequest req, CancellationToken ct)
     {
         var projectId = Route<Guid>("projectId");
 
-        var project = await _db.Projects.FirstOrDefaultAsync(p => p.Id == projectId, ct);
-        if (project == null)
-        {
-            await Send.NotFoundAsync(ct);
-            return;
-        }
-
-        var isOrgAdmin = await _db.OrganizationMembers
-            .AnyAsync(om => om.OrganizationId == project.OrganizationId && om.UserId == UserId && om.Role == OrganizationRole.Admin, ct);
-
-        var projectMember = await _db.ProjectMembers
-            .FirstOrDefaultAsync(m => m.ProjectId == projectId && m.UserId == UserId, ct);
-
-        var baseRole = isOrgAdmin ? ProjectRole.Owner : (projectMember?.Role ?? ProjectRole.None);
-
-        var memberEnvRoles = await _db.MemberEnvironmentRoles
-            .Where(r => r.ProjectMemberId == (projectMember != null ? projectMember.Id : Guid.Empty))
-            .ToDictionaryAsync(r => r.EnvironmentId, r => r.Role, ct);
-
         var envs = await _db.Environments
-            .Where(x => x.ProjectId == projectId)
-            .ToDictionaryAsync(x => x.Id, x => x.Name, ct);
+            .Where(e => e.ProjectId == projectId)
+            .ToDictionaryAsync(e => 
+                e.Id, e => e.Name, ct);
 
-        var envIds = envs.Keys.Where(envId => {
-            var role = memberEnvRoles.TryGetValue(envId, out var specificRole) ? specificRole : baseRole;
-            return role != ProjectRole.None;
-        }).ToList();
+        var envIds = envs.Keys.ToList();
 
-        var activeFlags = await _db.FlagEnvironmentStates
+        var allMetricsQuery = _db.ExperimentMetrics
+            .AsNoTracking()
+            .Where(m => envIds.Contains(m.EnvironmentId));
+
+        if (!string.IsNullOrWhiteSpace(req.EnvironmentId) && 
+            Guid.TryParse(req.EnvironmentId, out var fEnv))
+            allMetricsQuery = allMetricsQuery
+                .Where(m => m.EnvironmentId == fEnv);
+        
+        if (!string.IsNullOrWhiteSpace(req.FlagKey))
+            allMetricsQuery = allMetricsQuery
+                .Where(m => m.FlagKey.Contains(req.FlagKey));
+
+        var allMetrics = await allMetricsQuery.ToListAsync(ct);
+
+        var statesQuery = _db.FlagEnvironmentStates
             .Include(x => x.FeatureFlag)
-            .Where(x => envIds.Contains(x.EnvironmentId) && x.FeatureFlag.ProjectId == projectId && x.IsExperimentActive)
-            .ToListAsync(ct);
+            .AsNoTracking()
+            .Where(x => envIds.Contains(x.EnvironmentId));
+            
+        if (!string.IsNullOrWhiteSpace(req.EnvironmentId) && 
+            Guid.TryParse(req.EnvironmentId, out var fEnv2))
+            statesQuery = statesQuery
+                .Where(m => m.EnvironmentId == fEnv2);
+        
+        if (!string.IsNullOrWhiteSpace(req.FlagKey))
+            statesQuery = statesQuery
+                .Where(m => m.FeatureFlag.Key.Contains(req.FlagKey));
 
-        var activeFlagKeys = activeFlags.Select(x => x.FeatureFlag.Key).Distinct().ToList();
+        var states = await statesQuery.ToListAsync(ct);
 
-        var allMetrics = await _db.ExperimentMetrics
-            .Where(x => envIds.Contains(x.EnvironmentId) && activeFlagKeys.Contains(x.FlagKey))
-            .ToListAsync(ct);
+        var stateDict = 
+            states.ToDictionary(x => (x.EnvironmentId, x.FeatureFlag.Key));
 
         var groupedMetrics = allMetrics
-            .GroupBy(x => new { x.EnvironmentId, x.FlagKey, x.EventName })
-            .ToDictionary(g => g.Key, g => g.ToList());
+            .GroupBy(m => new { m.EnvironmentId, m.FlagKey, m.EventName })
+            .ToList();
 
         var summaries = new List<ProjectExperimentSummaryDto>();
 
-        foreach (var state in activeFlags)
+        foreach (var group in groupedMetrics)
         {
-            var envId = state.EnvironmentId;
-            var flagKey = state.FeatureFlag.Key;
-            
-            var targetEvent = state.MabGoalEvent;
-            
-            List<ExperimentMetric>? metrics = null;
-            var eventName = targetEvent ?? "Any Event";
+            var envId = group.Key.EnvironmentId;
+            var flagKey = group.Key.FlagKey;
+            var eventName = group.Key.EventName;
 
-            if (targetEvent != null)
-            {
-                var groupKey = new { EnvironmentId = envId, FlagKey = flagKey, EventName = targetEvent };
-                if (groupedMetrics.TryGetValue(groupKey, out var g1))
-                    metrics = g1;
-            }
-            else
-            {
-                var anyGroup = groupedMetrics.Where(x => x.Key.EnvironmentId == envId && x.Key.FlagKey == flagKey)
-                    .OrderByDescending(x => x.Value.Sum(m => m.TotalExposures))
-                    .FirstOrDefault();
-                
-                if (anyGroup.Value != null)
-                {
-                    metrics = anyGroup.Value;
-                    eventName = anyGroup.Key.EventName;
-                }
-            }
+            stateDict.TryGetValue((envId, flagKey), out var state);
 
-            if (metrics == null || metrics.Count == 0)
+            if (state == null) 
+                continue;
+
+            if (req.IsActiveOnly && !state.IsExperimentActive)
+                continue;
+
+            var metrics = group.ToList();
+
+            if (metrics.Count == 0)
             {
                 summaries.Add(new ProjectExperimentSummaryDto
                 {
@@ -116,44 +102,98 @@ public class GetProjectExperimentsEndpoint : ToggleEndpointWithoutRequest<List<P
                     FlagKey = flagKey,
                     EventName = eventName,
                     TotalParticipants = 0,
-                    LastCalculatedAt = state.ExperimentStartedAt ?? DateTimeOffset.UtcNow,
+                    LastCalculatedAt = DateTimeOffset.UtcNow,
                     ProbabilityToBeatBaseline = 0.5,
                     ExpectedUplift = 0,
                     IsPrimaryGoal = true,
                     IsExperimentActive = state.IsExperimentActive,
                     IsMabEnabled = state.IsMabEnabled,
-                    RolloutPercentage = state.RolloutPercentage
+                    HasRollout = state.FallthroughRollout.Count > 0
                 });
+                
                 continue;
             }
 
-            var control = metrics.FirstOrDefault(g => !g.Variant);
-            var treatment = metrics.FirstOrDefault(g => g.Variant);
-            
-            var totalExposures = metrics.Sum(x => x.TotalExposures);
-            var maxLastCalculatedAt = metrics.Max(x => x.LastCalculatedAt);
+            var totalExposures = metrics
+                .Sum(x => x.TotalExposures);
+            var maxLastCalculatedAt = metrics
+                .Max(x => x.LastCalculatedAt);
 
             var prob = 0.5;
             double uplift = 0;
             double expectedValueUplift = 0;
             var isRevenueBased = false;
+            
+            var variations = metrics
+                .Select(m => m.VariationId)
+                .Distinct()
+                .ToList();
 
-            if (control != null && treatment != null && control.TotalExposures > 0 && treatment.TotalExposures > 0)
+            if (variations.Count >= 2)
             {
-                prob = _math.CalculateProbabilityBBeatsA(
-                    control.TotalExposures, control.TotalConversions,
-                    treatment.TotalExposures, treatment.TotalConversions);
-                uplift = _math.CalculateExpectedUplift(
-                    control.TotalExposures, control.TotalConversions,
-                    treatment.TotalExposures, treatment.TotalConversions);
+                var exposures = new long[variations.Count];
+                var conversions = new long[variations.Count];
+                var values = new double[variations.Count];
+                var sumSquared = new double[variations.Count];
 
-                isRevenueBased = control.TotalValue > 0 || treatment.TotalValue > 0;
-                if (isRevenueBased)
+                for (var i = 0; i < variations.Count; i++)
                 {
-                    var controlArpu = control.TotalValue / control.TotalExposures;
-                    var treatmentArpu = treatment.TotalValue / treatment.TotalExposures;
-                    expectedValueUplift = controlArpu > 0 ? (treatmentArpu - controlArpu) / controlArpu : 0;
+                    var m = metrics.First(x => x.VariationId == variations[i]);
+                    exposures[i] = m.TotalExposures;
+                    conversions[i] = m.TotalConversions;
+                    values[i] = m.TotalValue;
+                    sumSquared[i] = m.SumOfSquaredValues;
                 }
+                isRevenueBased = state.MabOptimizationType == MabOptimizationType.Revenue;
+
+                double[] probs;
+                if (!isRevenueBased)
+                    probs = _math.CalculateDirichletProbabilities(exposures, conversions);
+                else
+                    probs = _math.CalculateDirichletProbabilities_Revenue(exposures, values, sumSquared);
+
+                const int baselineIdx = 0;
+                
+                var maxUplift = variations.Count > 1 ? -double.MaxValue : 0;
+                var maxValUplift = variations.Count > 1 ? -double.MaxValue : 0;
+                
+                for (var i = 0; i < variations.Count; i++)
+                {
+                    if (i == baselineIdx) 
+                        continue;
+                    
+                    if (!isRevenueBased)
+                    {
+                        var up = _math.CalculateExpectedUplift(
+                            exposures[baselineIdx], 
+                            conversions[baselineIdx],
+                            exposures[i], 
+                            conversions[i]);
+                        if (up > maxUplift) 
+                            maxUplift = up;
+                    }
+                    else
+                    {
+                        var bArpu = 
+                            exposures[baselineIdx] > 0 
+                                ? values[baselineIdx] / exposures[baselineIdx] 
+                                : 0;
+                        var vArpu = 
+                            exposures[i] > 0 
+                                ? values[i] / exposures[i] 
+                                : 0;
+                        var up = 
+                            bArpu > 0 
+                                ? (vArpu - bArpu) / bArpu 
+                                : 0;
+                        if (up > maxValUplift) 
+                            maxValUplift = up;
+                    }
+                }
+
+                prob = probs.Max();
+                uplift = maxUplift;
+                expectedValueUplift = maxValUplift;
             }
 
             summaries.Add(new ProjectExperimentSummaryDto
@@ -171,7 +211,7 @@ public class GetProjectExperimentsEndpoint : ToggleEndpointWithoutRequest<List<P
                 IsPrimaryGoal = eventName == state.MabGoalEvent,
                 IsExperimentActive = state.IsExperimentActive,
                 IsMabEnabled = state.IsMabEnabled,
-                RolloutPercentage = state.RolloutPercentage
+                HasRollout = state.FallthroughRollout.Count > 0
             });
         }
 

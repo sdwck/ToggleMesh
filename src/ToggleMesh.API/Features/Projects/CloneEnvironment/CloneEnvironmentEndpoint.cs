@@ -83,7 +83,8 @@ public class CloneEnvironmentEndpoint : ToggleEndpointWithoutRequest
             }
 
             targetState.IsEnabled = sourceState.IsEnabled;
-            targetState.RolloutPercentage = sourceState.RolloutPercentage;
+            targetState.OffVariationId = sourceState.OffVariationId;
+            targetState.FallthroughRollout = sourceState.FallthroughRollout.Select(r => new VariationWeight { VariationId = r.VariationId, Weight = r.Weight }).ToList();
             
             if (targetState.Rules.Count != 0)
             {

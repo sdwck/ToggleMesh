@@ -17,19 +17,22 @@ public class AnalyticsEventJsonConverter : JsonConverter<AnalyticsEvent>
         writer.WriteNumber("Type", (int)value.Type);
         writer.WriteNumber("Timestamp", value.Timestamp);
         
-        if (value.Identity != null)
+        if (!string.IsNullOrEmpty(value.Identity))
             writer.WriteString("Identity", value.Identity);
         
-        if (value.FlagKey != null)
+        if (!string.IsNullOrEmpty(value.FlagKey))
             writer.WriteString("FlagKey", value.FlagKey);
             
         if (value.Type == AnalyticsEventType.Exposure)
         {
-            writer.WriteBoolean("Result", value.Result);
+            if (value.VariationId.HasValue)
+                writer.WriteString("VariationId", value.VariationId.Value.ToString());
+            if (value.VariationValue != null)
+                writer.WriteString("VariationValue", value.VariationValue);
         }
         else if (value.Type == AnalyticsEventType.Track)
         {
-            if (value.EventName != null)
+            if (!string.IsNullOrEmpty(value.EventName))
                 writer.WriteString("EventName", value.EventName);
                 
             if (value.Value.HasValue)

@@ -1,3 +1,5 @@
+using ToggleMesh.API.Features.Flags.Domain;
+
 namespace ToggleMesh.API.Features.Flags.GetAll;
 
 public record ProjectFlagDto(
@@ -9,5 +11,7 @@ public record ProjectFlagDto(
     DateTime CreatedAt,
     DateTime? UpdatedAt,
     IEnumerable<FlagEnvironmentStateDto> Environments,
-    string[] Tags
+    string[] Tags,
+    int Type,
+    IEnumerable<VariationDto> Variations
 );

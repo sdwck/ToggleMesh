@@ -79,6 +79,9 @@ public class AuditInterceptor : SaveChangesInterceptor
     {
         if (context is null) 
             return;
+            
+        if (context is AppDbContext { DisableAuditing: true })
+            return;
         
         var user = _httpContextAccessor.HttpContext?.User;
 
@@ -88,14 +91,17 @@ public class AuditInterceptor : SaveChangesInterceptor
 
         var actorEmail = user?.FindFirst("email")?.Value
                          ?? user?.FindFirst(ClaimTypes.Email)?.Value
-                         ?? user?.Identity?.Name
-                         ?? string.Empty;
+                         ?? user?.Identity?.Name;
+                         
+        if (string.IsNullOrWhiteSpace(actorEmail))
+            actorEmail = (context as AppDbContext)?.SystemActorEmail;
+        
+        if (string.IsNullOrWhiteSpace(actorEmail))
+            actorEmail = string.Empty;
 
         var auditEntries = new List<AuditLog>();
         if (!_webhookEventsTable.TryGetValue(context, out var webhookEvents))
-        {
-            webhookEvents = new List<WebhookEvent>();
-        }
+            webhookEvents = [];
         
         var modifiedEntries = context.ChangeTracker.Entries()
             .Where(e => 
@@ -134,7 +140,9 @@ public class AuditInterceptor : SaveChangesInterceptor
                 Id = Guid.CreateVersion7(),
                 EntityName = entityType.Name,
                 EntityFriendlyName = metadata.FriendlyName,
-                EntityId = entry.Property("Id").CurrentValue?.ToString() ?? "New",
+                EntityId = entry.Metadata.FindProperty("Id") != null
+                    ? entry.Property("Id").CurrentValue?.ToString() ?? "New"
+                    : "New",
                 Action = action,
                 Timestamp = _timeProvider.GetUtcNow().UtcDateTime,
                 ProjectId = metadata.ProjectId,
@@ -148,7 +156,12 @@ public class AuditInterceptor : SaveChangesInterceptor
             if (metadata.ProjectId.HasValue)
             {
                 string? eventName = null;
-                var flagKey = metadata.FriendlyName.Replace(" (Rule)", "");
+                var flagKey = metadata.FriendlyName
+                    .Replace(" (Rule)", "")
+                    .Replace(" (Variation)", "")
+                    .Replace(" (Rollout Context)", "")
+                    .Replace(" (Individual Target)", "")
+                    .Replace(" (Default Rollout)", "");
                 
                 var isNewFlagTx = modifiedEntries
                     .Any(e => e is
@@ -157,6 +170,8 @@ public class AuditInterceptor : SaveChangesInterceptor
                         State: EntityState.Added
                     });
 
+                string? contextMsg = null;
+
                 if (entry.Entity is FeatureFlag)
                 {
                     if (entry.State == EntityState.Added)
@@ -164,16 +179,62 @@ public class AuditInterceptor : SaveChangesInterceptor
                     else if (entry.State == EntityState.Deleted)
                         eventName = "flag.deleted";
                     else if (entry.State == EntityState.Modified)
+                    {
                         eventName = "flag.updated";
+                        contextMsg = "Modified core flag settings";
+                    }
                 }
-                else if (entry is
-                         {
-                             Entity: FlagEnvironmentState, 
-                             State: EntityState.Modified
-                         } 
-                         || entry.Entity is FlagRule 
-                         && !isNewFlagTx)
+                else if (entry is { Entity: FlagEnvironmentState, State: EntityState.Modified })
+                {
+                    var modifiedProps = entry.Properties.Where(p => p.IsModified).Select(p => p.Metadata.Name).ToList();
+                    var isOnlySrmUpdate = modifiedProps.Count > 0 && modifiedProps.All(p => p == "IsSrmAlertSent" || p == "SrmPValue" || p == "UpdatedAt" || p == "LastModifiedAt");
+                    if (!isOnlySrmUpdate)
+                    {
+                        if (modifiedProps.Contains("IsExperimentActive"))
+                        {
+                            var isActive = (bool)entry.Property("IsExperimentActive").CurrentValue!;
+                            eventName = isActive ? "experiment.started" : "experiment.stopped";
+                            contextMsg = isActive ? "Started an A/B test" : "Stopped the A/B test";
+                        }
+                        else
+                        {
+                            eventName = "flag.updated";
+                            if (modifiedProps.Contains("IsEnabled"))
+                                contextMsg = (bool)entry.Property("IsEnabled").CurrentValue! ? "Enabled the flag" : "Disabled the flag";
+                            else if (modifiedProps.Contains("IsMabEnabled"))
+                                contextMsg = (bool)entry.Property("IsMabEnabled").CurrentValue! ? "Enabled Multi-Armed Bandit" : "Disabled Multi-Armed Bandit";
+                            else if (modifiedProps.Contains("FallthroughRollout"))
+                                contextMsg = "Updated default rollout strategy";
+                            else
+                                contextMsg = "Updated environment settings";
+                        }
+                    }
+                }
+                else if (entry.Entity is FlagRule && !isNewFlagTx)
+                {
                     eventName = "flag.updated";
+                    contextMsg = "Updated contextual rules";
+                }
+                else if (entry.Entity is FlagVariation && !isNewFlagTx)
+                {
+                    eventName = "flag.updated";
+                    contextMsg = "Updated flag variations";
+                }
+                else if (entry.Entity is ContextualRollout && !isNewFlagTx)
+                {
+                    eventName = "flag.updated";
+                    contextMsg = "Updated contextual rollout";
+                }
+                else if (entry.Entity is FlagIndividualTarget && !isNewFlagTx)
+                {
+                    eventName = "flag.updated";
+                    contextMsg = "Updated individual targets";
+                }
+                else if (entry.Entity is VariationWeight && !isNewFlagTx)
+                {
+                    eventName = "flag.updated";
+                    contextMsg = "Updated default rollout strategy";
+                }
 
                 if (eventName != null)
                 {
@@ -184,11 +245,13 @@ public class AuditInterceptor : SaveChangesInterceptor
 
                     if (existingEvent != null)
                     {
-                        if (existingEvent.EnvironmentId == null && metadata.EnvironmentId != null)
-                        {
-                            webhookEvents.Remove(existingEvent);
-                            webhookEvents.Add(existingEvent with { EnvironmentId = metadata.EnvironmentId });
-                        }
+                        var newContextMsg = existingEvent.ContextMessage ?? contextMsg;
+                        
+                        webhookEvents.Remove(existingEvent);
+                        webhookEvents.Add(existingEvent with { 
+                            EnvironmentId = existingEvent.EnvironmentId ?? metadata.EnvironmentId,
+                            ContextMessage = newContextMsg
+                        });
                     }
                     else
                     {
@@ -196,7 +259,9 @@ public class AuditInterceptor : SaveChangesInterceptor
                             metadata.ProjectId.Value,
                             metadata.EnvironmentId,
                             eventName,
-                            flagKey));
+                            flagKey,
+                            contextMsg
+                        ));
                     }
                 }
             }

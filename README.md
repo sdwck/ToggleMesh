@@ -9,7 +9,7 @@
   <img src="https://img.shields.io/badge/Status-v1.0.0--rc-success" alt="Status" />
   <a href="https://github.com/sdwck/ToggleMesh/actions/workflows/publish_sdk.yml"><img src="https://github.com/sdwck/ToggleMesh/actions/workflows/publish_sdk.yml/badge.svg" alt="Build Status" /></a>
   <img src="https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet" alt=".NET 10" />
-  <img src="https://img.shields.io/badge/Latency-%3C25ns-success" alt="<25ns Latency" />
+  <img src="https://img.shields.io/badge/Latency-%3C30ns-success" alt="<30ns Latency" />
   <img src="https://img.shields.io/badge/Allocations-0B-blue" alt="0 Bytes Allocated" />
   <img src="https://img.shields.io/badge/License-MIT-green" alt="MIT License" />
 </p>
@@ -116,7 +116,7 @@ public void ProcessOrder(IToggleMeshClient toggleMesh)
 
 ---
 
-## ⚡ The Sub-25ns Evaluation Engine (Performance Proof)
+## ⚡ Performance & Benchmarks
 
 ToggleMesh is engineered for ultra-low-latency microservices where Garbage Collection (GC) pauses are unacceptable.
 
@@ -126,12 +126,12 @@ By leveraging compiled Expression Trees, pre-computed rule groups, C# Source Gen
 *We benchmarked various scenarios: from a simple global toggle to a worst-case scenario evaluating 10 nested AND/OR targeting rules.*
 
 | Method | Mean | StdDev | Max | P95 | Allocated |
-|---|---:|---:|---:|---:|---:|
-| **IsEnabled_NoRules_AOT** *(Baseline)* | **17.34 ns** | 0.026 ns | 17.39 ns | 17.38 ns | **-** |
-| **IsEnabled_With1Rule_AOT** *(Typical)*| **22.49 ns** | 0.055 ns | 22.55 ns | 22.55 ns | **-** |
-| **IsEnabled_Complex_AOT** *(MAB/Rollout)*| **81.44 ns** | 0.160 ns | 81.82 ns | 81.74 ns | **-** |
-| **IsEnabled_With10Rules_AOT** *(Worst-case)* | **127.14 ns** | 0.664 ns | 128.12 ns | 127.93 ns | **-** |
-| **Track_Event** *(Metrics Buffer)* | **41.58 ns** | 0.071 ns | 41.69 ns | 41.69 ns | **-** |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| **Evaluate_NoRules_AOT** *(Baseline)* | **7.43 ns** | 0.04 ns | 7.50 ns | 7.48 ns | **-** |
+| **Evaluate_1Rule_AOT** *(Typical)* | **29.53 ns** | 0.11 ns | 29.67 ns | 29.66 ns | **-** |
+| **Evaluate_ComplexRule_AOT** *(MAB/Rollout)* | **96.66 ns** | 0.48 ns | 97.69 ns | 97.47 ns | **-** |
+| **Evaluate_10Rules_AOT** *(Worst-case)* | **114.23 ns** | 0.38 ns | 114.94 ns | 114.76 ns | **-** |
+| **TrackEvent_10Rules_AOT** *(Metrics Buffer)*| **45.84 ns** | 0.06 ns | 45.98 ns | 45.93 ns | **-** |
 
 > **Hardware Specs:** Intel Core i7-14700K, 20 Physical Cores, Windows 11 x64, .NET 10.0 Release Build.
 
@@ -170,11 +170,14 @@ ToggleMesh provides native SDKs and tooling for your entire microservice fleet.
 ## 🏢 Enterprise-Grade Features
 
 - 📡 **Push, Not Pull (SSE + Redis):** Real-time cache invalidation using Server-Sent Events. No wasteful HTTP polling.
+- 🎯 **Advanced Targeting Engine:** Individual user overrides, Contextual Percentage Rollouts, and Semantic Versioning (SemVer) operators synchronized across all supported SDKs.
+- 🎛️ **Multivariate Flags & Remote Config:** Move beyond simple booleans. Serve strongly-typed JSON, strings, or numeric payloads dynamically to your clients, enabling complex UI theming, game balancing, and multi-variant A/B/C testing without deploying new code.
 - 🧠 **Contextual Multi-Armed Bandits (MAB):** Built-in Bayesian inference engine (Monte Carlo simulations via Beta distributions). Autonomously shifts traffic toward winning variants based on conversion or revenue metrics.
+- 🔬 **Sample Ratio Mismatch (SRM) Detection:** Automated background statistical checks (Chi-Square) to detect tracking bugs or critical assignment skews in your A/B tests before they ruin your data.
 - 📈 **High-Throughput Analytics Ingestion:** SDKs buffer metrics client-side. The API ingests telemetry into bounded `System.Threading.Channels` with `DropOldest` backpressure, flushing to PostgreSQL or horizontally scalable **Kafka + ClickHouse** clusters.
+- 🔌 **Integrations & Webhooks:** Native Slack and MS Teams notifications, plus SSRF-Protected outbound webhook dispatcher with Polly-powered exponential backoff and Dead-Letter Queues (DLQ).
 - 🔐 **Multi-Tenancy & RBAC:** Organization and Project-level isolation with strict Role-Based Access Control.
 - 🔑 **Personal Access Tokens (PATs):** SHA-256 hashed PATs for secure CI/CD and CLI integrations.
-- 🛡️ **SSRF-Protected Webhooks:** Secure outbound webhook dispatcher with Polly-powered exponential backoff and Dead-Letter Queues (DLQ).
 - 📜 **Immutable Audit Logs:** EF Core `SaveChangesInterceptors` capture deep JSON diffs of every mutation.
 - 💾 **Offline Resilience:** SDKs persist the latest synchronized state to a local JSON fallback file, ensuring safe boot-ups during complete network partitions.
 

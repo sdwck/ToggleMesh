@@ -2,7 +2,7 @@ import json
 from dataclasses import dataclass
 from typing import List, Dict, Any, Optional
 
-from .models import FeatureFlagDto, RuleDto, SegmentDto
+from .models import FeatureFlagDto, RuleDto, SegmentDto, VariationWeight
 from .operators import OPERATOR_MAP, RuleOperator, FalseOperator, InSegmentOperator
 
 def calculate_fnv1a_hash(text: str) -> int:
@@ -17,19 +17,28 @@ def calculate_fnv1a_hash(text: str) -> int:
     
     return hash_val
 
-def evaluate_rollout(rollout_percentage: Optional[int], flag_key: str, identity: str) -> bool:
-    if rollout_percentage is None:
-        return True
-    if rollout_percentage <= 0:
-        return False
-    if rollout_percentage >= 100:
-        return True
+def evaluate_rollout(rollout: List['VariationWeight'], flag_key: str, identity: str) -> Optional[str]:
+    if not rollout:
+        return None
+    if len(rollout) == 1:
+        return rollout[0].variation_id
     if not identity:
-        return False
+        return rollout[0].variation_id
         
     hash_val = calculate_fnv1a_hash(flag_key + identity)
-    bucket = hash_val % 100
-    return bucket < rollout_percentage
+    bucket = hash_val % 10000
+    
+    current_sum = 0
+    for w in rollout:
+        weight = w.get("weight", 0) if isinstance(w, dict) else w.weight
+        variation_id = w.get("variation_id") if isinstance(w, dict) else w.variation_id
+        
+        current_sum += weight
+        if bucket < current_sum:
+            return variation_id
+            
+    last_w = rollout[-1]
+    return last_w.get("variation_id") if isinstance(last_w, dict) else last_w.variation_id
 
 
 @dataclass
@@ -40,13 +49,18 @@ class CompiledRule:
 
 @dataclass
 class CompiledRuleGroup:
+    priority: int
+    rollout: List['VariationWeight']
     rules: List[CompiledRule]
 
 class CachedFlag:
     def __init__(self, dto: FeatureFlagDto, groups: List[CompiledRuleGroup]):
         self.key = dto.key
         self.is_enabled = dto.is_enabled
-        self.rollout_percentage = dto.rollout_percentage
+        self.off_variation_id = dto.off_variation_id
+        self.fallthrough_rollout = dto.fallthrough_rollout
+        self.variations = dto.variations
+        self.individual_targets = dto.individual_targets
         self.contextual_rollouts = dto.contextual_rollouts
         self.is_experiment_active = dto.is_experiment_active
         self.groups = groups
@@ -100,13 +114,18 @@ class RuleEngine:
                     operator=op,
                     compiled_value=op.compile(r.value)
                 ))
-            compiled_groups.append(CompiledRuleGroup(rules=compiled_rules))
+            compiled_groups.append(CompiledRuleGroup(
+                priority=g_rules[0].priority,
+                rollout=g_rules[0].rollout,
+                rules=compiled_rules
+            ))
             
+        compiled_groups.sort(key=lambda g: g.priority)
         return compiled_groups
 
-    def evaluate(self, groups: List[CompiledRuleGroup], context: Dict[str, str]) -> bool:
+    def evaluate(self, groups: List[CompiledRuleGroup], context: Dict[str, str]) -> Optional[CompiledRuleGroup]:
         if not groups:
-            return True
+            return None
             
         for group in groups:
             group_passed = True
@@ -114,7 +133,7 @@ class RuleEngine:
                 if isinstance(rule.operator, InSegmentOperator):
                     if self.segment_provider:
                         segment_rules = self.segment_provider.get_segment_rules(rule.compiled_value)
-                        if segment_rules is not None and self.evaluate(segment_rules, context):
+                        if segment_rules is not None and self.evaluate(segment_rules, context) is not None:
                             continue
                 else:
                     user_value = context.get(rule.attribute)
@@ -126,6 +145,6 @@ class RuleEngine:
                 break
                 
             if group_passed:
-                return True
+                return group
                 
-        return False
+        return None

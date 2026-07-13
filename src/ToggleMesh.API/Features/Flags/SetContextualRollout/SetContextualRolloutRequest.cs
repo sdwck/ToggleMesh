@@ -1,7 +1,9 @@
-﻿namespace ToggleMesh.API.Features.Flags.SetContextualRollout;
+using ToggleMesh.API.Features.Flags.Domain;
+
+namespace ToggleMesh.API.Features.Flags.SetContextualRollout;
 
 public class SetContextualRolloutRequest
 {
-    public string ContextSlice { get; set; } = null!;
-    public int RolloutPercentage { get; set; }
+    public string ContextSlice { get; set; } = string.Empty;
+    public List<VariationWeight> Rollout { get; set; } = [];
 }

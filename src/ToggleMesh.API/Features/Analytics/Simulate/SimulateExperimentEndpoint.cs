@@ -1,7 +1,8 @@
-using System.Globalization;
 using ToggleMesh.API.Extensions;
 using ToggleMesh.API.Features.Analytics.Domain;
+using ToggleMesh.API.Infrastructure.Data;
 using ToggleMesh.API.Infrastructure.Endpoints;
+using ToggleMesh.API.Features.Analytics.Ingest;
 using AuthModels = ToggleMesh.API.Infrastructure.Security.Authorization.Models;
 
 namespace ToggleMesh.API.Features.Analytics.Simulate;
@@ -46,28 +47,51 @@ public class SimulateExperimentEndpoint : ToggleEndpoint<SimulateExperimentReque
 
         var clickHouseConn = _config["Analytics:ClickHouse:ConnectionString"];
         var storage = string.IsNullOrWhiteSpace(clickHouseConn) ? "PostgreSQL" : "ClickHouse";
+            
+        if (req.Variations.Count == 0)
+            ThrowError("Variations are required");
 
-        await GenerateVariantDataAsync(environmentId, flagKey, req.EventName, 0, req.ParticipantsCount, req.ControlConversionRate, req.ControlValue, storage, ct);
-        await GenerateVariantDataAsync(environmentId, flagKey, req.EventName, 1, req.ParticipantsCount, req.TreatmentConversionRate, req.TreatmentValue, storage, ct);
+        foreach (var v in req.Variations)
+            await GenerateVariantDataAsync(environmentId, flagKey, req.EventName, v.VariationId, req.ParticipantsCount, v.ConversionRate, v.Value, req.ContextProperties, storage, ct);
 
-        await Send.OkAsync(new { Success = true, Message = $"Injected {req.ParticipantsCount * 2} users." }, ct);
+        var queryEngine = Resolve<IAnalyticsQueryEngine>();
+        await queryEngine.AggregateMetricsAsync(ct);
+        await queryEngine.AggregateContextualMetricsAsync(ct);
+
+        await Send.OkAsync(new
+        {
+            Success = true, 
+            Message = $"Injected {req.ParticipantsCount * req.Variations.Count} users and triggered aggregation."
+        }, ct);
     }
 
-    private async Task GenerateVariantDataAsync(Guid environmentId, string flagKey, string eventName, int variant, int participants, double conversionRate, double? explicitValue, string storage, CancellationToken ct)
+    private async Task GenerateVariantDataAsync(Guid environmentId, string flagKey, string eventName, Guid variationId, int participants, double conversionRate, double? explicitValue, Dictionary<string, string[]> contextProperties, string storage, CancellationToken ct)
     {
         if (storage.Equals("ClickHouse", StringComparison.OrdinalIgnoreCase))
         {
             var connectionString = _config["Analytics:ClickHouse:ConnectionString"] ?? throw new InvalidOperationException("ClickHouse ConnectionString not found");
 
+            string chPropsStr;
+            if (contextProperties is { Count: > 0 })
+            {
+                var dictItems = contextProperties
+                    .Select(kvp => 
+                        $"'{kvp.Key}':" + $"(['" + string.Join("','", kvp.Value.Select(v => v.Replace("'", "''"))) + $"'])[rand() % {kvp.Value.Length} + 1]").ToList();
+                chPropsStr = "concat('{{'," + string.Join(",',',", dictItems) + ",'}}')";
+            }
+            else
+                chPropsStr = "concat('{{\"country\":\"', (['US', 'CA', 'GB', 'AU'])[rand() % 4 + 1], '\"}}')";
+
             var sql1 = $@"
-                INSERT INTO AnalyticsExposures (Id, EnvironmentId, FlagKey, Identity, Variant, Timestamp)
+                INSERT INTO AnalyticsExposures (Id, EnvironmentId, FlagKey, Identity, VariationId, Timestamp, Properties)
                 SELECT 
                     generateUUIDv4(), 
                     '{environmentId}', 
                     '{flagKey}', 
-                    concat('sim-{variant}-', toString(number)), 
-                    {(variant == 1 ? "1" : "0")}, 
-                    now() - interval (rand() % 3600) second
+                    concat('sim-{variationId}-', toString(number)), 
+                    '{variationId}', 
+                    now() - interval (rand() % 3600) second,
+                    {chPropsStr}
                 FROM numbers({participants})
             ";
 
@@ -76,13 +100,14 @@ public class SimulateExperimentEndpoint : ToggleEndpoint<SimulateExperimentReque
                 SELECT 
                     generateUUIDv4(), 
                     '{environmentId}', 
-                    concat('sim-{variant}-', toString(number)), 
+                    e.Identity, 
                     '{eventName}', 
-                    {(explicitValue.HasValue ? explicitValue.Value.ToString(CultureInfo.InvariantCulture) : "(rand() % 45) + 5 + " + (variant == 1 ? "7.5" : "0.0"))}, 
-                    concat('{{""Country"":""', (['US', 'CA', 'GB', 'AU'])[rand() % 4 + 1], '""}}'),
-                    now() - interval (rand() % 3000) second
-                FROM numbers({participants})
-                WHERE rand() % 10000 < {(int)(conversionRate * 10000)}
+                    {(explicitValue.HasValue ? explicitValue.Value.ToString(global::System.Globalization.CultureInfo.InvariantCulture) : "(rand() % 45) + 5")}, 
+                    e.Properties,
+                    e.Timestamp + interval (rand() % 600 + 1) second
+                FROM AnalyticsExposures e
+                WHERE e.EnvironmentId = '{environmentId}' AND e.VariationId = '{variationId}'
+                  AND rand() % 10000 < {(int)(conversionRate * 10000)}
             ";
             
             var sql3 = $@"
@@ -90,12 +115,13 @@ public class SimulateExperimentEndpoint : ToggleEndpoint<SimulateExperimentReque
                 SELECT 
                     generateUUIDv4(), 
                     '{environmentId}', 
-                    concat('sim-{variant}-', toString(number)), 
+                    e.Identity, 
                     'identified', 
                     NULL, 
-                    concat('{{""Country"":""', (['US', 'CA', 'GB', 'AU'])[rand() % 4 + 1], '""}}'),
-                    now() - interval (rand() % 3600 + 1) second
-                FROM numbers({participants})
+                    e.Properties,
+                    e.Timestamp - interval (rand() % 10 + 1) second
+                FROM AnalyticsExposures e
+                WHERE e.EnvironmentId = '{environmentId}' AND e.VariationId = '{variationId}'
             ";
 
             await using var connection = new ClickHouse.Client.ADO.ClickHouseConnection(connectionString);
@@ -116,7 +142,7 @@ public class SimulateExperimentEndpoint : ToggleEndpoint<SimulateExperimentReque
         else
         {
             using var scope = Resolve<IServiceScopeFactory>().CreateScope();
-            var db = scope.ServiceProvider.GetRequiredService<Infrastructure.Data.AppDbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
             var rand = new Random();
             var now = DateTime.UtcNow;
@@ -126,7 +152,24 @@ public class SimulateExperimentEndpoint : ToggleEndpoint<SimulateExperimentReque
 
             for (var i = 0; i < participants; i++)
             {
-                var identity = $"sim-{variant}-{i}";
+                if (i % 1000 == 0) 
+                    ct.ThrowIfCancellationRequested();
+
+                var identity = $"sim-{variationId}-{i}";
+
+                var propsDict = new Dictionary<string, string>();
+                if (contextProperties is { Count: > 0 })
+                {
+                    foreach (var kvp in contextProperties)
+                        if (kvp.Value is { Length: > 0 })
+                            propsDict[kvp.Key] = kvp.Value[rand.Next(0, kvp.Value.Length)];
+                }
+                else
+                    propsDict["country"] = new[] { "US", "CA", "GB", "AU" }[rand.Next(0, 4)];
+                var jsonProps = global::System.Text.Json.JsonSerializer.Serialize(propsDict);
+                var props = global::System.Text.Json.JsonDocument.Parse(jsonProps);
+                
+                var exposureTime = now.AddSeconds(-rand.Next(0, 3600));
                 
                 exposures.Add(new AnalyticsExposure
                 {
@@ -134,16 +177,14 @@ public class SimulateExperimentEndpoint : ToggleEndpoint<SimulateExperimentReque
                     EnvironmentId = environmentId,
                     FlagKey = flagKey,
                     Identity = identity,
-                    Variant = variant == 1,
-                    Timestamp = now.AddSeconds(-rand.Next(0, 3600))
+                    VariationId = variationId,
+                    Timestamp = exposureTime,
+                    Properties = props
                 });
 
                 if (rand.Next(0, 10000) < (int)(conversionRate * 10000))
                 {
-                    var val = explicitValue ?? rand.Next(0, 45) + 5 + (variant == 1 ? 7.5 : 0.0);
-                    var country = new[] { "US", "CA", "GB", "AU" }[rand.Next(0, 4)];
-                    var props = global::System.Text.Json.JsonDocument.Parse($"{{\"Country\":\"{country}\"}}");
-
+                    var val = explicitValue ?? rand.Next(0, 45) + 5;
                     tracks.Add(new AnalyticsTrack
                     {
                         Id = Guid.NewGuid(),
@@ -152,12 +193,10 @@ public class SimulateExperimentEndpoint : ToggleEndpoint<SimulateExperimentReque
                         EventName = eventName,
                         Value = (float)val,
                         Properties = props,
-                        Timestamp = now.AddSeconds(-rand.Next(0, 3000))
+                        Timestamp = exposureTime.AddSeconds(rand.Next(1, 600))
                     });
                 }
                 
-                var country2 = new[] { "US", "CA", "GB", "AU" }[rand.Next(0, 4)];
-                var props2 = global::System.Text.Json.JsonDocument.Parse($"{{\"Country\":\"{country2}\"}}");
                 tracks.Add(new AnalyticsTrack
                 {
                     Id = Guid.NewGuid(),
@@ -165,8 +204,8 @@ public class SimulateExperimentEndpoint : ToggleEndpoint<SimulateExperimentReque
                     Identity = identity,
                     EventName = "identified",
                     Value = null,
-                    Properties = props2,
-                    Timestamp = now.AddSeconds(-rand.Next(0, 3600) - 1)
+                    Properties = props,
+                    Timestamp = exposureTime.AddSeconds(-rand.Next(1, 10))
                 });
             }
 

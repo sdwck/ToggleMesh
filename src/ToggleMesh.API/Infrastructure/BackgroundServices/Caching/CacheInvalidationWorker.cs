@@ -1,4 +1,4 @@
-﻿using StackExchange.Redis;
+using StackExchange.Redis;
 
 namespace ToggleMesh.API.Infrastructure.BackgroundServices.Caching;
 

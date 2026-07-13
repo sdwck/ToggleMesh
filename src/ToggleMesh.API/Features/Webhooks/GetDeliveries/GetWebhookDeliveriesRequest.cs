@@ -1,4 +1,4 @@
-﻿using ToggleMesh.Common.Pagination;
+using ToggleMesh.Common.Pagination;
 
 namespace ToggleMesh.API.Features.Webhooks.GetDeliveries;
 

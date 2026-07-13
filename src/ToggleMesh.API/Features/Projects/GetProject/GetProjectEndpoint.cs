@@ -43,9 +43,9 @@ public class GetProjectEndpoint : ToggleEndpointWithoutRequest<GetProjectRespons
 
         var project = await _db.Projects
             .AsNoTracking()
-            .AsSplitQuery()
             .Include(p => p.Environments)
-            .ThenInclude(e => e.Keys)
+                .ThenInclude(e => e.Keys)
+            .AsSplitQuery()
             .FirstOrDefaultAsync(p => p.Id == projectId, ct);
 
         if (project == null)

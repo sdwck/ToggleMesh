@@ -115,8 +115,8 @@ function compareSemver(a: string, b: string): number {
     return 0;
 }
 
-export class SemVerEqualsOperator implements RuleOperator {
-    name = "SemVerEquals";
+export class SemVerEqualOperator implements RuleOperator {
+    name = "SemVerEqual";
     compile(ruleValue: string) { return ruleValue.replace(/^v/, ''); }
     evaluate(userValue: string, compiledRuleValue: any) {
         return compareSemver(userValue.replace(/^v/, ''), compiledRuleValue) === 0;
@@ -136,6 +136,22 @@ export class SemVerLessThanOperator implements RuleOperator {
     compile(ruleValue: string) { return ruleValue.replace(/^v/, ''); }
     evaluate(userValue: string, compiledRuleValue: any) {
         return compareSemver(userValue.replace(/^v/, ''), compiledRuleValue) < 0;
+    }
+}
+
+export class SemVerGreaterThanOrEqualOperator implements RuleOperator {
+    name = "SemVerGreaterThanOrEqual";
+    compile(ruleValue: string) { return ruleValue.replace(/^v/, ''); }
+    evaluate(userValue: string, compiledRuleValue: any) {
+        return compareSemver(userValue.replace(/^v/, ''), compiledRuleValue) >= 0;
+    }
+}
+
+export class SemVerLessThanOrEqualOperator implements RuleOperator {
+    name = "SemVerLessThanOrEqual";
+    compile(ruleValue: string) { return ruleValue.replace(/^v/, ''); }
+    evaluate(userValue: string, compiledRuleValue: any) {
+        return compareSemver(userValue.replace(/^v/, ''), compiledRuleValue) <= 0;
     }
 }
 
@@ -167,9 +183,11 @@ export const OPERATOR_MAP: Record<string, RuleOperator> = (() => {
         new GreaterThanOrEqualOperator(),
         new LessThanOperator(),
         new LessThanOrEqualOperator(),
-        new SemVerEqualsOperator(),
+        new SemVerEqualOperator(),
         new SemVerGreaterThanOperator(),
-        new SemVerLessThanOperator()
+        new SemVerGreaterThanOrEqualOperator(),
+        new SemVerLessThanOperator(),
+        new SemVerLessThanOrEqualOperator()
     ];
     for (const op of ops) {
         map[op.name.toLowerCase()] = op;

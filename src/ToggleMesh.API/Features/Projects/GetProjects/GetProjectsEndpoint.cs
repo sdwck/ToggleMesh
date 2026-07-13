@@ -118,7 +118,7 @@ public class GetProjectsEndpoint : ToggleEndpoint<GetProjectsRequest, PagedRespo
                 .GroupBy(b => b.Environment.ProjectId)
                 .Select(g => new {
                     ProjectId = g.Key,
-                    TotalEvals = g.Sum(x => x.TrueCount + x.FalseCount)
+                    TotalEvals = g.Sum(x => x.Count)
                 }).ToDictionaryAsync(x => x.ProjectId, ct);
                 
             var webhookStats = new Dictionary<Guid, int>();

@@ -1,4 +1,4 @@
-﻿namespace ToggleMesh.API.Features.Flags.Experiments.Iterations.Get;
+namespace ToggleMesh.API.Features.Flags.Experiments.Iterations.Get;
 
 public record ExperimentIterationDto(
     Guid Id,

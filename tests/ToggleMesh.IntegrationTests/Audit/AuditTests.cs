@@ -7,6 +7,7 @@ using ToggleMesh.API.Features.Flags.Create;
 using ToggleMesh.API.Features.Flags.Domain;
 using ToggleMesh.API.Features.Flags.Toggle;
 using ToggleMesh.API.Features.Flags.Update;
+using ToggleMesh.API.Features.Flags.UpdateGlobalSettings;
 using ToggleMesh.API.Features.Organizations.Domain;
 using ToggleMesh.API.Features.Projects.AddMember;
 using ToggleMesh.API.Features.Projects.CreateEnvironment;
@@ -130,8 +131,7 @@ public class AuditTests : IAsyncLifetime
 
         var updateRequest = new UpdateFlagRequest
         {
-            IsEnabled = true,
-            Rules = [new RuleDto(0, "Email", "EndsWith", "@gmail.com")]
+            Rules = [new RuleInput(0, "Email", "EndsWith", "@gmail.com")]
         };
 
         // Act
@@ -388,5 +388,64 @@ public class AuditTests : IAsyncLifetime
         // Assert
         var logs = await db.AuditLogs.ToListAsync();
         logs.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task UpdatingGlobalSettings_ToMultivariate_ShouldGenerateAuditLogs_ForVariations()
+    {
+        // Arrange
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        var project = new Project { Name = "Audit Variation Project" };
+        db.Projects.Add(project);
+        db.ProjectMembers.Add(new ProjectMember { Project = project, UserId = Guid.Parse(TestAuthHandler.TestUserId), Role = ProjectRole.Owner });
+        var env = new ProjectEnvironment { Name = "Audit Var Env", Project = project };
+        db.Environments.Add(env);
+        await db.SaveChangesAsync();
+
+        await _client.PostAsJsonAsync($"/api/v1/projects/{project.Id}/flags",
+            new CreateFlagRequest { 
+                Key = "audit_var_flag",
+                Type = FlagType.String,
+                Variations = [
+                    new VariationDto(Guid.CreateVersion7(), "initial")
+                ]
+            });
+
+        db.AuditLogs.RemoveRange(db.AuditLogs);
+        await db.SaveChangesAsync();
+
+        var flag = await db.FeatureFlags.Include(x => x.Variations).FirstAsync(x => x.Key == "audit_var_flag");
+        var existingVarId = flag.Variations.First().Id;
+
+        var request = new UpdateGlobalFlagSettingsRequest
+        {
+            Name = flag.Name,
+            Description = flag.Description,
+            Tags = flag.Tags,
+            Variations = [
+                new VariationDto(existingVarId, "a"),
+                new VariationDto(Guid.CreateVersion7(), "b")
+            ]
+        };
+
+        // Act
+        var response = await _client.PutAsJsonAsync(
+            $"/api/v1/projects/{project.Id}/flags/audit_var_flag/settings", request);
+        var responseText = await response.Content.ReadAsStringAsync();
+        if (!response.IsSuccessStatusCode)
+            throw new Exception($"API Error: {response.StatusCode} - {responseText}");
+
+        // Assert
+        var logs = await db.AuditLogs
+            .Where(x => x.EntityName == "FlagVariation" && (x.Action == "Added" || x.Action == "Modified"))
+            .ToListAsync();
+
+        logs.Should().HaveCount(2);
+        logs.Count(l => l.Action == "Added").Should().Be(1);
+        logs.Count(l => l.Action == "Modified").Should().Be(1);
+        logs.All(l => l.EntityFriendlyName == "audit_var_flag (Variation)").Should().BeTrue();
+        logs.All(l => l.EnvironmentId == null).Should().BeTrue();
     }
 }

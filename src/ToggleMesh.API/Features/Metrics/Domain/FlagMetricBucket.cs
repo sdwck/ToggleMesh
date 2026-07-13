@@ -9,8 +9,8 @@ public class FlagMetricBucket
     
     public string FlagKey { get; set; } = string.Empty;
     
-    public DateTime TimestampBucket { get; set; }
+    public DateTimeOffset TimestampBucket { get; set; }
     
-    public long TrueCount { get; set; }
-    public long FalseCount { get; set; }
+    public Guid VariationId { get; set; }
+    public long Count { get; set; }
 }

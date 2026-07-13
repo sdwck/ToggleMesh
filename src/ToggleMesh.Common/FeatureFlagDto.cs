@@ -6,7 +6,11 @@ public sealed record FeatureFlagDto(
     string Key, 
     bool IsEnabled, 
     IEnumerable<RuleDto> Rules, 
-    int? RolloutPercentage = null, 
+    Guid? OffVariationId = null,
+    IEnumerable<VariationWeight>? FallthroughRollout = null, 
+    Dictionary<Guid, string>? Variations = null,
     bool IsExperimentActive = false, 
-    Dictionary<string, int>? ContextualRollouts = null, 
-    string[]? ContextPartitionKeys = null);
+    Dictionary<string, IEnumerable<VariationWeight>>? ContextualRollouts = null, 
+    string[]? ContextPartitionKeys = null,
+    Dictionary<string, Guid>? IndividualTargets = null,
+    EvaluationStrategy EvaluationStrategy = EvaluationStrategy.Complex);

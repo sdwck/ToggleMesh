@@ -103,9 +103,9 @@ public class GetAuditLogsEndpoint : ToggleEndpoint<GetAuditLogsRequest, CursorPa
         {
             var searchTerm = $"%{req.Search}%";
             query = query.Where(x =>
-                (x.EntityFriendlyName != null && EF.Functions.ILike(x.EntityFriendlyName, searchTerm)) ||
+                EF.Functions.ILike(x.EntityFriendlyName, searchTerm) ||
                 EF.Functions.ILike(x.EntityId, searchTerm) ||
-                (x.PerformedByEmail != null && EF.Functions.ILike(x.PerformedByEmail, searchTerm)));
+                EF.Functions.ILike(x.PerformedByEmail, searchTerm));
         }
 
         if (dateFrom.HasValue)

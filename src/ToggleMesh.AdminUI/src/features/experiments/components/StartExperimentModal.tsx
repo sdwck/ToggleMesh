@@ -6,6 +6,7 @@ import { Loader2, Play, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
+import { Slider } from '@/components/ui/slider';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
     Dialog,
@@ -31,7 +32,8 @@ const formSchema = z.object({
     goalEvent: z.string().min(1, 'Goal event is required'),
     optimizationType: z.union([z.literal(0), z.literal(1)]),
     contextPartitionKeys: z.array(z.string()),
-    initialRolloutPercentage: z.number().optional(),
+    mabExplorationFloor: z.number().min(0).max(10).optional(),
+    balanceWeights: z.boolean().optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -42,12 +44,13 @@ interface Props {
     flagKey: string;
     currentRolloutPercentage: number | null;
     isLoading: boolean;
-    hasRules?: boolean;
+    rulesCount?: number;
     onStart: (values: FormValues) => void;
     canEditEnv?: boolean;
+    variationsCount?: number;
 }
 
-export function StartExperimentModal({ projectId, envId, flagKey, currentRolloutPercentage, isLoading, hasRules, onStart, canEditEnv = true }: Props) {
+export function StartExperimentModal({ projectId, envId, flagKey, currentRolloutPercentage, isLoading, rulesCount = 0, onStart, canEditEnv = true, variationsCount = 2 }: Props) {
     const [open, setOpen] = useState(false);
     const { data: uniqueEvents } = useUniqueEvents(projectId, envId);
 
@@ -58,13 +61,14 @@ export function StartExperimentModal({ projectId, envId, flagKey, currentRollout
             goalEvent: '',
             optimizationType: 0,
             contextPartitionKeys: [],
-            initialRolloutPercentage: currentRolloutPercentage ?? undefined
+            mabExplorationFloor: 5,
+            balanceWeights: false
         },
     });
 
     const isMab = form.watch('mode') === 'mab';
     const goalEvent = form.watch('goalEvent');
-    const selectedRolloutPercentage = form.watch('initialRolloutPercentage') ?? currentRolloutPercentage;
+    const isEvenlySplit = currentRolloutPercentage !== null && Math.abs(currentRolloutPercentage - (10000 / variationsCount)) <= 1;
 
     const { data: schema } = useAnalyticsSchema(projectId, envId, flagKey, goalEvent);
 
@@ -73,12 +77,13 @@ export function StartExperimentModal({ projectId, envId, flagKey, currentRollout
         setOpen(false);
     };
 
-    const showMabWarning = isMab && selectedRolloutPercentage !== 50 && selectedRolloutPercentage !== null;
+    const showMabWarning = isMab && !isEvenlySplit && !form.watch('balanceWeights');
 
     return (
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
                 <Button
+                    type="button"
                     size="sm"
                     className="bg-emerald-500 hover:bg-emerald-600 text-white"
                     disabled={isLoading || !canEditEnv}
@@ -87,7 +92,7 @@ export function StartExperimentModal({ projectId, envId, flagKey, currentRollout
                     {isLoading ? 'Starting...' : 'Start New Experiment'}
                 </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[500px] bg-zinc-950 border-border/40">
+            <DialogContent className="sm:max-w-[500px] bg-zinc-950 border-border/40 max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle>Start Experiment</DialogTitle>
                     <DialogDescription>
@@ -96,7 +101,13 @@ export function StartExperimentModal({ projectId, envId, flagKey, currentRollout
                 </DialogHeader>
 
                 <Form {...form}>
-                    <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6 py-4">
+                    <form 
+                        onSubmit={(e) => {
+                            e.stopPropagation();
+                            form.handleSubmit(handleSubmit)(e);
+                        }} 
+                        className="space-y-6 py-4"
+                    >
                         <div className="space-y-4">
                             <FormField
                                 control={form.control}
@@ -118,6 +129,35 @@ export function StartExperimentModal({ projectId, envId, flagKey, currentRollout
                                     </FormItem>
                                 )}
                             />
+
+                            {isMab && (
+                                <FormField
+                                    control={form.control}
+                                    name="mabExplorationFloor"
+                                    render={({ field }) => (
+                                        <FormItem className="space-y-4 p-4 border border-border/40 rounded-lg bg-muted/10">
+                                            <div className="flex justify-between items-center">
+                                                <FormLabel className="text-sm font-medium">Exploration Floor</FormLabel>
+                                                <span className="text-sm font-medium">{field.value}%</span>
+                                            </div>
+                                            <FormControl>
+                                                <Slider
+                                                    min={0}
+                                                    max={10}
+                                                    step={1}
+                                                    value={[field.value || 0]}
+                                                    onValueChange={vals => field.onChange(vals[0])}
+                                                    className="py-2"
+                                                />
+                                            </FormControl>
+                                            <p className="text-[11px] text-muted-foreground mt-2">
+                                                Minimum traffic percentage allocated to each variation.
+                                            </p>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                            )}
 
                             <FormField
                                 control={form.control}
@@ -158,11 +198,22 @@ export function StartExperimentModal({ projectId, envId, flagKey, currentRollout
                                                 <AlertTriangle className="h-4 w-4" />
                                                 Slower Learning Phase
                                             </h4>
-                                            <p className="text-xs text-amber-500/90">
-                                                Initial Traffic Allocation: {selectedRolloutPercentage}% Treatment / {100 - selectedRolloutPercentage!}% Control
-                                            </p>
+                                            <div className="text-xs text-amber-500/90 space-y-2">
+                                                {currentRolloutPercentage !== null && currentRolloutPercentage !== 10000 / variationsCount && (
+                                                    <p>Current traffic split is not evenly balanced across variations.</p>
+                                                )}
+                                                {rulesCount > 0 && (
+                                                    <div className="flex items-start gap-2 text-[13px] text-amber-500 bg-amber-500/10 p-3 rounded-md border border-amber-500/20">
+                                                        <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                                                        <p>
+                                                            <strong>Warning:</strong> You have <strong>{rulesCount} targeting rules</strong> with custom weights. 
+                                                            "Reset to Even Split" will only balance the <em>Default Rollout</em>. This might skew your experiment traffic if users hit the targeting rules instead. We recommend balancing your rules manually or deleting them before starting.
+                                                        </p>
+                                                    </div>
+                                                )}
+                                            </div>
                                             <p className="text-xs text-amber-500/80">
-                                                Starting with an unbalanced split will delay MAB convergence. The algorithm needs traffic on both variants to learn efficiently.
+                                                Starting with an unbalanced split will delay MAB convergence. The algorithm needs traffic on all variants to learn efficiently.
                                             </p>
                                             <Button
                                                 type="button"
@@ -170,15 +221,15 @@ export function StartExperimentModal({ projectId, envId, flagKey, currentRollout
                                                 size="sm"
                                                 className="w-full bg-zinc-950 border-amber-500/50 hover:bg-amber-500/20 text-amber-500"
                                                 onClick={() => {
-                                                    form.setValue('initialRolloutPercentage', 50);
+                                                    form.setValue('balanceWeights', true);
                                                 }}
                                             >
-                                                Reset to 50/50 (Recommended)
+                                                Reset to {variationsCount === 2 ? '50/50' : 'Even Split'} (Recommended)
                                             </Button>
                                         </div>
                                     )}
 
-                                    {hasRules === false && selectedRolloutPercentage == null && (
+                                    {!isMab && rulesCount === 0 && !isEvenlySplit && !form.watch('balanceWeights') && (
                                         <div className="p-4 rounded-lg bg-amber-500/10 border border-amber-500/30 space-y-3">
                                             <h4 className="text-amber-500 text-sm font-semibold flex items-center gap-2">
                                                 <AlertTriangle className="h-4 w-4" />
@@ -193,10 +244,10 @@ export function StartExperimentModal({ projectId, envId, flagKey, currentRollout
                                                 size="sm"
                                                 className="w-full bg-zinc-950 border-amber-500/50 hover:bg-amber-500/20 text-amber-500"
                                                 onClick={() => {
-                                                    form.setValue('initialRolloutPercentage', 50);
+                                                    form.setValue('balanceWeights', true);
                                                 }}
                                             >
-                                                Set 50/50 Rollout
+                                                Set {variationsCount === 2 ? '50/50' : 'Even'} Rollout
                                             </Button>
                                         </div>
                                     )}

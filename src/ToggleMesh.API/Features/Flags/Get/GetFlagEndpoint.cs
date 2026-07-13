@@ -55,7 +55,9 @@ public class GetFlagEndpoint : ToggleEndpointWithoutRequest<GetFlagResponse>
         var state = await _db.FlagEnvironmentStates
             .AsNoTracking()
             .Include(x => x.FeatureFlag)
+                .ThenInclude(f => f.Variations)
             .Include(x => x.Rules)
+            .AsSplitQuery()
             .FirstOrDefaultAsync(x => x.EnvironmentId == environmentId && x.FeatureFlag.Key == flagKey, ct);
 
         if (state is null)

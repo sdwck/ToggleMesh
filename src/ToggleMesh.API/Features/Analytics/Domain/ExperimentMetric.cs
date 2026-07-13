@@ -7,7 +7,7 @@ public class ExperimentMetric : AuditableEntity
     public Guid EnvironmentId { get; set; }
     public string FlagKey { get; set; } = null!;
     public string EventName { get; set; } = null!;
-    public bool Variant { get; set; }
+    public Guid VariationId { get; set; }
     public long TotalExposures { get; set; }
     public long TotalConversions { get; set; }
     public double TotalValue { get; set; }

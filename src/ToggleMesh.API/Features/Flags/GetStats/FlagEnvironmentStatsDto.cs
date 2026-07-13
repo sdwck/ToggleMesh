@@ -1,3 +1,3 @@
-﻿namespace ToggleMesh.API.Features.Flags.GetStats;
+namespace ToggleMesh.API.Features.Flags.GetStats;
 
-public record FlagEnvironmentStatsDto(Guid EnvironmentId, long TrueCount, long FalseCount);
+public record FlagEnvironmentStatsDto(Guid EnvironmentId, Dictionary<Guid, long> VariationsCount);

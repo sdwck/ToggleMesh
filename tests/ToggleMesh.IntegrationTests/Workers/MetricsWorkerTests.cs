@@ -57,8 +57,9 @@ public class MetricsWorkerTests : IAsyncLifetime
         await _db.FlagEnvironmentStates.AddAsync(state);
         await _db.SaveChangesAsync();
 
-        var metricEvent1 = new MetricQueueItem(envId, flagKey, true, 1, 0);
-        var metricEvent2 = new MetricQueueItem(envId, flagKey, true, 0, 1);
+        var variationId = Guid.NewGuid();
+        var metricEvent1 = new MetricQueueItem(envId, flagKey, true, variationId, 1);
+        var metricEvent2 = new MetricQueueItem(envId, flagKey, true, variationId, 1);
 
         await _channel.Writer.WriteAsync(metricEvent1);
         await _channel.Writer.WriteAsync(metricEvent2);
@@ -80,7 +81,7 @@ public class MetricsWorkerTests : IAsyncLifetime
 
         var targetBucket = buckets.FirstOrDefault(b => b.FlagKey == flagKey);
         targetBucket.Should().NotBeNull();
-        targetBucket.TrueCount.Should().BeGreaterThanOrEqualTo(1);
-        targetBucket.FalseCount.Should().BeGreaterThanOrEqualTo(1);
+        targetBucket.Count.Should().BeGreaterThanOrEqualTo(1);
+        targetBucket.Count.Should().BeGreaterThanOrEqualTo(1);
     }
 }

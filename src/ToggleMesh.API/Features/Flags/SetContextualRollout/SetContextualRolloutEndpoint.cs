@@ -32,6 +32,7 @@ public class SetContextualRolloutEndpoint : ToggleEndpoint<SetContextualRolloutR
 
         var state = await _db.FlagEnvironmentStates
             .Include(x => x.FeatureFlag)
+                .ThenInclude(x => x.Variations)
             .Include(x => x.Rules)
             .Include(x => x.ContextualRollouts)
             .AsSplitQuery()
@@ -43,11 +44,8 @@ public class SetContextualRolloutEndpoint : ToggleEndpoint<SetContextualRolloutR
             return;
         }
 
-        if (req.RolloutPercentage is < 0 or > 100)
-        {
-            ThrowError("Rollout percentage must be between 0 and 100.");
-            return;
-        }
+        if (req.Rollout == null || req.Rollout.Sum(r => r.Weight) > 10000)
+            ThrowError("Rollout weights must not sum to more than 10000.");
 
         var rollout = state.ContextualRollouts.FirstOrDefault(x => x.ContextSlice == req.ContextSlice);
         if (rollout == null)
@@ -55,14 +53,14 @@ public class SetContextualRolloutEndpoint : ToggleEndpoint<SetContextualRolloutR
             rollout = new ContextualRollout
             {
                 ContextSlice = req.ContextSlice,
-                RolloutPercentage = req.RolloutPercentage,
+                Rollout = req.Rollout,
                 IsAutoManaged = false
             };
             state.ContextualRollouts.Add(rollout);
         }
         else
         {
-            rollout.RolloutPercentage = req.RolloutPercentage;
+            rollout.Rollout = req.Rollout;
             rollout.IsAutoManaged = false;
         }
 
@@ -72,7 +70,8 @@ public class SetContextualRolloutEndpoint : ToggleEndpoint<SetContextualRolloutR
         await new NotifyFlagUpdatedCommand(
             environmentId, 
             flagKey, 
-            response
+            response,
+            state.ToSdkDto()
         ).ExecuteAsync(ct);
 
         await Send.OkAsync(response, ct);

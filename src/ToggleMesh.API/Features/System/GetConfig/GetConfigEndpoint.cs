@@ -34,15 +34,14 @@ public class GetConfigEndpoint : ToggleEndpoint<EmptyRequest, SystemConfigRespon
             _configuration.GetValue("Auth:PasswordPolicy:RequireNonAlphanumeric", true)
         );
 
-        if (!allowUserOrganizationCreation && User.Identity?.IsAuthenticated == true)
+        if (!allowUserOrganizationCreation 
+            && User.Identity?.IsAuthenticated == true 
+            && User.TryGetUserId(out var userId))
         {
-            if (User.TryGetUserId(out var userId))
-            {
-                var adminEmail = _configuration["DEFAULT_ADMIN_EMAIL"];
-                var user = await _db.Users.FindAsync(new object[] { userId }, ct);
-                if (user != null && string.Equals(user.Email, adminEmail, StringComparison.OrdinalIgnoreCase))
-                    allowUserOrganizationCreation = true;
-            }
+            var adminEmail = _configuration["DEFAULT_ADMIN_EMAIL"];
+            var user = await _db.Users.FindAsync([userId], ct);
+            if (user != null && string.Equals(user.Email, adminEmail, StringComparison.OrdinalIgnoreCase))
+                allowUserOrganizationCreation = true;
         }
 
         await Send.OkAsync(new SystemConfigResponse(allowOpenRegistration, allowUserOrganizationCreation, passwordPolicy), cancellation: ct);

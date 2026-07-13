@@ -95,10 +95,17 @@ export interface ProjectDetails {
 }
 
 export interface RuleDto {
+    priority: number;
     groupId: number;
     attribute: string;
     operator: string;
     value: string;
+    rollout: VariationWeight[];
+}
+
+export interface VariationWeight {
+    variationId: string;
+    weight: number;
 }
 
 export interface SegmentDto {
@@ -123,20 +130,26 @@ export interface UpdateSegmentRequest {
 }
 
 export interface FeatureFlag {
-    id: string;
     key: string;
     isEnabled: boolean;
-    rolloutPercentage: number | null;
     rules: RuleDto[];
+    tags: string[];
+    offVariationId?: string;
+    fallthroughRollout?: VariationWeight[];
     trueCount: number;
     falseCount: number;
-    tags: string[];
-    isMabEnabled: boolean;
-    mabGoalEvent: string | null;
-    isExperimentActive: boolean;
-    mabOptimizationType: 0 | 1;
-    contextPartitionKeys: string[];
-    contextualRollouts: Record<string, number> | null;
+    isMabEnabled?: boolean;
+    mabGoalEvent?: string;
+    isExperimentActive?: boolean;
+    mabOptimizationType?: number;
+    mabExplorationFloor?: number;
+    contextPartitionKeys?: string[];
+    contextualRollouts?: Record<string, VariationWeight[]>;
+    variations?: { id: string; value: string }[];
+    individualTargets?: Record<string, string>;
+    type?: number;
+    isSrmAlertSent: boolean;
+    srmPValue: number | null;
 }
 
 export interface FlagEnvironmentStateDto {
@@ -161,6 +174,8 @@ export interface ProjectFlagDto {
     updatedAt: string;
     environments: FlagEnvironmentStateDto[];
     tags: string[];
+    type: number;
+    variations: { id: string; value: string }[];
 }
 
 export interface PaginatedResponse<T> {
@@ -242,9 +257,17 @@ export interface ProjectMember {
 }
 
 export interface UpdateFlagRequest {
-    isEnabled: boolean;
-    rolloutPercentage: number | null;
     rules: RuleDto[];
+    offVariationId?: string | null;
+    fallthroughRollout: VariationWeight[];
+    individualTargets?: Record<string, string>;
+}
+
+export interface UpdateGlobalFlagSettingsRequest {
+    name: string | null;
+    description: string | null;
+    tags?: string[];
+    variations: { id: string; value: string }[];
 }
 
 export interface UpdateMemberRequest {
@@ -359,6 +382,25 @@ export interface WebhookDelivery {
     createdAt: string;
 }
 
+export const IntegrationProvider = {
+    Slack: 'Slack',
+    Discord: 'Discord',
+    MicrosoftTeams: 'MicrosoftTeams'
+} as const;
+
+export type IntegrationProvider = typeof IntegrationProvider[keyof typeof IntegrationProvider];
+
+export interface Integration {
+    id: string;
+    projectId: string;
+    provider: IntegrationProvider;
+    name: string;
+    webhookUrl: string;
+    events: string[];
+    environmentIds: string[];
+    isActive: boolean;
+}
+
 export interface ExperimentResultDto {
     eventName: string;
     controlExposures: number;
@@ -423,7 +465,7 @@ export interface ProjectDashboardDto {
 
 export interface TimeSeriesResponsePoint {
     time: string;
-    variant: boolean;
+    variationId: string;
     exposures: number;
     conversions: number;
     conversionRate: number;
@@ -437,4 +479,25 @@ export interface ExperimentIterationDto {
     endedAt: string;
     finalMetricsSnapshot: string;
     flagConfigSnapshot: string;
+}
+
+export interface ContextualExperimentVariationResultDto {
+    variationId: string;
+    exposures: number;
+    conversions: number;
+    conversionRate: number;
+    totalValue: number;
+    arpu: number;
+    expectedUplift: number;
+    probabilityToBeatBaseline: number;
+    rolloutWeight: number;
+}
+
+export interface ContextualExperimentResultDto {
+    contextSlice: string;
+    eventName: string;
+    isRevenueBased: boolean;
+    lastCalculatedAt: string;
+    isAutoManaged: boolean;
+    variations: ContextualExperimentVariationResultDto[];
 }
