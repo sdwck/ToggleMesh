@@ -219,18 +219,18 @@ public class UniversalSuiteTest
             }
             else if (eval.Type == "boolean")
             {
-                var result = client.IsEnabled(eval.FlagKey, eval.Identity, eval.Context, false);
+                var result = client.IsEnabled(eval.FlagKey, eval.Identity, eval.Context);
                 Assert.Equal(eval.ExpectedValue == "true", result);
             }
             else if (eval.Type == "number")
             {
-                var result = client.GetJsonVariation<Dictionary<string, string>, double>(eval.FlagKey, eval.Identity, eval.Context, 0);
+                var result = client.GetJsonVariation<Dictionary<string, string>, double>(eval.FlagKey, eval.Identity, eval.Context);
                 var expectedNum = double.Parse(eval.ExpectedValue, CultureInfo.InvariantCulture);
                 Assert.Equal(expectedNum, result);
             }
             else if (eval.Type == "json")
             {
-                var result = client.GetJsonVariation<Dictionary<string, string>, JsonElement>(eval.FlagKey, eval.Identity, eval.Context, default);
+                var result = client.GetJsonVariation<Dictionary<string, string>, JsonElement>(eval.FlagKey, eval.Identity, eval.Context);
                 var expectedJson = JsonSerializer.Deserialize<JsonElement>(eval.ExpectedValue);
                 Assert.Equal(expectedJson.GetRawText(), result.GetRawText());
             }

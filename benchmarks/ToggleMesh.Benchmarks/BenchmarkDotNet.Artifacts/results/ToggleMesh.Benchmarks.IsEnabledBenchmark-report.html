@@ -2,7 +2,7 @@
 <html lang='en'>
 <head>
 <meta charset='utf-8' />
-<title>ToggleMesh.Benchmarks.IsEnabledBenchmark-20260713-032541</title>
+<title>ToggleMesh.Benchmarks.IsEnabledBenchmark-20260713-155717</title>
 
 <style type="text/css">
 	table { border-collapse: collapse; display: block; width: 100%; overflow: auto; }
@@ -24,19 +24,21 @@ Intel Core i7-14700K 3.40GHz, 1 CPU, 28 logical and 20 physical cores
 <table>
 <thead><tr><th>Method                     </th><th>Mean</th><th>Error</th><th>StdDev</th><th>Max </th><th>Min </th><th>P95 </th><th>Allocated</th>
 </tr>
-</thead><tbody><tr><td>Evaluate_1Rule_TypedContext</td><td>70.160 ns</td><td>0.4558 ns</td><td>0.4264 ns</td><td>71.189 ns</td><td>69.629 ns</td><td>70.772 ns</td><td>-</td>
-</tr><tr><td>Evaluate_1Rule_AOT</td><td>29.533 ns</td><td>0.1249 ns</td><td>0.1107 ns</td><td>29.667 ns</td><td>29.269 ns</td><td>29.658 ns</td><td>-</td>
-</tr><tr><td>Evaluate_1Rule_Dictionary</td><td>79.205 ns</td><td>0.3959 ns</td><td>0.3703 ns</td><td>79.800 ns</td><td>78.534 ns</td><td>79.686 ns</td><td>-</td>
-</tr><tr><td>Evaluate_ComplexRule_TypedContext</td><td>145.408 ns</td><td>0.6078 ns</td><td>0.5686 ns</td><td>146.411 ns</td><td>144.294 ns</td><td>146.129 ns</td><td>-</td>
-</tr><tr><td>Evaluate_ComplexRule_AOT</td><td>96.656 ns</td><td>0.5116 ns</td><td>0.4785 ns</td><td>97.686 ns</td><td>95.977 ns</td><td>97.468 ns</td><td>-</td>
-</tr><tr><td>Evaluate_ComplexRule_Dictionary</td><td>160.223 ns</td><td>0.3670 ns</td><td>0.3254 ns</td><td>160.718 ns</td><td>159.554 ns</td><td>160.640 ns</td><td>-</td>
-</tr><tr><td>Evaluate_10Rules_AOT</td><td>114.230 ns</td><td>0.4029 ns</td><td>0.3769 ns</td><td>114.939 ns</td><td>113.569 ns</td><td>114.758 ns</td><td>-</td>
-</tr><tr><td>Evaluate_NoRules_AOT</td><td>7.432 ns</td><td>0.0452 ns</td><td>0.0401 ns</td><td>7.495 ns</td><td>7.358 ns</td><td>7.484 ns</td><td>-</td>
-</tr><tr><td>Evaluate_50_50_Rollout_AOT</td><td>38.266 ns</td><td>0.1731 ns</td><td>0.1620 ns</td><td>38.558 ns</td><td>38.038 ns</td><td>38.517 ns</td><td>-</td>
-</tr><tr><td>GetJsonVariation</td><td>28.685 ns</td><td>0.1165 ns</td><td>0.1090 ns</td><td>28.830 ns</td><td>28.449 ns</td><td>28.798 ns</td><td>-</td>
-</tr><tr><td>GetStringVariation</td><td>28.440 ns</td><td>0.0130 ns</td><td>0.0122 ns</td><td>28.461 ns</td><td>28.420 ns</td><td>28.459 ns</td><td>-</td>
-</tr><tr><td>Analytics_TrackEvent_Simple</td><td>43.758 ns</td><td>0.0699 ns</td><td>0.0584 ns</td><td>43.920 ns</td><td>43.715 ns</td><td>43.860 ns</td><td>-</td>
-</tr><tr><td>Analytics_TrackEvent_10Rules_AOT</td><td>45.841 ns</td><td>0.0764 ns</td><td>0.0597 ns</td><td>45.978 ns</td><td>45.774 ns</td><td>45.931 ns</td><td>-</td>
+</thead><tbody><tr><td>Evaluate_1Rule_TypedContext</td><td>67.467 ns</td><td>0.7700 ns</td><td>0.7203 ns</td><td>68.638 ns</td><td>66.245 ns</td><td>68.569 ns</td><td>-</td>
+</tr><tr><td>Evaluate_1Rule_AOT</td><td>29.841 ns</td><td>0.6063 ns</td><td>0.7217 ns</td><td>30.733 ns</td><td>28.782 ns</td><td>30.648 ns</td><td>-</td>
+</tr><tr><td>Evaluate_1Rule_Dictionary</td><td>112.657 ns</td><td>2.2260 ns</td><td>2.3818 ns</td><td>117.369 ns</td><td>110.319 ns</td><td>117.284 ns</td><td>-</td>
+</tr><tr><td>Evaluate_ComplexRule_TypedContext</td><td>144.747 ns</td><td>0.1534 ns</td><td>0.1360 ns</td><td>145.015 ns</td><td>144.576 ns</td><td>144.965 ns</td><td>-</td>
+</tr><tr><td>Evaluate_ComplexRule_AOT</td><td>94.681 ns</td><td>0.1634 ns</td><td>0.1528 ns</td><td>94.940 ns</td><td>94.416 ns</td><td>94.873 ns</td><td>-</td>
+</tr><tr><td>Evaluate_ComplexRule_Dictionary</td><td>200.159 ns</td><td>3.9238 ns</td><td>3.8537 ns</td><td>209.292 ns</td><td>196.543 ns</td><td>206.678 ns</td><td>-</td>
+</tr><tr><td>Evaluate_10Rules_AOT</td><td>117.107 ns</td><td>1.2149 ns</td><td>1.0770 ns</td><td>118.850 ns</td><td>115.391 ns</td><td>118.705 ns</td><td>-</td>
+</tr><tr><td>Evaluate_NoRules_AOT</td><td>7.281 ns</td><td>0.0344 ns</td><td>0.0321 ns</td><td>7.342 ns</td><td>7.222 ns</td><td>7.329 ns</td><td>-</td>
+</tr><tr><td>Evaluate_50_50_Rollout_AOT</td><td>38.536 ns</td><td>0.3945 ns</td><td>0.3691 ns</td><td>39.045 ns</td><td>37.792 ns</td><td>38.980 ns</td><td>-</td>
+</tr><tr><td>GetJsonVariation</td><td>25.509 ns</td><td>0.0208 ns</td><td>0.0184 ns</td><td>25.547 ns</td><td>25.481 ns</td><td>25.535 ns</td><td>-</td>
+</tr><tr><td>GetJsonVariation_WithUser_AOT</td><td>27.864 ns</td><td>0.0445 ns</td><td>0.0394 ns</td><td>27.947 ns</td><td>27.813 ns</td><td>27.935 ns</td><td>-</td>
+</tr><tr><td>GetStringVariation</td><td>22.827 ns</td><td>0.1537 ns</td><td>0.1437 ns</td><td>23.072 ns</td><td>22.615 ns</td><td>23.069 ns</td><td>-</td>
+</tr><tr><td>GetStringVariation_WithUser_AOT</td><td>28.788 ns</td><td>0.2499 ns</td><td>0.2337 ns</td><td>29.138 ns</td><td>28.330 ns</td><td>29.098 ns</td><td>-</td>
+</tr><tr><td>Analytics_TrackEvent_Simple</td><td>45.324 ns</td><td>0.3558 ns</td><td>0.3329 ns</td><td>45.911 ns</td><td>44.979 ns</td><td>45.818 ns</td><td>-</td>
+</tr><tr><td>Analytics_TrackEvent_10Rules_AOT</td><td>46.434 ns</td><td>0.1356 ns</td><td>0.1268 ns</td><td>46.657 ns</td><td>46.246 ns</td><td>46.631 ns</td><td>-</td>
 </tr></tbody></table>
 </body>
 </html>

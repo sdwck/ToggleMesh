@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Hosting;
+using ToggleMesh.Common.Contexts;
 using ToggleMesh.SDK.Attributes;
 using ToggleMesh.SDK.Clients;
 using ToggleMesh.SDK.Models;
@@ -56,17 +57,21 @@ public class ShowcaseWorker : BackgroundService
             var user = new ToggleMeshUser<AotUserContext>(identity, context);
 
             Console.WriteLine("\n[1] Boolean Flag Evaluation (AOT Context)");
-            var isNewCheckoutEnabled = _client.IsEnabled("new-checkout", user);
+            var isNewCheckoutEnabled = _client.IsEnabled("new-checkout", ref user);
             Console.WriteLine($"Flag 'new-checkout' -> {isNewCheckoutEnabled}");
 
             Console.WriteLine("\n[2] String Variation Evaluation");
-            var buttonColor = _client.GetStringVariation("button-color", identity, context, "blue");
+            var buttonColor = _client.GetStringVariation(
+                "button-color", 
+                identity, 
+                context, 
+                "blue");
             Console.WriteLine($"Flag 'button-color' -> {buttonColor}");
             
             if (Random.Shared.NextDouble() > 0.1)
             {
                 var price = buttonColor == "red" ? 150.0 : 100.0;
-                _client.Track("purchase", user, value: price);
+                _client.Track("purchase", ref user, value: price);
                 Console.WriteLine($"Tracked 'purchase' for button-color testing with value ${price}");
             }
 
@@ -75,7 +80,7 @@ public class ShowcaseWorker : BackgroundService
             Console.WriteLine($"Flag 'ui-config' -> Theme: {uiConfig.Theme}, Sidebar: {uiConfig.ShowSidebar}, Items/Page: {uiConfig.ItemsPerPage}");
 
             Console.WriteLine("\n[4] Low-Level Guid Evaluation");
-            var variationId = _client.Evaluate("backend-algo", user);
+            var variationId = _client.Evaluate("backend-algo", ref user);
             Console.WriteLine($"Flag 'backend-algo' -> VariationId: {variationId}");
 
             Console.WriteLine("\n[5] Tracking Event with Value");
@@ -93,7 +98,8 @@ public class ShowcaseWorker : BackgroundService
                 Category = Random.Shared.NextDouble() > 0.5 ? "Electronics" : "Books", 
                 IsSubscription = false 
             };
-            _client.Track("purchase", user, purchaseProps, value: 299.99);
+            var purchasePropsAcc = new ContextAccessor<PurchaseEventProperties>(purchaseProps);
+            _client.Track("purchase", ref user, ref purchasePropsAcc, value: 299.99);
             Console.WriteLine("Tracked 'purchase' with structured properties.");
 
             await Task.Delay(5000, stoppingToken);

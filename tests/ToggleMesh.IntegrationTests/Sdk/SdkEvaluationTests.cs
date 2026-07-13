@@ -53,7 +53,7 @@ public class SdkEvaluationTests
         };
 
         // Act
-        var result = _client.GetStringVariation("color_flag", "blue");
+        var result = _client.GetStringVariation("color_flag", defaultValue: "blue");
 
         // Assert
         result.Should().Be("red");
@@ -73,7 +73,7 @@ public class SdkEvaluationTests
         };
 
         // Act
-        var result = _client.GetStringVariation("color_flag", "blue");
+        var result = _client.GetStringVariation("color_flag", defaultValue: "blue");
 
         // Assert
         result.Should().Be("blue");
@@ -95,7 +95,7 @@ public class SdkEvaluationTests
         // Act
         var result = _client.GetJsonVariation(
             "config_flag", 
-            new TestConfig { Timeout = 1000 });
+            defaultValue: new TestConfig { Timeout = 1000 });
 
         // Assert
         result.Should().NotBeNull();

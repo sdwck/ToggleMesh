@@ -2,14 +2,13 @@ using ToggleMesh.Common.Contexts;
 
 namespace ToggleMesh.SDK.Models;
 
-public readonly struct ToggleMeshUser<TContext> where TContext : IContextAccessor
+public struct ToggleMeshUser<TContext> where TContext : IContextAccessor
 {
-    public readonly string Identity;
-    public readonly TContext Context;
+    public string Identity;
+    public TContext Context;
 
-    public ToggleMeshUser(string identity, TContext context)
+    public ToggleMeshUser(string? identity, TContext context)
     {
-        // ReSharper disable once NullCoalescingConditionIsAlwaysNotNullAccordingToAPIContract
         Identity = identity ?? string.Empty;
         Context = context;
     }

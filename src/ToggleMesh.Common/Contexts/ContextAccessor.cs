@@ -89,10 +89,27 @@ public readonly struct ContextAccessor<T> : IContextAccessor
 
         if (_instance is IContextAccessor ca)
             return ca.TryGetValue(key, out value);
+        
+        if (_instance is Dictionary<string, string> concreteDict)
+        {
+            if (concreteDict.TryGetValue(key, out value)) 
+                return true;
+
+            foreach (var kvp in concreteDict)
+            {
+                if (!string.Equals(kvp.Key, key, StringComparison.OrdinalIgnoreCase)) 
+                    continue;
+                
+                value = kvp.Value;
+                return true;
+            }
+            return false;
+        }
 
         if (_instance is IDictionary<string, string> dict)
         {
-            if (dict.TryGetValue(key, out value)) return true;
+            if (dict.TryGetValue(key, out value)) 
+                return true;
 
             foreach (var kvp in dict)
             {

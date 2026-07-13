@@ -8,10 +8,12 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
 using ToggleMesh.Common;
+using ToggleMesh.Common.Contexts;
 using ToggleMesh.Common.Rules;
 using ToggleMesh.Common.Rules.Operators;
 using ToggleMesh.SDK.Attributes;
 using ToggleMesh.SDK.Clients;
+using ToggleMesh.SDK.Models;
 using ToggleMesh.SDK.Options;
 
 namespace ToggleMesh.Benchmarks;
@@ -56,12 +58,18 @@ public class IsEnabledBenchmark
 {
     private ToggleMeshClient _client = null!;
     private readonly TypedUserContext _userContextTyped = new();
-    private AotUserContext _userContextAot = new() { Email = "test@gmail.com", Age = 25, AppVersion = "2.1.0" };
+    private readonly AotUserContext _userContextAot = new() { Email = "test@gmail.com", Age = 25, AppVersion = "2.1.0" };
+    private ToggleMeshUser<AotUserContext> _benchUser;
     private readonly Dictionary<string, string> _userContextDictionary = new() { { "Email", "test@gmail.com" }, { "Age", "25" }, { "AppVersion", "2.1.0" } };
+    private readonly PurchaseProps _purchaseProps = new() { TotalAmount = 99.99, ItemsCount = 1 };
+    private ContextAccessor<PurchaseProps> _purchasePropsAcc;
 
     [GlobalSetup]
     public void Setup()
     {
+        _benchUser = new ToggleMeshUser<AotUserContext>(null, _userContextAot); 
+        _purchasePropsAcc = new ContextAccessor<PurchaseProps>(_purchaseProps);
+        
         var operators = new IRuleOperator[] { 
             new EqualsOperator(), new EndsWithOperator(), new StartsWithOperator(), 
             new ContainsOperator(), new GreaterThanOperator(), new LessThanOperator(), 
@@ -251,7 +259,7 @@ public class IsEnabledBenchmark
     [BenchmarkCategory("Bool")]
     public bool Evaluate_1Rule_AOT()
     {
-        return _client.IsEnabled("bench-flag", ref _userContextAot);
+        return _client.IsEnabled("bench-flag", ref _benchUser);
     }
 
     [Benchmark]
@@ -272,7 +280,7 @@ public class IsEnabledBenchmark
     [BenchmarkCategory("Bool", "Complex")]
     public bool Evaluate_ComplexRule_AOT()
     {
-        return _client.IsEnabled("bench-flag-complex", ref _userContextAot);
+        return _client.IsEnabled("bench-flag-complex", ref _benchUser);
     }
 
     [Benchmark]
@@ -281,8 +289,6 @@ public class IsEnabledBenchmark
     {
         return _client.IsEnabled("bench-flag-complex", _userContextDictionary);
     }
-
-    private readonly PurchaseProps _purchaseProps = new() { TotalAmount = 99.99, ItemsCount = 1 };
 
     [Benchmark]
     [BenchmarkCategory("Track")]
@@ -295,35 +301,42 @@ public class IsEnabledBenchmark
     [BenchmarkCategory("Bool", "Complex")]
     public bool Evaluate_10Rules_AOT()
     {
-        return _client.IsEnabled("bench-flag-10rules", ref _userContextAot);
+        return _client.IsEnabled("bench-flag-10rules", ref _benchUser);
     }
 
     [Benchmark]
     [BenchmarkCategory("Track")]
     public void Analytics_TrackEvent_10Rules_AOT()
     {
-        _client.Track("purchase", ref _userContextAot, _purchaseProps, value: 99.99);
+        _client.Track("purchase", ref _benchUser, ref _purchasePropsAcc, value: 99.99);
     }
 
     [Benchmark]
     [BenchmarkCategory("Bool", "NoRules")]
     public bool Evaluate_NoRules_AOT()
     {
-        return _client.IsEnabled("bench-flag-norules", ref _userContextAot);
+        return _client.IsEnabled("bench-flag-norules", ref _benchUser);
     }
 
     [Benchmark]
     [BenchmarkCategory("Bool", "Rollout")]
     public bool Evaluate_50_50_Rollout_AOT()
     {
-        return _client.IsEnabled("bench-flag-rollout", ref _userContextAot);
+        return _client.IsEnabled("bench-flag-rollout", ref _benchUser);
     }
 
     [Benchmark]
     [BenchmarkCategory("String")]
     public string GetStringVariation()
     {
-        return _client.GetStringVariation("bench-flag-string", "default-value");
+        return _client.GetStringVariation("bench-flag-string", defaultValue: "default-value");
+    }
+    
+    [Benchmark]
+    [BenchmarkCategory("String")]
+    public string GetStringVariation_WithUser_AOT()
+    {
+        return _client.GetStringVariation("bench-flag-string", ref _benchUser, "default-value");
     }
 
     private readonly FeatureSettings _defaultSettings = new();
@@ -332,7 +345,14 @@ public class IsEnabledBenchmark
     [BenchmarkCategory("Json")]
     public FeatureSettings GetJsonVariation()
     {
-        return _client.GetJsonVariation("bench-flag-json", _defaultSettings);
+        return _client.GetJsonVariation("bench-flag-json", defaultValue: _defaultSettings);
+    }
+    
+    [Benchmark]
+    [BenchmarkCategory("Json")]
+    public FeatureSettings GetJsonVariation_WithUser_AOT()
+    {
+        return _client.GetJsonVariation("bench-flag-json", ref _benchUser, defaultValue: _defaultSettings);
     }
 }
 

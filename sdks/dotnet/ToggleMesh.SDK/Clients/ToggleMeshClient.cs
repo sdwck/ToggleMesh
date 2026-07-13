@@ -2,6 +2,8 @@ using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Json;
 using System.Runtime.CompilerServices;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Threading.Channels;
 using Microsoft.Extensions.Hosting;
@@ -86,9 +88,18 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService, ISegmentProvi
                 SamplingDuration = TimeSpan.FromSeconds(30),
                 MinimumThroughput = 2,
                 BreakDuration = TimeSpan.FromSeconds(30),
-                OnOpened = _ => { _logger.LogWarning("[ToggleMesh] API is unreachable. Circuit breaker OPENED for 30s."); return ValueTask.CompletedTask; },
-                OnClosed = _ => { _logger.LogInformation("[ToggleMesh] API recovered. Circuit breaker CLOSED."); return ValueTask.CompletedTask; },
-                OnHalfOpened = _ => { _logger.LogDebug("[ToggleMesh] Circuit breaker HALF-OPENED. Testing API connection..."); return ValueTask.CompletedTask; }
+                OnOpened = _ =>
+                {
+                    _logger.LogWarning("[ToggleMesh] API is unreachable. Circuit breaker OPENED for 30s."); return ValueTask.CompletedTask;
+                },
+                OnClosed = _ =>
+                {
+                    _logger.LogInformation("[ToggleMesh] API recovered. Circuit breaker CLOSED."); return ValueTask.CompletedTask;
+                },
+                OnHalfOpened = _ =>
+                {
+                    _logger.LogDebug("[ToggleMesh] Circuit breaker HALF-OPENED. Testing API connection..."); return ValueTask.CompletedTask;
+                }
             })
             .Build();
 
@@ -99,13 +110,258 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService, ISegmentProvi
                 ? Path.Combine(AppContext.BaseDirectory, ".togglemesh", $"{safeKey}.json")
                 : options.Value.FallbackFilePath;
     }
+    
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool IsEnabled(string flagKey, string? identity = null, bool defaultValue = false)
+    {
+        if (!_cache.TryGetValue(flagKey, out var flag)) 
+            return defaultValue;
+        if (string.IsNullOrEmpty(identity) && flag.HasFastPath)
+        {
+            if (_isMetricsEnabled) 
+                Interlocked.Increment(ref flag.FastMetricsCount);
+            return flag.FastBoolResult;
+        }
+        var result = EvaluateInternalWithFlag<EmptyContext>(
+            flagKey, identity ?? string.Empty, default, null, flag);
+        return GetBoolVariation(flag, result, defaultValue);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool IsEnabled<TContext>(string flagKey, TContext contextAttributes, bool defaultValue = false)
+    {
+        if (!_cache.TryGetValue(flagKey, out var flag)) 
+            return defaultValue;
+        if (flag.HasFastPath)
+        {
+            if (_isMetricsEnabled) 
+                Interlocked.Increment(ref flag.FastMetricsCount);
+            return flag.FastBoolResult;
+        }
+        var result = EvaluateInternalWithFlag(
+            flagKey, string.Empty, contextAttributes, null, flag);
+        return GetBoolVariation(flag, result, defaultValue);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool IsEnabled<TContext>(string flagKey, string? identity, TContext contextAttributes, bool defaultValue = false)
+    {
+        if (!_cache.TryGetValue(flagKey, out var flag)) 
+            return defaultValue;
+        if (string.IsNullOrEmpty(identity) && flag.HasFastPath)
+        {
+            if (_isMetricsEnabled) 
+                Interlocked.Increment(ref flag.FastMetricsCount);
+            return flag.FastBoolResult;
+        }
+        var result = EvaluateInternalWithFlag(
+            flagKey, identity ?? string.Empty, contextAttributes, null, flag);
+        return GetBoolVariation(flag, result, defaultValue);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool IsEnabled<TContext>(string flagKey, ref ToggleMeshUser<TContext> user, bool defaultValue = false) where TContext : IContextAccessor
+    {
+        if (!_cache.TryGetValue(flagKey, out var flag))
+            return defaultValue;
+        if (flag.HasFastPath)
+        {
+            if (_isMetricsEnabled)
+                Interlocked.Increment(ref flag.FastMetricsCount);
+            return flag.FastBoolResult;
+        }
+        
+        var result = EvaluateInternalWithFlag(
+            flagKey, user.Identity, ref user.Context, null, flag);
+        return GetBoolVariation(flag, result, defaultValue);
+    }
+
+    
+    public Guid? Evaluate(string flagKey, string? identity = null, Guid? defaultValue = null) =>
+        EvaluateInternal<EmptyContext>(flagKey, identity ?? string.Empty, default, defaultValue, out _);
+    
+    public Guid? Evaluate<TContext>(string flagKey, TContext contextAttributes, Guid? defaultValue = null) =>
+        EvaluateInternal(flagKey, string.Empty, contextAttributes, defaultValue, out _);
+
+    public Guid? Evaluate<TContext>(string flagKey, string? identity, TContext contextAttributes, Guid? defaultValue = null) =>
+        EvaluateInternal(flagKey, identity ?? string.Empty, contextAttributes, defaultValue, out _);
+
+    public Guid? Evaluate<TContext>(string flagKey, ref ToggleMeshUser<TContext> user, Guid? defaultValue = null) where TContext : IContextAccessor
+    {
+        return EvaluateInternal(
+            flagKey, user.Identity, ref user.Context, defaultValue, out _);
+    }
+    
+    
+    public string GetStringVariation(string flagKey, string? identity = null, string defaultValue = null!)
+    {
+        var result = EvaluateInternal<EmptyContext>(
+            flagKey, identity ?? string.Empty, default, null, out var flag);
+        return GetTypedVariation(flag, result, defaultValue);
+    }
+    
+    public string GetStringVariation<TContext>(string flagKey, TContext contextAttributes, string defaultValue = null!)
+    {
+        var result = EvaluateInternal(
+            flagKey, string.Empty, contextAttributes, null, out var flag);
+        return GetTypedVariation(flag, result, defaultValue);
+    }
+
+    public string GetStringVariation<TContext>(string flagKey, string? identity, TContext? contextAttributes, string defaultValue = null!)
+    {
+        var result = EvaluateInternal(
+            flagKey, identity ?? string.Empty, contextAttributes, null, out var flag);
+        return GetTypedVariation(flag, result, defaultValue);
+    }
+
+    public string GetStringVariation<TContext>(string flagKey, ref ToggleMeshUser<TContext> user, string defaultValue = null!) where TContext : IContextAccessor
+    {
+        var result = EvaluateInternal(
+            flagKey, user.Identity, ref user.Context, null, out var flag);
+        return GetTypedVariation(flag, result, defaultValue);
+    }
+
+    
+    public T GetJsonVariation<T>(string flagKey, string? identity = null, T defaultValue = default!)
+    {
+        var result = EvaluateInternal<EmptyContext>(
+            flagKey, identity ?? string.Empty, default, null, out var flag);
+        return GetTypedVariation(flag, result, defaultValue);
+    }
+    
+    public T GetJsonVariation<TContext, T>(string flagKey, TContext contextAttributes, T defaultValue = default!)
+    {
+        var result = EvaluateInternal(
+            flagKey, string.Empty, contextAttributes, null, out var flag);
+        return GetTypedVariation(flag, result, defaultValue);
+    }
+
+    public T GetJsonVariation<TContext, T>(string flagKey, string? identity, TContext contextAttributes, T defaultValue = default!)
+    {
+        var result = EvaluateInternal(
+            flagKey, identity ?? string.Empty, contextAttributes, null, out var flag);
+        return GetTypedVariation(flag, result, defaultValue);
+    }
+
+    public T GetJsonVariation<TContext, T>(string flagKey, ref ToggleMeshUser<TContext> user, T defaultValue = default!) where TContext : IContextAccessor
+    {
+        var result = EvaluateInternal(
+            flagKey, user.Identity, ref user.Context, null, out var flag);
+        return GetTypedVariation(flag, result, defaultValue);
+    }
+
+    
+    public void Track(string eventName, string? identity = null, double? value = null)
+    {
+        var accessor = new ContextAccessor<EmptyContext>(default);
+        var evalContext = new EvaluationContext<ContextAccessor<EmptyContext>>(accessor, _contextProviders, _identityKeys);
+        var actualIdentity = evalContext.GetIdentity(identity ?? string.Empty);
+
+        if (string.IsNullOrEmpty(actualIdentity) || string.IsNullOrEmpty(eventName)) 
+            return;
+
+        var evt = ObjectPools<object?>.Pool.Get();
+        evt.Type = AnalyticsEventType.Track;
+        evt.Timestamp = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
+        evt.Identity = actualIdentity;
+        evt.EventName = eventName;
+        evt.Value = value;
+        evt.Properties = null;
+        if (!_eventsChannel.Writer.TryWrite(evt)) 
+            evt.ReturnToPool();
+    }
+    
+    public void Track<TProperties>(string eventName, TProperties properties, double? value = null)
+    {
+        var accessor = new ContextAccessor<TProperties>(properties);
+        var evalContext = new EvaluationContext<ContextAccessor<TProperties>>(
+            accessor, _contextProviders, _identityKeys);
+        var actualIdentity = evalContext.GetIdentity(string.Empty);
+
+        if (string.IsNullOrEmpty(actualIdentity) || string.IsNullOrEmpty(eventName)) 
+            return;
+
+        var evt = ObjectPools<TProperties>.Pool.Get();
+        evt.Type = AnalyticsEventType.Track;
+        evt.Timestamp = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
+        evt.Identity = actualIdentity;
+        evt.EventName = eventName;
+        evt.Value = value;
+        evt.Properties = properties;
+        if (!_eventsChannel.Writer.TryWrite(evt)) 
+            evt.ReturnToPool();
+    }
+
+    public void Track<TProperties>(string eventName, string? identity, TProperties properties, double? value = null)
+    {
+        var accessor = new ContextAccessor<TProperties>(properties);
+        var evalContext = new EvaluationContext<ContextAccessor<TProperties>>(
+            accessor, _contextProviders, _identityKeys);
+        var actualIdentity = evalContext.GetIdentity(identity ?? string.Empty);
+
+        if (string.IsNullOrEmpty(actualIdentity) || string.IsNullOrEmpty(eventName)) 
+            return;
+
+        var evt = ObjectPools<TProperties>.Pool.Get();
+        evt.Type = AnalyticsEventType.Track;
+        evt.Timestamp = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
+        evt.Identity = actualIdentity;
+        evt.EventName = eventName;
+        evt.Value = value;
+        evt.Properties = properties;
+        if (!_eventsChannel.Writer.TryWrite(evt)) 
+            evt.ReturnToPool();
+    }
+    
+    public void Track<TContext>(string eventName, ref ToggleMeshUser<TContext> user, double? value = null) 
+        where TContext : IContextAccessor
+    {
+        var evalContext = new EvaluationContext<TContext>(
+            user.Context, _contextProviders, _identityKeys);
+        var actualIdentity = evalContext.GetIdentity(user.Identity);
+
+        if (string.IsNullOrEmpty(actualIdentity) || string.IsNullOrEmpty(eventName)) 
+            return;
+
+        var evt = ObjectPools<object?>.Pool.Get();
+        evt.Type = AnalyticsEventType.Track;
+        evt.Timestamp = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
+        evt.Identity = actualIdentity;
+        evt.EventName = eventName;
+        evt.Value = value;
+        evt.Properties = null;
+        if (!_eventsChannel.Writer.TryWrite(evt)) 
+            evt.ReturnToPool();
+    }
+
+    public void Track<TContext, TProperties>(string eventName, ref ToggleMeshUser<TContext> user, ref TProperties properties, double? value = null) 
+        where TContext : IContextAccessor 
+        where TProperties : IContextAccessor
+    {
+        var evalContext = new EvaluationContext<TContext>(
+            user.Context, _contextProviders, _identityKeys);
+        var actualIdentity = evalContext.GetIdentity(user.Identity);
+
+        if (string.IsNullOrEmpty(actualIdentity) || string.IsNullOrEmpty(eventName)) 
+            return;
+
+        var evt = ObjectPools<TProperties>.Pool.Get();
+        evt.Type = AnalyticsEventType.Track;
+        evt.Timestamp = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
+        evt.Identity = actualIdentity;
+        evt.EventName = eventName;
+        evt.Value = value;
+        evt.Properties = properties;
+        if (!_eventsChannel.Writer.TryWrite(evt)) 
+            evt.ReturnToPool();
+    }
 
     private static string GetSafeFileName(string apiKey)
     {
         if (string.IsNullOrWhiteSpace(apiKey)) 
             return "default";
-        var bytes = System.Text.Encoding.UTF8.GetBytes(apiKey);
-        var hash = System.Security.Cryptography.SHA256.HashData(bytes);
+        var bytes = Encoding.UTF8.GetBytes(apiKey);
+        var hash = SHA256.HashData(bytes);
         return Convert.ToHexString(hash)[..12].ToLowerInvariant();
     }
 
@@ -150,7 +406,7 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService, ISegmentProvi
         }
         catch
         {
-             /* ignore */
+             // ignore
         }
         return null;
     }
@@ -284,7 +540,8 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService, ISegmentProvi
     {
         if (variationId == null || flag == null) 
             return defaultValue;
-        if (flag.Variations == null || !flag.Variations.TryGetValue(variationId.Value, out var val)) 
+        if (flag.Variations == null || 
+            !flag.Variations.TryGetValue(variationId.Value, out var val)) 
             return defaultValue;
 
         try
@@ -313,294 +570,6 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService, ISegmentProvi
         }
     }
 
-    public Guid? Evaluate(string flagKey, Guid? defaultValue = null) => 
-        Evaluate<object>(flagKey, string.Empty, null!, defaultValue);
-    public Guid? Evaluate(string flagKey, string identity, Guid? defaultValue = null) => 
-        Evaluate<object>(flagKey, identity, null!, defaultValue);
-    public Guid? Evaluate(string flagKey, IDictionary<string, string> context, Guid? defaultValue = null) => 
-        Evaluate(flagKey, string.Empty, context, defaultValue);
-    public Guid? Evaluate(string flagKey, string identity, IDictionary<string, string> context, Guid? defaultValue = null) => 
-        Evaluate<IDictionary<string, string>>(flagKey, identity, context, defaultValue);
-    public Guid? Evaluate<TContext>(string flagKey, TContext contextObject, Guid? defaultValue = null) => 
-        Evaluate(flagKey, string.Empty, contextObject, defaultValue);
-    public Guid? Evaluate<TContext>(string flagKey, string identity, TContext contextObject, Guid? defaultValue = null) => 
-        EvaluateInternal(flagKey, identity, contextObject, defaultValue, out _);
-    public Guid? Evaluate<TContext>(string flagKey, ref TContext contextObject, Guid? defaultValue = null) where TContext : IContextAccessor => 
-        Evaluate(flagKey, string.Empty, ref contextObject, defaultValue);
-    public Guid? Evaluate<TContext>(string flagKey, string identity, ref TContext contextObject, Guid? defaultValue = null) where TContext : IContextAccessor => 
-        EvaluateInternal(flagKey, identity, ref contextObject, defaultValue, out _);
-    public Guid? Evaluate<TContext>(string flagKey, ToggleMeshUser<TContext> user, Guid? defaultValue = null) where TContext : IContextAccessor
-    {
-        var ctx = user.Context;
-        return Evaluate(flagKey, user.Identity, ref ctx, defaultValue);
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public bool IsEnabled(string flagKey, bool defaultValue = false)
-    {
-        if (!_cache.TryGetValue(flagKey, out var flag)) 
-            return defaultValue;
-        if (flag.HasFastPath)
-        {
-            if (_isMetricsEnabled) 
-                Interlocked.Increment(ref flag.FastMetricsCount); 
-            return flag.FastBoolResult;
-        }
-        var result = EvaluateInternalWithFlag<object>(flagKey, string.Empty, null!, null, flag);
-        return GetBoolVariation(flag, result, defaultValue);
-    }
-    
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public bool IsEnabled(string flagKey, string identity, bool defaultValue = false)
-    {
-        if (!_cache.TryGetValue(flagKey, out var flag)) 
-            return defaultValue;
-        if (string.IsNullOrEmpty(identity) && flag.HasFastPath)
-        {
-            if (_isMetricsEnabled) 
-                Interlocked.Increment(ref flag.FastMetricsCount); 
-            return flag.FastBoolResult;
-        }
-        var result = EvaluateInternalWithFlag<object>(flagKey, identity, null!, null, flag);
-        return GetBoolVariation(flag, result, defaultValue);
-    }
-        
-    public bool IsEnabled(string flagKey, IDictionary<string, string> context, bool defaultValue = false)
-    {
-        if (!_cache.TryGetValue(flagKey, out var flag)) 
-            return defaultValue;
-        if (flag.HasFastPath)
-        {
-            if (_isMetricsEnabled) 
-                Interlocked.Increment(ref flag.FastMetricsCount); 
-            return flag.FastBoolResult;
-        }
-        var result = EvaluateInternalWithFlag(flagKey, string.Empty, context, null, flag);
-        return GetBoolVariation(flag, result, defaultValue);
-    }
-        
-    public bool IsEnabled(string flagKey, string identity, IDictionary<string, string> context, bool defaultValue = false)
-    {
-        if (!_cache.TryGetValue(flagKey, out var flag)) 
-            return defaultValue;
-        if (string.IsNullOrEmpty(identity) && flag.HasFastPath)
-        {
-            if (_isMetricsEnabled) 
-                Interlocked.Increment(ref flag.FastMetricsCount); 
-            return flag.FastBoolResult;
-        }
-        var result = EvaluateInternalWithFlag(flagKey, identity, context, null, flag);
-        return GetBoolVariation(flag, result, defaultValue);
-    }
-        
-    public bool IsEnabled<TContext>(string flagKey, TContext contextObject, bool defaultValue = false)
-    {
-        if (!_cache.TryGetValue(flagKey, out var flag)) 
-            return defaultValue;
-        if (flag.HasFastPath) { 
-            if (_isMetricsEnabled) 
-                Interlocked.Increment(ref flag.FastMetricsCount); 
-            return flag.FastBoolResult;
-        }
-        var result = EvaluateInternalWithFlag(flagKey, string.Empty, contextObject, null, flag);
-        return GetBoolVariation(flag, result, defaultValue);
-    }
-        
-    public bool IsEnabled<TContext>(string flagKey, string identity, TContext contextObject, bool defaultValue = false)
-    {
-        var result = EvaluateInternal(flagKey, identity, contextObject, null, out var flag);
-        if (flag == null)
-            return defaultValue;
-        
-        return GetBoolVariation(flag, result, defaultValue);
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public bool IsEnabled<TContext>(string flagKey, ref TContext contextObject, bool defaultValue = false) where TContext : IContextAccessor
-    {
-        if (!_cache.TryGetValue(flagKey, out var flag)) 
-            return defaultValue;
-        if (flag.HasFastPath)
-        {
-            if (_isMetricsEnabled) 
-                Interlocked.Increment(ref flag.FastMetricsCount); 
-            return flag.FastBoolResult;
-        }
-        if (flag.HasRolloutOnlyPath)
-        {
-            string? actualIdentity = null;
-            for (var i = 0; i < _identityKeys.Length; i++)
-            {
-                if (contextObject.TryGetValue(_identityKeys[i], out var val) && !string.IsNullOrWhiteSpace(val))
-                {
-                    actualIdentity = val;
-                    break;
-                }
-            }
-            var rollResult = RolloutEvaluator.Evaluate(flag.FallthroughRollout, flag.OffVariationId, flagKey, actualIdentity ?? string.Empty);
-            UpdateMetrics(flagKey, rollResult, flag);
-            return GetBoolVariation(flag, rollResult, defaultValue);
-        }
-        var result = EvaluateInternalWithFlag(flagKey, string.Empty, ref contextObject, null, flag);
-        return GetBoolVariation(flag, result, defaultValue);
-    }
-        
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public bool IsEnabled<TContext>(string flagKey, string identity, ref TContext contextObject, bool defaultValue = false) where TContext : IContextAccessor
-    {
-        if (!_cache.TryGetValue(flagKey, out var flag)) 
-            return defaultValue;
-        if (string.IsNullOrEmpty(identity) && flag.HasFastPath)
-        {
-            if (_isMetricsEnabled) 
-                Interlocked.Increment(ref flag.FastMetricsCount); 
-            return flag.FastBoolResult;
-        }
-        if (flag.HasRolloutOnlyPath)
-        {
-            var actualIdentity = identity;
-            if (string.IsNullOrEmpty(actualIdentity))
-            {
-                for (var i = 0; i < _identityKeys.Length; i++)
-                {
-                    if (contextObject.TryGetValue(_identityKeys[i], out var val) && !string.IsNullOrWhiteSpace(val))
-                    {
-                        actualIdentity = val;
-                        break;
-                    }
-                }
-            }
-            var rollResult = RolloutEvaluator.Evaluate(flag.FallthroughRollout, flag.OffVariationId, flagKey, actualIdentity);
-            UpdateMetrics(flagKey, rollResult, flag);
-            return GetBoolVariation(flag, rollResult, defaultValue);
-        }
-        var result = EvaluateInternalWithFlag(flagKey, identity, ref contextObject, null, flag);
-        return GetBoolVariation(flag, result, defaultValue);
-    }
-        
-    public bool IsEnabled<TContext>(string flagKey, ToggleMeshUser<TContext> user, bool defaultValue = false) where TContext : IContextAccessor
-    {
-        var ctx = user.Context;
-        var result = EvaluateInternal(flagKey, user.Identity, ref ctx, null, out var flag);
-        if (flag == null)
-            return defaultValue;
-        
-        return GetBoolVariation(flag, result, defaultValue);
-    }
-
-    public string GetStringVariation(string flagKey, string defaultValue)
-    {
-        var result = EvaluateInternal<object>(flagKey, string.Empty, null!, null, out var flag);
-        return GetTypedVariation(flag, result, defaultValue);
-    }
-        
-    public string GetStringVariation(string flagKey, string identity, string defaultValue)
-    {
-        var result = EvaluateInternal<object>(flagKey, identity, null!, null, out var flag);
-        return GetTypedVariation(flag, result, defaultValue);
-    }
-        
-    public string GetStringVariation<TContext>(string flagKey, TContext contextObject, string defaultValue)
-    {
-        var result = EvaluateInternal(flagKey, string.Empty, contextObject, null, out var flag);
-        return GetTypedVariation(flag, result, defaultValue);
-    }
-        
-    public string GetStringVariation<TContext>(string flagKey, string identity, TContext contextObject, string defaultValue)
-    {
-        var result = EvaluateInternal(flagKey, identity, contextObject, null, out var flag);
-        return GetTypedVariation(flag, result, defaultValue);
-    }
-
-    public T GetJsonVariation<T>(string flagKey, T defaultValue)
-    {
-        var result = EvaluateInternal<object>(flagKey, string.Empty, null!, null, out var flag);
-        return GetTypedVariation(flag, result, defaultValue);
-    }
-        
-    public T GetJsonVariation<T>(string flagKey, string identity, T defaultValue)
-    {
-        var result = EvaluateInternal<object>(flagKey, identity, null!, null, out var flag);
-        return GetTypedVariation(flag, result, defaultValue);
-    }
-        
-    public T GetJsonVariation<TContext, T>(string flagKey, TContext contextObject, T defaultValue)
-    {
-        var result = EvaluateInternal(flagKey, string.Empty, contextObject, null, out var flag);
-        return GetTypedVariation(flag, result, defaultValue);
-    }
-        
-    public T GetJsonVariation<TContext, T>(string flagKey, string identity, TContext contextObject, T defaultValue)
-    {
-        var result = EvaluateInternal(flagKey, identity, contextObject, null, out var flag);
-        return GetTypedVariation(flag, result, defaultValue);
-    }
-    
-    public void Track(string eventName, double? value = null)
-    {
-        var accessor = new ContextAccessor<object>(null!);
-        var evalContext = new EvaluationContext<ContextAccessor<object>>(accessor, _contextProviders, _identityKeys);
-        var actualIdentity = evalContext.GetIdentity(string.Empty);
-        Track(eventName, actualIdentity, value);
-    }
-
-    public void Track<TProperties>(string eventName, TProperties properties, double? value = null)
-    {
-        var accessor = new ContextAccessor<object>(null!);
-        var evalContext = new EvaluationContext<ContextAccessor<object>>(accessor, _contextProviders, _identityKeys);
-        var actualIdentity = evalContext.GetIdentity(string.Empty);
-        Track(eventName, actualIdentity, properties, value);
-    }
-
-    public void Track<TContext, TProperties>(string eventName, TContext contextObject, TProperties properties, double? value = null)
-    {
-        var accessor = new ContextAccessor<TContext>(contextObject);
-        var evalContext = new EvaluationContext<ContextAccessor<TContext>>(accessor, _contextProviders, _identityKeys);
-        var actualIdentity = evalContext.GetIdentity(string.Empty);
-        Track(eventName, actualIdentity, properties, value);
-    }
-
-    public void Track<TContext, TProperties>(string eventName, ref TContext contextObject, TProperties properties, double? value = null) where TContext : IContextAccessor
-    {
-        var evalContext = new EvaluationContext<TContext>(contextObject, _contextProviders, _identityKeys);
-        var actualIdentity = evalContext.GetIdentity(string.Empty);
-        Track(eventName, actualIdentity, properties, value);
-    }
-
-    public void Track(string eventName, string identity, double? value = null)
-    {
-        if (string.IsNullOrEmpty(identity) || string.IsNullOrEmpty(eventName)) 
-            return;
-        var evt = ObjectPools<object?>.Pool.Get();
-        evt.Type = AnalyticsEventType.Track;
-        evt.Timestamp = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
-        evt.Identity = identity;
-        evt.EventName = eventName;
-        evt.Value = value;
-        evt.Properties = null;
-        if (!_eventsChannel.Writer.TryWrite(evt)) evt.ReturnToPool();
-    }
-
-    public void Track<TProperties>(string eventName, string identity, TProperties properties, double? value = null)
-    {
-        if (string.IsNullOrEmpty(identity) || string.IsNullOrEmpty(eventName)) 
-            return;
-        var evt = ObjectPools<TProperties>.Pool.Get();
-        evt.Type = AnalyticsEventType.Track;
-        evt.Timestamp = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
-        evt.Identity = identity;
-        evt.EventName = eventName;
-        evt.Value = value;
-        evt.Properties = properties;
-        if (!_eventsChannel.Writer.TryWrite(evt)) evt.ReturnToPool();
-    }
-
-    public void Track<TContext>(string eventName, ToggleMeshUser<TContext> user, double? value = null) where TContext : IContextAccessor =>
-        Track(eventName, user.Identity, value);
-
-    public void Track<TContext, TProperties>(string eventName, ToggleMeshUser<TContext> user, TProperties properties, double? value = null) where TContext : IContextAccessor =>
-        Track(eventName, user.Identity, properties, value);
-
     private void CacheFlag(FeatureFlagDto flag)
     {
         Dictionary<string, object>? rolloutsTree = null;
@@ -613,16 +582,15 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService, ISegmentProvi
                 try
                 {
                     var dict = JsonSerializer.Deserialize<Dictionary<string, string>>(kvp.Key);
-                    if (dict == null) continue;
+                    if (dict == null) 
+                        continue;
 
                     var currentDict = rolloutsTree;
-                    for (int i = 0; i < flag.ContextPartitionKeys.Length; i++)
+                    for (var i = 0; i < flag.ContextPartitionKeys.Length; i++)
                     {
                         var key = dict.GetValueOrDefault(flag.ContextPartitionKeys[i], "null");
                         if (i == flag.ContextPartitionKeys.Length - 1)
-                        {
                             currentDict[key] = kvp.Value.ToArray();
-                        }
                         else
                         {
                             if (!currentDict.TryGetValue(key, out var nextNode))
@@ -653,7 +621,8 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService, ISegmentProvi
             FallthroughRollout = rollout,
             IndividualTargets = flag.IndividualTargets,
             ContextualRolloutsTree = rolloutsTree,
-            HasContextualRollouts = rolloutsTree != null && flag.ContextPartitionKeys is { Length: > 0 },
+            HasContextualRollouts = rolloutsTree != null && 
+                                    flag.ContextPartitionKeys is { Length: > 0 },
             ContextPartitionKeys = flag.ContextPartitionKeys,
             IsExperimentActive = flag.IsExperimentActive,
             Variations = flag.Variations,
@@ -662,7 +631,10 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService, ISegmentProvi
         };
 
         var hasTargets = flag.IndividualTargets is { Count: > 0 };
-        if (cached is { IsEnabled: true, IsExperimentActive: false } && groups.Length == 0 && rolloutsTree == null && !hasTargets)
+        if (cached is { IsEnabled: true, IsExperimentActive: false } 
+            && groups.Length == 0 
+            && rolloutsTree == null 
+            && !hasTargets)
         {
             if (rollout is [{ Weight: >= 10000 }])
             {
@@ -674,14 +646,10 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService, ISegmentProvi
                     cached.FastBoolResult = boolStr.Equals("true", StringComparison.OrdinalIgnoreCase);
             }
             else
-            {
                 cached.Strategy = EvaluationStrategy.RolloutOnly;
-            }
         }
         else
-        {
             cached.Strategy = EvaluationStrategy.Complex;
-        }
 
         if (flag.Variations != null)
         {
@@ -708,7 +676,8 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService, ISegmentProvi
 
     public CompiledRuleGroup[]? GetSegmentRules(string segmentId)
     {
-        if (Guid.TryParse(segmentId, out var id) && _segmentsCache.TryGetValue(id, out var segment))
+        if (Guid.TryParse(segmentId, out var id) && 
+            _segmentsCache.TryGetValue(id, out var segment))
             return segment.Groups.ToArray();
         return null;
     }
@@ -747,27 +716,31 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService, ISegmentProvi
         {
             using var timer = new PeriodicTimer(TimeSpan.FromSeconds(10), _timeProvider);
             while (!ct.IsCancellationRequested && await timer.WaitForNextTickAsync(ct))
-            {
                 await FlushMetricsAsync(ct);
-            }
         }
-        catch (OperationCanceledException) { }
-        catch (Exception ex) { _logger.LogError(ex, "[ToggleMesh] Metrics flusher loop crashed unexpectedly."); }
+        catch (OperationCanceledException)
+        {
+            // ignore
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "[ToggleMesh] Metrics flusher loop crashed unexpectedly.");
+        }
     }
 
     private async Task FlushMetricsAsync(CancellationToken ct)
     {
         foreach (var flag in _cache.Values)
         {
-            if (flag.HasFastPath && flag.FastMetricsCount > 0 && flag.FastResultVariationId.HasValue)
-            {
-                var count = Interlocked.Exchange(ref flag.FastMetricsCount, 0);
-                if (count > 0)
-                {
-                    var m = _metricsBuffer.GetOrAdd(flag.Key, _ => new FlagMetrics());
-                    m.AddCount(flag.FastResultVariationId.Value, count);
-                }
-            }
+            if (flag is not { HasFastPath: true, FastMetricsCount: > 0, FastResultVariationId: not null }) 
+                continue;
+            
+            var count = Interlocked.Exchange(ref flag.FastMetricsCount, 0);
+            if (count <= 0) 
+                continue;
+                
+            var m = _metricsBuffer.GetOrAdd(flag.Key, _ => new FlagMetrics());
+            m.AddCount(flag.FastResultVariationId.Value, count);
         }
         
         var payloadList = new List<MetricPayload>();
@@ -781,23 +754,24 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService, ISegmentProvi
             if (m.Slot0Id != Guid.Empty)
             {
                 var count = Interlocked.Exchange(ref m.Slot0Count, 0);
-                if (count > 0) variationPayloads.Add(new MetricVariationPayload(m.Slot0Id, count));
+                if (count > 0) 
+                    variationPayloads.Add(new MetricVariationPayload(m.Slot0Id, count));
             }
             if (m.Slot1Id != Guid.Empty)
             {
                 var count = Interlocked.Exchange(ref m.Slot1Count, 0);
-                if (count > 0) variationPayloads.Add(new MetricVariationPayload(m.Slot1Id, count));
+                if (count > 0) 
+                    variationPayloads.Add(new MetricVariationPayload(m.Slot1Id, count));
             }
             if (m.Overflow != null)
             {
-                foreach (var varKvp in m.Overflow)
+                foreach (var (key, count) in m.Overflow)
                 {
-                    var count = varKvp.Value;
-                    if (count > 0)
-                    {
-                        m.Overflow.AddOrUpdate(varKvp.Key, 0, (_, current) => current - count);
-                        variationPayloads.Add(new MetricVariationPayload(varKvp.Key, count));
-                    }
+                    if (count <= 0) 
+                        continue;
+                    
+                    m.Overflow.AddOrUpdate(key, 0, (_, current) => current - count);
+                    variationPayloads.Add(new MetricVariationPayload(key, count));
                 }
             }
 
@@ -816,21 +790,30 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService, ISegmentProvi
                 await _client.PostAsJsonAsync(Constants.Endpoints.Metrics, payloadList, token), ct);
 
             isSuccess = response.IsSuccessStatusCode;
-            if (!isSuccess) _logger.LogWarning("[ToggleMesh] Failed to flush metrics. Status: {StatusCode}", response.StatusCode);
+            if (!isSuccess)
+                _logger.LogWarning("[ToggleMesh] Failed to flush metrics. Status: {StatusCode}", response.StatusCode);
         }
-        catch (BrokenCircuitException) { _logger.LogTrace("[ToggleMesh] Circuit breaker open. Skipping metrics flush."); }
-        catch (HttpRequestException e) { _logger.LogWarning("[ToggleMesh] Network error during metrics flush: {Message}", e.Message); }
-        catch (Exception e) { _logger.LogError(e, "[ToggleMesh] Unexpected error during metrics flush."); }
+        catch (BrokenCircuitException)
+        {
+            _logger.LogTrace("[ToggleMesh] Circuit breaker open. Skipping metrics flush.");
+        }
+        catch (HttpRequestException e)
+        {
+            _logger.LogWarning("[ToggleMesh] Network error during metrics flush: {Message}", e.Message);
+        }
+        catch (Exception e)
+        {
+            _logger.LogError(e, "[ToggleMesh] Unexpected error during metrics flush.");
+        }
         finally
         {
             if (!isSuccess)
-            {
                 foreach (var item in payloadList)
                 {
                     var activeMetrics = _metricsBuffer.GetOrAdd(item.Key, _ => new FlagMetrics());
-                    foreach (var v in item.Variations) activeMetrics.AddCount(v.VariationId, v.Count);
+                    foreach (var v in item.Variations) 
+                        activeMetrics.AddCount(v.VariationId, v.Count);
                 }
-            }
         }
     }
 
@@ -841,14 +824,26 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService, ISegmentProvi
             using var timer = new PeriodicTimer(TimeSpan.FromSeconds(10), _timeProvider);
             while (!ct.IsCancellationRequested)
             {
-                try { await timer.WaitForNextTickAsync(ct); }
-                catch (OperationCanceledException) { break; }
+                try
+                {
+                    await timer.WaitForNextTickAsync(ct);
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
 
                 await FlushAnalyticsAsync(ct);
             }
         }
-        catch (OperationCanceledException) { }
-        catch (Exception ex) { _logger.LogError(ex, "[ToggleMesh] Analytics flusher loop crashed unexpectedly."); }
+        catch (OperationCanceledException)
+        {
+            // ignore
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "[ToggleMesh] Analytics flusher loop crashed unexpectedly.");
+        }
     }
 
     private async Task FlushAnalyticsAsync(CancellationToken ct)
@@ -874,21 +869,36 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService, ISegmentProvi
                 foreach (var evt in batch) evt.ReturnToPool();
                 batch.Clear();
             }
-            else _logger.LogWarning("[ToggleMesh] Failed to flush analytics events. Status: {StatusCode}. Keeping {Count} events for next tick.", response.StatusCode, batch.Count);
+            else
+                _logger.LogWarning(
+                    "[ToggleMesh] Failed to flush analytics events. Status: {StatusCode}. Keeping {Count} events for next tick.",
+                    response.StatusCode, batch.Count);
         }
-        catch (BrokenCircuitException) { _logger.LogTrace("[ToggleMesh] Circuit breaker open. Skipping analytics flush. Keeping {Count} events for next tick.", batch.Count); }
-        catch (HttpRequestException e) { _logger.LogWarning("[ToggleMesh] Network error during analytics flush. Keeping {Count} events for next tick. ({Message})", batch.Count, e.Message); }
-        catch (OperationCanceledException) { }
-        catch (Exception e) { _logger.LogWarning(e, "[ToggleMesh] Unexpected error during analytics flush. Keeping {Count} events for next tick.", batch.Count); }
+        catch (BrokenCircuitException)
+        {
+            _logger.LogTrace(
+                "[ToggleMesh] Circuit breaker open. Skipping analytics flush. Keeping {Count} events for next tick.",
+                batch.Count);
+        }
+        catch (HttpRequestException e)
+        {
+            _logger.LogWarning(
+                "[ToggleMesh] Network error during analytics flush. Keeping {Count} events for next tick. ({Message})",
+                batch.Count, e.Message);
+        }
+        catch (OperationCanceledException)
+        {
+            // ignore
+        }
+        catch (Exception e)
+        {
+            _logger.LogWarning(e, "[ToggleMesh] Unexpected error during analytics flush. Keeping {Count} events for next tick.", batch.Count);
+        }
         finally
         {
             if (batch.Count > 0)
-            {
                 foreach (var evt in batch)
-                {
                     if (!_eventsChannel.Writer.TryWrite(evt)) evt.ReturnToPool();
-                }
-            }
         }
     }
 
@@ -904,9 +914,20 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService, ISegmentProvi
         {
             await SyncStateWithApiAsync(linkedCts.Token);
         }
-        catch (OperationCanceledException) { _logger.LogWarning("[ToggleMesh] Initial sync timed out. Operating with offline cache/defaults."); }
-        catch (HttpRequestException ex) when (ex.StatusCode != HttpStatusCode.Unauthorized) { _logger.LogWarning("[ToggleMesh] Initial API connection failed: {Message}. Operating with offline cache/defaults.", ex.Message); }
-        catch (Exception ex) { _logger.LogWarning(ex, "[ToggleMesh] Initial sync failed unexpectedly. Operating with offline cache/defaults."); }
+        catch (OperationCanceledException)
+        {
+            _logger.LogWarning("[ToggleMesh] Initial sync timed out. Operating with offline cache/defaults.");
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode != HttpStatusCode.Unauthorized)
+        {
+            _logger.LogWarning(
+                "[ToggleMesh] Initial API connection failed: {Message}. Operating with offline cache/defaults.",
+                ex.Message);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "[ToggleMesh] Initial sync failed unexpectedly. Operating with offline cache/defaults.");
+        }
 
         _ = Task.Run(() => EnsureConnectedLoopAsync(_sdkLifetimeCts.Token), _sdkLifetimeCts.Token);
         _ = Task.Run(() => RunAnalyticsFlusherAsync(_sdkLifetimeCts.Token), _sdkLifetimeCts.Token);
@@ -932,15 +953,17 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService, ISegmentProvi
                         await SyncStateWithApiAsync(ct);
 
                         using var request = new HttpRequestMessage(HttpMethod.Get, Constants.Endpoints.SseStream);
-                        using var response = await _client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
-                        
+                        using var response =
+                            await _client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+
                         if (response.StatusCode == HttpStatusCode.Unauthorized)
                         {
-                            _logger.LogCritical("[ToggleMesh] Invalid API Key. Background sync loop stopped permanently. Please check your configuration.");
+                            _logger.LogCritical(
+                                "[ToggleMesh] Invalid API Key. Background sync loop stopped permanently. Please check your configuration.");
                             await _sdkLifetimeCts.CancelAsync();
                             break;
                         }
-                        
+
                         response.EnsureSuccessStatusCode();
                         backoff = 1.0;
 
@@ -950,19 +973,26 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService, ISegmentProvi
                         while (!ct.IsCancellationRequested)
                         {
                             var line = await reader.ReadLineAsync(ct);
-                            if (line == null) break;
-                            if (string.IsNullOrWhiteSpace(line)) continue;
-                            if (!line.StartsWith("data: ")) continue;
-                            
-                            var data = line.Substring(6);
+                            if (line == null) 
+                                break;
+                            if (string.IsNullOrWhiteSpace(line)) 
+                                continue;
+                            if (!line.StartsWith("data: ")) 
+                                continue;
+
+                            var data = line[6..];
                             var doc = JsonDocument.Parse(data);
-                            if (!doc.RootElement.TryGetProperty("EventName", out var evtName)) continue;
-                            
+                            if (!doc.RootElement.TryGetProperty("EventName", out var evtName)) 
+                                continue;
+
                             var eventName = evtName.GetString();
-                            if (eventName == "SdkFlagUpdated" && doc.RootElement.TryGetProperty("Payload", out var payload))
+                            if (eventName == "SdkFlagUpdated" &&
+                                doc.RootElement.TryGetProperty("Payload", out var payload))
                             {
-                                var flag = JsonSerializer.Deserialize<FeatureFlagDto>(payload.GetRawText());
-                                if (flag == null) continue;
+                                var flag = JsonSerializer.Deserialize<FeatureFlagDto>(
+                                    payload.GetRawText());
+                                if (flag == null) 
+                                    continue;
                                 _logger.LogInformation("[ToggleMesh] Flag updated remotely: {Key}", flag.Key);
                                 CacheFlag(flag);
                                 _ = SaveFallbackAsync();
@@ -982,15 +1012,17 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService, ISegmentProvi
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogTrace(ex, "[ToggleMesh] Background connection attempt failed. Retrying in {backoff}s.", backoff);
+                        _logger.LogTrace(ex,
+                            "[ToggleMesh] Background connection attempt failed. Retrying in {backoff}s.", backoff);
                     }
 
-                    if (ct.IsCancellationRequested) break;
+                    if (ct.IsCancellationRequested) 
+                        break;
 
                     var jitter = Random.Shared.NextDouble();
                     var waitTime = TimeSpan.FromSeconds(backoff + jitter);
                     await Task.Delay(waitTime, _timeProvider, ct);
-                    
+
                     backoff = Math.Min(backoff * 2, 30.0);
                 }
             }
@@ -999,8 +1031,14 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService, ISegmentProvi
                 Interlocked.Exchange(ref _isConnecting, 0);
             }
         }
-        catch (OperationCanceledException) { }
-        catch (Exception ex) { _logger.LogError(ex, "[ToggleMesh] Background connection loop crashed unexpectedly."); }
+        catch (OperationCanceledException)
+        {
+            // ignore
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "[ToggleMesh] Background connection loop crashed unexpectedly.");
+        }
     }
 
     public async Task StopAsync(CancellationToken cancellationToken)
@@ -1010,8 +1048,14 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService, ISegmentProvi
 
         if (_isMetricsEnabled)
         {
-            try { await FlushMetricsAsync(cancellationToken); }
-            catch (Exception ex) { _logger.LogWarning(ex, "[ToggleMesh] Failed to flush final metrics on shutdown."); }
+            try
+            {
+                await FlushMetricsAsync(cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "[ToggleMesh] Failed to flush final metrics on shutdown.");
+            }
         }
 
         try
@@ -1020,7 +1064,10 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService, ISegmentProvi
             while (_eventsChannel.Reader.Count > 0 && limit-- > 0)
                 await FlushAnalyticsAsync(cancellationToken);
         }
-        catch (Exception ex) { _logger.LogWarning(ex, "[ToggleMesh] Failed to flush final analytics events on shutdown."); }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "[ToggleMesh] Failed to flush final analytics events on shutdown.");
+        }
 
         _sdkLifetimeCts.Dispose();
     }
@@ -1030,7 +1077,9 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService, ISegmentProvi
         try
         {
             var response = await _resiliencePipeline.ExecuteAsync(async token =>
-                    await _client.GetFromJsonAsync<SdkGetFlagsResponse>(Constants.Endpoints.GetAll, token), cancellationToken);
+                    await _client.GetFromJsonAsync<SdkGetFlagsResponse>(
+                        Constants.Endpoints.GetAll, token),
+                cancellationToken);
 
             if (response is null)
             {
@@ -1041,33 +1090,63 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService, ISegmentProvi
             var flags = response.Flags;
             var segments = response.Segments;
 
-            var fetchedKeys = flags.Select(f => f.Key).ToHashSet();
-            var keysToRemove = _cache.Keys.Where(k => !fetchedKeys.Contains(k)).ToList();
-            foreach (var key in keysToRemove) _cache.TryRemove(key, out _);
-            foreach (var flag in flags) CacheFlag(flag);
+            var fetchedKeys = flags
+                .Select(f => f.Key)
+                .ToHashSet();
+            var keysToRemove = _cache.Keys
+                .Where(k => !fetchedKeys.Contains(k))
+                .ToList();
+            foreach (var key in keysToRemove)
+                _cache.TryRemove(key, out _);
+            foreach (var flag in flags)
+                CacheFlag(flag);
 
-            var fetchedSegmentIds = segments.Select(s => s.Id).ToHashSet();
-            var segmentsToRemove = _segmentsCache.Keys.Where(k => !fetchedSegmentIds.Contains(k)).ToList();
-            foreach (var key in segmentsToRemove) _segmentsCache.TryRemove(key, out _);
-            foreach (var segment in segments) CacheSegment(segment);
+            var fetchedSegmentIds = segments
+                .Select(s => s.Id)
+                .ToHashSet();
+            var segmentsToRemove = _segmentsCache.Keys
+                .Where(k => !fetchedSegmentIds.Contains(k))
+                .ToList();
+            foreach (var key in segmentsToRemove) 
+                _segmentsCache.TryRemove(key, out _);
+            foreach (var segment in segments) 
+                CacheSegment(segment);
 
-            _logger.LogInformation("[ToggleMesh] State synchronized with API. Loaded {Count} flags and {SegCount} segments.", flags.Count, segments.Count);
+            _logger.LogInformation(
+                "[ToggleMesh] State synchronized with API. Loaded {Count} flags and {SegCount} segments.", flags.Count,
+                segments.Count);
             await SaveFallbackAsync();
         }
-        catch (BrokenCircuitException) { _logger.LogWarning("[ToggleMesh] Circuit breaker is open. Cannot sync state right now."); }
-        catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.Unauthorized) { _logger.LogCritical("[ToggleMesh] Unauthorized (401). Invalid API Key."); throw; }
-        catch (OperationCanceledException) { }
-        catch (HttpRequestException ex) when (ex.StatusCode != HttpStatusCode.Unauthorized) { _logger.LogWarning("[ToggleMesh] Failed to synchronize state with API: {Message}", ex.Message); }
-        catch (Exception ex) { _logger.LogError(ex, "[ToggleMesh] Unexpected error during state synchronization."); }
+        catch (BrokenCircuitException)
+        {
+            _logger.LogWarning("[ToggleMesh] Circuit breaker is open. Cannot sync state right now.");
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.Unauthorized)
+        {
+            _logger.LogCritical("[ToggleMesh] Unauthorized (401). Invalid API Key.");
+            throw;
+        }
+        catch (OperationCanceledException)
+        {
+            // ignore
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode != HttpStatusCode.Unauthorized)
+        {
+            _logger.LogWarning("[ToggleMesh] Failed to synchronize state with API: {Message}", ex.Message);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "[ToggleMesh] Unexpected error during state synchronization.");
+        }
     }
 
     private async Task LoadFallbackAsync()
     {
         try
         {
-            if (_fallbackFilePath is null) 
+            if (_fallbackFilePath is null)
                 return;
-            if (!File.Exists(_fallbackFilePath)) 
+            if (!File.Exists(_fallbackFilePath))
                 return;
 
             var content = await File.ReadAllTextAsync(_fallbackFilePath);
@@ -1077,10 +1156,15 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService, ISegmentProvi
             {
                 foreach (var flag in response.Flags) CacheFlag(flag);
                 foreach (var segment in response.Segments) CacheSegment(segment);
-                _logger.LogInformation("[ToggleMesh] Loaded {Count} flags and {SegCount} segments from offline fallback file.", response.Flags.Count, response.Segments.Count);
+                _logger.LogInformation(
+                    "[ToggleMesh] Loaded {Count} flags and {SegCount} segments from offline fallback file.",
+                    response.Flags.Count, response.Segments.Count);
             }
         }
-        catch (Exception ex) { _logger.LogError(ex, "[ToggleMesh] Failed to read fallback file at {Path}", _fallbackFilePath); }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "[ToggleMesh] Failed to read fallback file at {Path}", _fallbackFilePath);
+        }
     }
 
     private async Task SaveFallbackAsync()
@@ -1092,25 +1176,57 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService, ISegmentProvi
         try
         {
             var dir = Path.GetDirectoryName(_fallbackFilePath);
-            if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir)) Directory.CreateDirectory(dir);
+            if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir)) 
+                Directory.CreateDirectory(dir);
 
-            var flagsPayload = _cache.Values.Select(x => x.OriginalDto).ToList();
-            var segmentsPayload = _segmentsCache.Values.Select(x => new SegmentDto
+            var flagsPayload = _cache.Values
+                .Select(x => x.OriginalDto)
+                .ToList();
+            var segmentsPayload = _segmentsCache.Values
+                .Select(x => new SegmentDto
             {
-                Id = x.Id, Name = x.Name, Rules = x.Groups.SelectMany(g => g.Rules.Select(r => new RuleDto(0, Array.IndexOf(x.Groups.ToArray(), g), r.Attribute, r.Operator.Name, r.CompiledValue?.ToString() ?? string.Empty)))
+                Id = x.Id, Name = x.Name,
+                Rules = x.Groups.SelectMany(g => g.Rules.Select(r => new RuleDto(0,
+                    Array.IndexOf(x.Groups.ToArray(), g), r.Attribute, r.Operator.Name,
+                    r.CompiledValue?.ToString() ?? string.Empty)))
             }).ToList();
-            
-            var payload = new SdkGetFlagsResponse { Flags = flagsPayload, Segments = segmentsPayload };
+
+            var payload = new SdkGetFlagsResponse
+            {
+                Flags = flagsPayload, 
+                Segments = segmentsPayload
+            };
             var content = JsonSerializer.Serialize(payload);
             await File.WriteAllTextAsync(tempFilePath, content);
             File.Move(tempFilePath, _fallbackFilePath, overwrite: true);
         }
-        catch (IOException) { _logger.LogTrace("[ToggleMesh] Fallback file is temporarily locked by another process."); }
-        catch (Exception ex) { _logger.LogError(ex, "[ToggleMesh] Failed to write fallback file to {Path} due to an error.", _fallbackFilePath); }
-        finally { TryDeleteTempFile(tempFilePath); }
+        catch (IOException)
+        {
+            _logger.LogTrace("[ToggleMesh] Fallback file is temporarily locked by another process.");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "[ToggleMesh] Failed to write fallback file to {Path} due to an error.",
+                _fallbackFilePath);
+        }
+        finally
+        {
+            TryDeleteTempFile(tempFilePath);
+        }
     }
     
-    private static void TryDeleteTempFile(string path) { try { if (File.Exists(path)) File.Delete(path); } catch { /* ignore */ } }
+    private static void TryDeleteTempFile(string path) {
+        try
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
+        catch
+        {
+             // ignore
+        } 
+    }
+    
     private record MetricVariationPayload(Guid VariationId, long Count);
     private record MetricPayload(string Key, List<MetricVariationPayload> Variations);
+    public readonly struct EmptyContext;
 }

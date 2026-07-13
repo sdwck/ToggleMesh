@@ -1,5 +1,7 @@
 using Microsoft.Extensions.Hosting;
+using ToggleMesh.Common.Contexts;
 using ToggleMesh.SDK.Clients;
+using ToggleMesh.SDK.Models;
 
 namespace ToggleMesh.ConsoleClient;
 
@@ -75,6 +77,8 @@ public class EnterpriseWorker : BackgroundService
                     Country = country
                 };
                 
+                var tmUser = new ToggleMeshUser<AotUserContext>(userId, userContext);
+                
                 var flagsToEvaluate = flags.OrderBy(_ => 
                     Random.Shared.Next())
                     .Take(Random.Shared.Next(3, 8))
@@ -82,10 +86,7 @@ public class EnterpriseWorker : BackgroundService
 
                 foreach (var flag in flagsToEvaluate)
                 {
-                    var isEnabled = _toggleMeshClient.IsEnabled(
-                        flag, 
-                        userId, 
-                        ref userContext);
+                    var isEnabled = _toggleMeshClient.IsEnabled(flag, ref tmUser);
 
                     var profile = countryProfiles[country];
                     var chanceToTrack = isEnabled 
