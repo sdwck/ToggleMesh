@@ -21,13 +21,28 @@ public class RequireOrgAdminPreProcessor<TRequest> : IPreProcessor<TRequest>
         
         var userId = context.HttpContext.User.GetUserId();
 
-        var isAdmin = await db.OrganizationMembers
-            .AnyAsync(m => m.OrganizationId == orgId && m.UserId == userId && m.Role == OrganizationRole.Admin, ct);
+        var member = await db.OrganizationMembers
+            .AsNoTracking()
+            .Include(m => m.Organization)
+            .FirstOrDefaultAsync(m => m.OrganizationId == orgId && m.UserId == userId && m.Role == OrganizationRole.Admin, ct);
 
-        if (!isAdmin)
+        if (member == null)
         {
             await context.HttpContext.Response.SendForbiddenAsync(ct);
             context.ValidationFailures.Add(new FluentValidation.Results.ValidationFailure("Role", "Organization Admin required"));
+            return;
+        }
+
+        if (member.Organization.RequireTwoFactor)
+        {
+            var hasMfaClaim = context.HttpContext.User.Claims.Any(c => c.Type == "amr" && c.Value == "mfa");
+            if (!hasMfaClaim)
+            {
+                context.HttpContext.Response.Headers.Append("X-Requires-TwoFactor", "true");
+                await context.HttpContext.Response.SendForbiddenAsync(ct);
+                context.ValidationFailures.Add(new FluentValidation.Results.ValidationFailure("2FA", "TwoFactorRequired"));
+                return;
+            }
         }
     }
 }

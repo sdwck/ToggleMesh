@@ -1,4 +1,3 @@
-
 using Microsoft.IdentityModel.JsonWebTokens;
 using System.Security.Claims;
 using System.Security.Cryptography;
@@ -24,6 +23,9 @@ public static class TokenGenerator
             new("username", user.UserName ?? ""),
             new(JwtRegisteredClaimNames.Jti, Guid.CreateVersion7().ToString())
         };
+
+        if (user.TwoFactorEnabled)
+            claims.Add(new Claim("amr", "mfa"));
         
         var userClaims = await userManager.GetClaimsAsync(user);
         claims.AddRange(userClaims);
@@ -51,5 +53,36 @@ public static class TokenGenerator
         var refreshToken = Convert.ToBase64String(randomNumber);
 
         return (accessToken, refreshToken);
+    }
+
+    public static string GenerateTwoFactorToken(
+        ApplicationUser user, 
+        IConfiguration configuration,
+        TimeProvider timeProvider)
+    {
+        var jwtSettings = configuration.GetSection("Jwt");
+        var claims = new List<Claim>
+        {
+            new(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
+            new("amr", "mfa_pending"),
+            new(JwtRegisteredClaimNames.Jti, Guid.CreateVersion7().ToString())
+        };
+
+        var key = RsaKeyProvider.GetKey(configuration);
+        var creds = new SigningCredentials(key, SecurityAlgorithms.RsaSha256);
+
+        var now = timeProvider.GetUtcNow().UtcDateTime;
+        var tokenDescriptor = new SecurityTokenDescriptor
+        {
+            Issuer = jwtSettings["Issuer"],
+            Audience = jwtSettings["Audience"],
+            Subject = new ClaimsIdentity(claims),
+            NotBefore = now,
+            Expires = now.AddMinutes(5),
+            SigningCredentials = creds
+        };
+
+        var tokenHandler = new JsonWebTokenHandler();
+        return tokenHandler.CreateToken(tokenDescriptor);
     }
 }

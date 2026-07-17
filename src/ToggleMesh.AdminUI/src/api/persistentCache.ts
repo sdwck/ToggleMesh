@@ -8,8 +8,14 @@ export async function hydrateCache(queryClient: QueryClient) {
     try {
         const savedState = await get(CACHE_KEY);
         if (savedState) {
-            hydrate(queryClient, savedState);
-            console.log('[Cache] Successfully hydrated from IndexedDB.');
+            const staleState = {
+                ...savedState,
+                queries: (savedState as any).queries?.map((q: any) => ({
+                    ...q,
+                    state: { ...q.state, dataUpdatedAt: 0 },
+                })) ?? [],
+            };
+            hydrate(queryClient, staleState);
         }
     } catch (e) {
         console.error('Failed to hydrate React Query cache from IndexedDB:', e);

@@ -37,6 +37,16 @@ public class SsoTicketExchangeEndpoint : ToggleEndpoint<SsoTicketExchangeRequest
         if (tokens == null)
             ThrowError("Invalid SSO ticket data");
 
+        if (tokens.RequiresTwoFactor)
+        {
+            await Send.OkAsync(new LoginResponse
+            {
+                RequiresTwoFactor = true,
+                TwoFactorToken = tokens.TwoFactorToken
+            }, cancellation: ct);
+            return;
+        }
+
         await Send.OkAsync(new LoginResponse
         {
             Token = tokens.AccessToken,

@@ -11,10 +11,12 @@ import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 import { Form, FormControl, FormField, FormItem, FormMessage } from '@/components/ui/form';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Switch } from '@/components/ui/switch';
 import { handleApiError } from '@/api/errorUtils';
 
 const renameOrgSchema = z.object({
     name: z.string().min(1, 'Organization name is required'),
+    requireTwoFactor: z.boolean().optional(),
 });
 type RenameOrgValues = z.infer<typeof renameOrgSchema>;
 
@@ -44,9 +46,11 @@ export function OrganizationGeneralTab({
 
     const [isDeleteOpen, setIsDeleteOpen] = useState(false);
 
+    const currentOrg = organizations?.find(o => o.id === activeOrganizationId);
+
     const renameForm = useForm<RenameOrgValues>({
         resolver: zodResolver(renameOrgSchema),
-        defaultValues: { name: activeOrgName },
+        defaultValues: { name: activeOrgName, requireTwoFactor: currentOrg?.requireTwoFactor ?? false },
     });
 
     const deleteForm = useForm<DeleteOrgValues>({
@@ -55,9 +59,9 @@ export function OrganizationGeneralTab({
     });
 
     useEffect(() => {
-        renameForm.reset({ name: activeOrgName });
+        renameForm.reset({ name: activeOrgName, requireTwoFactor: currentOrg?.requireTwoFactor ?? false });
         deleteForm.reset({ confirmName: '' });
-    }, [activeOrgName, renameForm, deleteForm]);
+    }, [activeOrgName, currentOrg, renameForm, deleteForm]);
 
     useEffect(() => {
         if (!isDeleteOpen) {
@@ -70,8 +74,9 @@ export function OrganizationGeneralTab({
             await updateOrg.mutateAsync({
                 organizationId: activeOrganizationId,
                 name: values.name.trim(),
+                requireTwoFactor: values.requireTwoFactor,
             });
-            toast.success('Organization renamed successfully');
+            toast.success('Organization settings updated successfully');
         } catch (error: any) {
             handleApiError(error, renameForm.setError, 'Failed to rename organization');
         }
@@ -120,33 +125,62 @@ export function OrganizationGeneralTab({
                 </CardHeader>
                 <CardContent className="space-y-4">
                     <Form {...renameForm}>
-                        <form onSubmit={renameForm.handleSubmit(handleRenameSubmit)} className="flex flex-col sm:flex-row gap-3 items-start sm:items-end">
-                            <div className="flex-1 space-y-2 w-full">
-                                <label className="text-sm text-muted-foreground">Organization Name</label>
-                                <FormField
-                                    control={renameForm.control}
-                                    name="name"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FormControl>
-                                                <Input
-                                                    {...field}
-                                                    placeholder="Enter organization name"
-                                                    className="border-border/40 bg-zinc-950/40"
-                                                />
-                                            </FormControl>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
+                        <form onSubmit={renameForm.handleSubmit(handleRenameSubmit)} className="space-y-6">
+                            {renameForm.formState.errors.root && (
+                                <div className="p-3 text-sm rounded-md bg-destructive/15 text-destructive border border-destructive/20">
+                                    {renameForm.formState.errors.root.message}
+                                </div>
+                            )}
+                            <div className="space-y-4">
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium text-foreground">Organization Name</label>
+                                    <FormField
+                                        control={renameForm.control}
+                                        name="name"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormControl>
+                                                    <Input
+                                                        {...field}
+                                                        placeholder="Enter organization name"
+                                                        className="border-border/40 bg-zinc-950/40"
+                                                    />
+                                                </FormControl>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <FormField
+                                        control={renameForm.control}
+                                        name="requireTwoFactor"
+                                        render={({ field }) => (
+                                            <FormItem className="flex flex-row items-center justify-between rounded-lg border border-border/40 bg-zinc-950/40 p-4">
+                                                <div className="space-y-0.5">
+                                                    <label className="text-sm font-medium text-foreground">Require Two-Factor Authentication</label>
+                                                    <p className="text-xs text-muted-foreground">Enforce strict mode. Users without 2FA will not be able to access any projects in this organization.</p>
+                                                </div>
+                                                <FormControl>
+                                                    <Switch
+                                                        checked={field.value}
+                                                        onCheckedChange={field.onChange}
+                                                    />
+                                                </FormControl>
+                                            </FormItem>
+                                        )}
+                                    />
+                                </div>
                             </div>
-                            <Button
-                                type="submit"
-                                disabled={updateOrg.isPending || !renameForm.watch('name')?.trim() || renameForm.watch('name') === activeOrgName}
-                                className="w-full sm:w-auto mt-2 sm:mt-0"
-                            >
-                                {updateOrg.isPending ? 'Saving...' : 'Save Changes'}
-                            </Button>
+                            <div className="flex justify-end">
+                                <Button
+                                    type="submit"
+                                    disabled={updateOrg.isPending || (!renameForm.formState.isDirty && renameForm.watch('name') === activeOrgName && renameForm.watch('requireTwoFactor') === (currentOrg?.requireTwoFactor ?? false))}
+                                    className="w-full sm:w-auto"
+                                >
+                                    {updateOrg.isPending ? 'Saving...' : 'Save Changes'}
+                                </Button>
+                            </div>
                         </form>
                     </Form>
                 </CardContent>

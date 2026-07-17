@@ -38,6 +38,17 @@ public class LoginEndpoint : ToggleEndpoint<LoginRequest, LoginResponse>
         if (!user.EmailConfirmed)
             ThrowError("Please confirm your email address before logging in.", 401);
 
+        if (user.TwoFactorEnabled)
+        {
+            var twoFactorToken = TokenGenerator.GenerateTwoFactorToken(user, _configuration, _timeProvider);
+            await Send.OkAsync(new LoginResponse
+            {
+                RequiresTwoFactor = true,
+                TwoFactorToken = twoFactorToken
+            }, cancellation: ct);
+            return;
+        }
+
         var (accessToken, refreshToken) = await TokenGenerator.GenerateTokensAsync(user, _userManager, _configuration, _timeProvider);
 
         if (!int.TryParse(

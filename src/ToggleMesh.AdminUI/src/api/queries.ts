@@ -73,8 +73,8 @@ export const useCreateOrganization = () => {
 export const useUpdateOrganization = () => {
     const queryClient = useQueryClient();
     return useMutation({
-        mutationFn: async (req: { organizationId: string; name: string }) => {
-            await api.put(`/organizations/${req.organizationId}`, { name: req.name });
+        mutationFn: async (req: { organizationId: string; name: string; requireTwoFactor?: boolean }) => {
+            await api.put(`/organizations/${req.organizationId}`, { name: req.name, requireTwoFactor: req.requireTwoFactor });
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['organizations'] });
@@ -696,7 +696,7 @@ export const useUpdateUserProfile = () => {
 export const useChangePassword = () => {
     return useMutation<void, Error, ChangePasswordRequest>({
         mutationFn: async (data) => {
-            await api.post('/api/v1/auth/change-password', data);
+            await api.post('/auth/change-password', data);
         },
     });
 };

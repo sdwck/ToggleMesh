@@ -74,34 +74,49 @@ public class SsoCallbackEndpoint : EndpointWithoutRequest
                 ThrowError("Could not provision SSO user");
         }
 
-        var (accessToken, refreshToken) = await TokenGenerator.GenerateTokensAsync(user, _userManager, _configuration, _timeProvider);
-        
-        if (!int.TryParse(
-                _configuration["Auth:RefreshTokenLifetimeDays"], 
-                out var tokenLifetime))
-            tokenLifetime = 7;
-
-        var now = _timeProvider.GetUtcNow().UtcDateTime;
-        var rt = new RefreshToken
-        {
-            Token = refreshToken,
-            UserId = user.Id,
-            Expires = now.AddDays(tokenLifetime),
-            Created = now
-        };
-        
-        _db.RefreshTokens.Add(rt);
-        await _db.SaveChangesAsync(ct);
-
-        await HttpContext.SignOutAsync("TempCookie");
-
         var ticket = Guid.CreateVersion7().ToString();
         var key = $"sso:ticket:{ticket}";
-        var data = JsonSerializer.Serialize(new SsoTicketData
+        SsoTicketData ticketData;
+
+        if (user.TwoFactorEnabled)
         {
-            AccessToken = accessToken, 
-            RefreshToken = refreshToken
-        });
+            var twoFactorToken = TokenGenerator.GenerateTwoFactorToken(user, _configuration, _timeProvider);
+            ticketData = new SsoTicketData
+            {
+                RequiresTwoFactor = true,
+                TwoFactorToken = twoFactorToken
+            };
+        }
+        else
+        {
+            var (accessToken, refreshToken) = await TokenGenerator.GenerateTokensAsync(user, _userManager, _configuration, _timeProvider);
+            
+            if (!int.TryParse(
+                    _configuration["Auth:RefreshTokenLifetimeDays"], 
+                    out var tokenLifetime))
+                tokenLifetime = 7;
+
+            var now = _timeProvider.GetUtcNow().UtcDateTime;
+            var rt = new RefreshToken
+            {
+                Token = refreshToken,
+                UserId = user.Id,
+                Expires = now.AddDays(tokenLifetime),
+                Created = now
+            };
+            
+            _db.RefreshTokens.Add(rt);
+            await _db.SaveChangesAsync(ct);
+
+            ticketData = new SsoTicketData
+            {
+                AccessToken = accessToken, 
+                RefreshToken = refreshToken
+            };
+        }
+
+        await HttpContext.SignOutAsync("TempCookie");
+        var data = JsonSerializer.Serialize(ticketData);
         
         await _redis.StringSetAsync(key, data, TimeSpan.FromSeconds(30));
 

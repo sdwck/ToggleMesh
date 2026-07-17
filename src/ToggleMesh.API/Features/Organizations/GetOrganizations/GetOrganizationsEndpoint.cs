@@ -29,7 +29,8 @@ public class GetOrganizationsEndpoint : ToggleEndpointWithoutRequest<List<Organi
                 Id = m.Organization.Id,
                 Name = m.Organization.Name,
                 CreatedAt = m.Organization.CreatedAt,
-                Role = m.Role
+                Role = m.Role,
+                RequireTwoFactor = m.Organization.RequireTwoFactor
             })
             .OrderBy(o => o.Name)
             .ToListAsync(ct);

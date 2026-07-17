@@ -1,8 +1,14 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import {
+  InputOTP,
+  InputOTPGroup,
+  InputOTPSeparator,
+  InputOTPSlot,
+} from "@/components/ui/input-otp";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from 'sonner';
 import { ToggleMeshIcon } from '@/components/icons/ToggleMeshIcon';
@@ -19,7 +25,7 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
-import { handleApiError } from '@/api/errorUtils';
+import { handleApiError, toastApiError } from '@/api/errorUtils';
 import { useSystemConfig } from '@/api/queries';
 
 const loginSchema = z.object({
@@ -32,6 +38,8 @@ type LoginValues = z.infer<typeof loginSchema>;
 interface LoginResponse {
   token: string;
   refreshToken: string;
+  requiresTwoFactor?: boolean;
+  twoFactorToken?: string;
 }
 
 export function Login() {
@@ -41,6 +49,10 @@ export function Login() {
   const [ssoEnabled, setSsoEnabled] = useState(false);
   const [isSsoExchanging, setIsSsoExchanging] = useState(false);
   const [ssoError, setSsoError] = useState<string | null>(null);
+  const [requiresTwoFactor, setRequiresTwoFactor] = useState(false);
+  const [twoFactorToken, setTwoFactorToken] = useState<string | null>(null);
+  const [twoFactorCode, setTwoFactorCode] = useState('');
+  const [isUsingRecoveryCode, setIsUsingRecoveryCode] = useState(false);
 
   const form = useForm<LoginValues>({
     resolver: zodResolver(loginSchema),
@@ -50,6 +62,8 @@ export function Login() {
     },
   });
 
+  const ssoExchangedRef = useRef(false);
+
   useEffect(() => {
     api.get<{ enabled: boolean }>('/auth/sso/status')
       .then((res) => setSsoEnabled(res.data.enabled))
@@ -57,12 +71,21 @@ export function Login() {
 
     const params = new URLSearchParams(window.location.search);
     const ticket = params.get('ticket');
-    if (ticket) {
+    if (ticket && !ssoExchangedRef.current) {
+      ssoExchangedRef.current = true;
+      window.history.replaceState(null, '', window.location.pathname);
       setIsSsoExchanging(true);
       setSsoError(null);
 
       api.post<LoginResponse>('/auth/sso/exchange', { ticket })
         .then(async (res) => {
+          if (res.data.requiresTwoFactor && res.data.twoFactorToken) {
+            setRequiresTwoFactor(true);
+            setTwoFactorToken(res.data.twoFactorToken);
+            setIsSsoExchanging(false);
+            return;
+          }
+
           localStorage.setItem('accessToken', res.data.token);
           localStorage.setItem('refreshToken', res.data.refreshToken);
 
@@ -75,17 +98,16 @@ export function Login() {
               queryClient.invalidateQueries({ queryKey: ['projects'] });
               toast.success('Invitation accepted via SSO!');
             } catch (error: any) {
-              toast.error(error.response?.data?.errors?.[0]?.message || 'Failed to accept invitation via SSO');
+              toastApiError(error, 'Failed to accept invitation via SSO');
             } finally {
               localStorage.removeItem('pendingInviteToken');
             }
           }
 
-          window.history.replaceState(null, '', window.location.pathname);
           navigate(pendingInviteToken ? '/projects' : '/');
         })
         .catch((err) => {
-          console.error('SSO Exchange error:', err);
+          toastApiError(err, 'Failed to complete SSO authentication. The link may have expired.');
           setSsoError('Failed to complete SSO authentication. The link may have expired.');
         })
         .finally(() => {
@@ -97,6 +119,52 @@ export function Login() {
   const loginMutation = useMutation({
     mutationFn: async (values: LoginValues) => {
       const response = await api.post<LoginResponse>('/auth/login', values);
+      return response.data;
+    },
+    onSuccess: async (data) => {
+      if (data.requiresTwoFactor && data.twoFactorToken) {
+        setRequiresTwoFactor(true);
+        setTwoFactorToken(data.twoFactorToken);
+        return;
+      }
+
+      localStorage.setItem('accessToken', data.token);
+      localStorage.setItem('refreshToken', data.refreshToken);
+
+      const params = new URLSearchParams(window.location.search);
+      const inviteToken = params.get('inviteToken') || localStorage.getItem('pendingInviteToken');
+
+      if (inviteToken) {
+        try {
+          const acceptRes = await api.post(`/organizations/invites/${inviteToken}/accept`, {});
+          useOrganizationStore.getState().setActiveOrganizationId(acceptRes.data.organizationId);
+          queryClient.invalidateQueries({ queryKey: ['organizations'] });
+          queryClient.invalidateQueries({ queryKey: ['projects'] });
+          toast.success('Invitation accepted!');
+        } catch (error: any) {
+          toastApiError(error, 'Failed to accept invitation');
+        } finally {
+          localStorage.removeItem('pendingInviteToken');
+        }
+      }
+
+      navigate(inviteToken ? '/projects' : '/');
+    },
+    onError: (error: any) => {
+      if (error.response?.status === 401) {
+        form.setError('root', { type: 'server', message: 'Invalid email or password.' });
+      } else {
+        handleApiError(error, form.setError, 'Failed to login');
+      }
+    }
+  });
+
+  const verifyTwoFactorMutation = useMutation({
+    mutationFn: async (code: string) => {
+      const response = await api.post<LoginResponse>('/auth/login/2fa', {
+        twoFactorToken,
+        code
+      });
       return response.data;
     },
     onSuccess: async (data) => {
@@ -114,7 +182,7 @@ export function Login() {
           queryClient.invalidateQueries({ queryKey: ['projects'] });
           toast.success('Invitation accepted!');
         } catch (error: any) {
-          toast.error(error.response?.data?.errors?.[0]?.message || 'Failed to accept invitation');
+          toastApiError(error, 'Failed to accept invitation');
         } finally {
           localStorage.removeItem('pendingInviteToken');
         }
@@ -123,11 +191,7 @@ export function Login() {
       navigate(inviteToken ? '/projects' : '/');
     },
     onError: (error: any) => {
-      if (error.response?.status === 401) {
-        form.setError('root', { type: 'server', message: 'Invalid email or password.' });
-      } else {
-        handleApiError(error, form.setError, 'Failed to login');
-      }
+      toastApiError(error, 'Invalid two-factor code');
     }
   });
 
@@ -153,6 +217,90 @@ export function Login() {
           <CardContent className="flex flex-col items-center justify-center py-12 space-y-4">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
             <p className="text-muted-foreground text-sm font-medium">Completing SSO authentication...</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (requiresTwoFactor) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-4">
+        <Card className="w-full max-w-md border-border/40 shadow-2xl">
+          <CardHeader className="space-y-2 text-center pb-8">
+            <div className="flex justify-center mb-4">
+              <div className="h-14 w-14 rounded-xl flex items-center justify-center bg-zinc-950 border border-border/40 shadow-sm transition-shadow">
+                <ToggleMeshIcon className="h-8 w-8 text-zinc-300 transition-colors duration-300" />
+              </div>
+            </div>
+            <CardTitle className="text-2xl font-bold tracking-tight">Two-Factor Authentication</CardTitle>
+            <CardDescription className="text-muted-foreground">
+              {isUsingRecoveryCode ? 'Enter one of your 10-character recovery codes.' : 'Enter the 6-digit code from your authenticator app.'}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={(e) => { e.preventDefault(); verifyTwoFactorMutation.mutate(twoFactorCode); }} className="space-y-4 flex flex-col items-center w-full">
+              <div className="space-y-2 flex flex-col items-center w-full">
+                <label className="text-sm font-medium text-foreground text-center w-full">
+                    {isUsingRecoveryCode ? 'Recovery Code' : 'Authentication Code'}
+                </label>
+                
+                {isUsingRecoveryCode ? (
+                    <Input 
+                        value={twoFactorCode} 
+                        onChange={(e) => setTwoFactorCode(e.target.value)} 
+                        disabled={verifyTwoFactorMutation.isPending} 
+                        placeholder="e.g. XXXXX-XXXXX"
+                        className="text-center tracking-widest uppercase font-mono max-w-[250px]"
+                        autoFocus
+                    />
+                ) : (
+                    <InputOTP maxLength={6} value={twoFactorCode} onChange={setTwoFactorCode} disabled={verifyTwoFactorMutation.isPending} autoFocus>
+                    <InputOTPGroup>
+                        <InputOTPSlot index={0} />
+                        <InputOTPSlot index={1} />
+                        <InputOTPSlot index={2} />
+                    </InputOTPGroup>
+                    <InputOTPSeparator />
+                    <InputOTPGroup>
+                        <InputOTPSlot index={3} />
+                        <InputOTPSlot index={4} />
+                        <InputOTPSlot index={5} />
+                    </InputOTPGroup>
+                    </InputOTP>
+                )}
+              </div>
+              <Button
+                type="submit"
+                className="w-full h-11 text-primary-foreground font-medium mt-4"
+                disabled={verifyTwoFactorMutation.isPending || (isUsingRecoveryCode ? twoFactorCode.length < 10 : twoFactorCode.length < 6)}
+              >
+                {verifyTwoFactorMutation.isPending ? 'Verifying...' : 'Verify'}
+              </Button>
+              <div className="flex flex-col gap-2 w-full mt-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="w-full text-sm text-muted-foreground"
+                    onClick={() => {
+                        setIsUsingRecoveryCode(!isUsingRecoveryCode);
+                        setTwoFactorCode('');
+                    }}
+                    disabled={verifyTwoFactorMutation.isPending}
+                  >
+                    {isUsingRecoveryCode ? 'Use authenticator app' : 'Use recovery code instead'}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="w-full text-sm text-muted-foreground"
+                    onClick={() => { setRequiresTwoFactor(false); setTwoFactorToken(null); setTwoFactorCode(''); setIsUsingRecoveryCode(false); }}
+                    disabled={verifyTwoFactorMutation.isPending}
+                  >
+                    Back to login
+                  </Button>
+              </div>
+            </form>
           </CardContent>
         </Card>
       </div>

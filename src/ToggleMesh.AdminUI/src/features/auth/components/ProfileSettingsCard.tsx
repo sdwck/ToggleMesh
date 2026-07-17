@@ -41,7 +41,7 @@ export function ProfileSettingsCard() {
     };
 
     return (
-        <Card className="border-border/40 bg-zinc-950/20">
+        <Card className="border-border/40 bg-zinc-950/20 h-full flex flex-col">
             <CardHeader>
                 <CardTitle className="text-base flex items-center gap-2">
                     <User className="h-4 w-4 text-muted-foreground" /> Profile Settings
@@ -50,9 +50,9 @@ export function ProfileSettingsCard() {
                     Manage your user profile information.
                 </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="flex-1">
                 <Form {...updateProfileForm}>
-                    <form onSubmit={updateProfileForm.handleSubmit(handleUpdateProfileSubmit)} className="space-y-4">
+                    <form onSubmit={updateProfileForm.handleSubmit(handleUpdateProfileSubmit)} className="flex flex-col h-full space-y-4">
                         <div className="space-y-2">
                             <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 text-muted-foreground">Email Address</label>
                             <Input value={profile?.email || ''} readOnly disabled className="border-border/40 bg-zinc-900/40" />
@@ -74,7 +74,8 @@ export function ProfileSettingsCard() {
                                 </FormItem>
                             )}
                         />
-                        <div className="flex justify-end pt-2">
+
+                        <div className="flex justify-end mt-auto pt-4">
                             <Button
                                 type="submit"
                                 disabled={updateProfile.isPending || !updateProfileForm.watch('username')?.trim() || updateProfileForm.watch('username') === profile?.username}

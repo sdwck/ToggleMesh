@@ -33,7 +33,7 @@ export function ProjectCard({ project }: ProjectCardProps) {
         queryClient.prefetchQuery({
             queryKey: ['projects', projId],
             queryFn: async () => {
-                const { data } = await api.get(`/projects/${projId}`);
+                const { data } = await api.get(`/projects/${projId}`, { headers: { 'X-Skip-TwoFactor-Interceptor': 'true' } });
                 return data;
             },
             staleTime: 5 * 60 * 1000,
@@ -41,7 +41,7 @@ export function ProjectCard({ project }: ProjectCardProps) {
         queryClient.prefetchQuery({
             queryKey: ['projects', projId, 'flags', undefined, undefined],
             queryFn: async () => {
-                const { data } = await api.get(`/projects/${projId}/flags`);
+                const { data } = await api.get(`/projects/${projId}/flags`, { headers: { 'X-Skip-TwoFactor-Interceptor': 'true' } });
                 return data;
             },
             staleTime: 5 * 60 * 1000,

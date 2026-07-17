@@ -10,6 +10,7 @@ export interface OrganizationDto {
     name: string;
     createdAt: string;
     role: OrganizationRole;
+    requireTwoFactor: boolean;
 }
 
 export interface OrganizationMemberDto {
@@ -333,6 +334,8 @@ export interface UserProfile {
     id: string;
     email: string;
     username: string;
+    twoFactorEnabled: boolean;
+    recoveryCodesLeft: number;
 }
 
 export const WebhookStatus = {

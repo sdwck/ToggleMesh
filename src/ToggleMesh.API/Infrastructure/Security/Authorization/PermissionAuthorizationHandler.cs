@@ -97,14 +97,17 @@ public class PermissionAuthorizationHandler : AuthorizationHandler<PermissionReq
 
             var orgMember = await _dbContext.OrganizationMembers
                 .AsNoTracking()
+                .Include(om => om.Organization)
                 .FirstOrDefaultAsync(om => om.OrganizationId == project.OrganizationId && om.UserId == userId, ct);
 
             if (orgMember == null) 
                 return null;
+                
+            var require2fa = orgMember.Organization.RequireTwoFactor;
 
             if (orgMember.Role == OrganizationRole.Admin)
             {
-                var state = new CachedMemberState(ProjectRole.Owner, new Dictionary<Guid, ProjectRole>());
+                var state = new CachedMemberState(ProjectRole.Owner, new Dictionary<Guid, ProjectRole>(), require2fa);
                 await _redis.StringSetAsync(cacheKey, JsonSerializer.Serialize(state), TimeSpan.FromMinutes(5));
                 return state;
             }
@@ -121,7 +124,7 @@ public class PermissionAuthorizationHandler : AuthorizationHandler<PermissionReq
                 return null;
 
             var envRoles = projectMember.EnvironmentRoles.ToDictionary(er => er.EnvironmentId, er => er.Role);
-            var resultState = new CachedMemberState(projectMember.Role, envRoles);
+            var resultState = new CachedMemberState(projectMember.Role, envRoles, require2fa);
             
             await _redis.StringSetAsync(cacheKey, JsonSerializer.Serialize(resultState), TimeSpan.FromMinutes(5));
             return resultState;
@@ -160,6 +163,18 @@ public class PermissionAuthorizationHandler : AuthorizationHandler<PermissionReq
         }
 
         if (hasPermission)
+        {
+            if (memberState.OrgRequiresTwoFactor)
+            {
+                var hasMfaClaim = context.User.Claims.Any(c => c.Type == "amr" && c.Value == "mfa");
+                if (!hasMfaClaim)
+                {
+                    httpContext.Response.Headers.Append("X-Requires-TwoFactor", "true");
+                    context.Fail(new AuthorizationFailureReason(this, "TwoFactorRequired"));
+                    return;
+                }
+            }
             context.Succeed(requirement);
+        }
     }
 }

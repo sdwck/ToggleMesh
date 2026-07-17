@@ -37,7 +37,7 @@ api.interceptors.response.use(
   async (error: AxiosError) => {
     const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
 
-    if (error.response?.status === 401 && !originalRequest._retry && originalRequest.url !== '/auth/refresh' && originalRequest.url !== '/auth/login') {
+    if (error.response?.status === 401 && !originalRequest._retry && originalRequest.url !== '/auth/refresh' && !originalRequest.url?.startsWith('/auth/login')) {
       if (isRefreshing) {
         return new Promise(function (resolve, reject) {
           failedQueue.push({ resolve, reject });
@@ -88,6 +88,13 @@ api.interceptors.response.use(
         return Promise.reject(refreshError);
       } finally {
         isRefreshing = false;
+      }
+    }
+
+    if (error.response?.status === 403 && error.response.headers['x-requires-twofactor'] === 'true') {
+      const skipTwoFactor = error.config?.headers?.['X-Skip-TwoFactor-Interceptor'];
+      if (skipTwoFactor !== 'true') {
+        window.dispatchEvent(new CustomEvent('togglemesh:requires-twofactor'));
       }
     }
 

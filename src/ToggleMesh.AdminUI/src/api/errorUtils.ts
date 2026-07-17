@@ -2,10 +2,20 @@ import { type UseFormSetError } from 'react-hook-form';
 import { toast } from 'sonner';
 
 export const handleApiError = (error: any, setError: UseFormSetError<any>, defaultMessage: string = 'An error occurred') => {
-    const data = error?.response?.data;
+    if (!error?.response) {
+        if (error?.message === 'Network Error' || error?.code === 'ERR_NETWORK' || error?.code === 'ERR_CONNECTION_REFUSED') {
+            toast.error('Unable to connect to the server. Please check your internet connection or try again later.');
+            setError('root', { type: 'server', message: 'Unable to connect to the server.' });
+        } else {
+            toast.error(error?.message || defaultMessage);
+            setError('root', { type: 'server', message: error?.message || defaultMessage });
+        }
+        return;
+    }
 
+    const data = error.response.data;
     if (!data) {
-        toast.error(error.message || defaultMessage);
+        toast.error(defaultMessage);
         return;
     }
 
@@ -51,9 +61,18 @@ export const handleApiError = (error: any, setError: UseFormSetError<any>, defau
 };
 
 export const toastApiError = (error: any, defaultMessage: string = 'An error occurred') => {
-    const data = error?.response?.data;
+    if (!error?.response) {
+        if (error?.message === 'Network Error' || error?.code === 'ERR_NETWORK' || error?.code === 'ERR_CONNECTION_REFUSED') {
+            toast.error('Unable to connect to the server. Please check your internet connection or try again later.');
+        } else {
+            toast.error(error?.message || defaultMessage);
+        }
+        return;
+    }
+
+    const data = error.response.data;
     if (!data) {
-        toast.error(error.message || defaultMessage);
+        toast.error(defaultMessage);
         return;
     }
     if (data.errors) {

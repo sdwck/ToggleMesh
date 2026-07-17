@@ -98,6 +98,13 @@ export function SecuritySettingsCard() {
                         </DialogHeader>
                         <Form {...changePasswordForm}>
                             <form onSubmit={changePasswordForm.handleSubmit(handleChangePasswordSubmit)} className="space-y-4">
+                                {changePasswordForm.formState.errors.root && (
+                                    <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-md">
+                                        <p className="text-sm font-medium text-destructive">
+                                            {changePasswordForm.formState.errors.root.message}
+                                        </p>
+                                    </div>
+                                )}
                                 <FormField
                                     control={changePasswordForm.control}
                                     name="currentPassword"

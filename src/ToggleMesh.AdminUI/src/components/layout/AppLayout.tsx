@@ -23,6 +23,7 @@ import { useUserProfile, useProjectDetails, useOrganizations } from '@/api/queri
 import { useEffect } from 'react';
 import { useOrganizationStore } from '@/stores/useOrganizationStore';
 import { OrganizationRole } from '@/api/types';
+import { RequireTwoFactorOverlay } from '@/features/auth/components/RequireTwoFactorOverlay';
 
 export function AppLayout() {
     const token = localStorage.getItem('accessToken');
@@ -222,6 +223,7 @@ export function AppLayout() {
 
     return (
         <div className="flex flex-col h-screen bg-background text-foreground overflow-hidden">
+            <RequireTwoFactorOverlay />
             <header
                 className="h-14 border-b border-border/40 bg-zinc-950/80 backdrop-blur flex items-center justify-between px-6 z-10 shrink-0">
                 <div className="flex items-center gap-2">

@@ -57,7 +57,8 @@ public class CreateOrganizationEndpoint : ToggleEndpoint<CreateOrganizationReque
             Id = org.Id,
             Name = org.Name,
             CreatedAt = org.CreatedAt,
-            Role = member.Role
+            Role = member.Role,
+            RequireTwoFactor = org.RequireTwoFactor
         }, ct);
     }
 }

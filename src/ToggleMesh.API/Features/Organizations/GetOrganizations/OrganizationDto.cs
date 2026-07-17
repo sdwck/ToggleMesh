@@ -8,4 +8,5 @@ public class OrganizationDto
     public string Name { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; }
     public OrganizationRole Role { get; set; }
-}
+    public bool RequireTwoFactor { get; set; }
+}

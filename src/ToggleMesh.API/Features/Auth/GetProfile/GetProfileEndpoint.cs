@@ -28,6 +28,8 @@ public class GetProfileEndpoint : ToggleEndpointWithoutRequest<UserProfileDto>
             return;
         }
 
-        await Send.OkAsync(new UserProfileDto(user.Id, user.Email ?? "", user.UserName ?? ""), ct);
+        var recoveryCodesLeft = user.TwoFactorEnabled ? await _userManager.CountRecoveryCodesAsync(user) : 0;
+
+        await Send.OkAsync(new UserProfileDto(user.Id, user.Email ?? "", user.UserName ?? "", user.TwoFactorEnabled, recoveryCodesLeft), ct);
     }
 }

@@ -6,6 +6,7 @@ namespace ToggleMesh.API.Features.Organizations.Domain;
 public class Organization : AuditableEntity, ISoftDeletable
 {
     public string Name { get; set; } = string.Empty;
+    public bool RequireTwoFactor { get; set; }
 
     public ICollection<Project> Projects { get; set; } = [];
     public ICollection<OrganizationMember> Members { get; set; } = [];
