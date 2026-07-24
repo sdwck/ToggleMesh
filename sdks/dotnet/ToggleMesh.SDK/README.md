@@ -13,6 +13,7 @@ ToggleMesh SDK is engineered for **hardcore, high-throughput backend services**.
 *   **Synchronization:** Real-time push via SignalR over Redis backplane (no polling).
 
 *Benchmarks executed using [BenchmarkDotNet](https://github.com/dotnet/BenchmarkDotNet) on .NET 10.0 / Intel Core i7-14700K:*
+
 | Method | Mean | StdDev | Max | P95 | Allocated |
 | :--- | :---: | :---: | :---: | :---: | :---: |
 | **Evaluate_NoRules_AOT** *(Baseline)* | **7.28 ns** | 0.03 ns | 7.34 ns | 7.33 ns | **-** |
