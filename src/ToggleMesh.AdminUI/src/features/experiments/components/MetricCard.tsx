@@ -59,7 +59,7 @@ export function MetricCard({ exp, isPrimary, variationsConfig, isBoolean }: { ex
                         const raw = exp.lastCalculatedAt ?? exp.LastCalculatedAt;
                         if (!raw) return 'N/A';
                         const d = new Date(raw);
-                        return isNaN(d.getTime()) ? 'N/A' : formatDistanceToNow(d, { addSuffix: true });
+                        return Number.isNaN(d.getTime()) ? 'N/A' : formatDistanceToNow(d, { addSuffix: true });
                     })()}
                 </span>
             </div>

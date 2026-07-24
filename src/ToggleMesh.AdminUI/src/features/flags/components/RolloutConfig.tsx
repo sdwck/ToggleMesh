@@ -12,8 +12,8 @@ const RolloutInput = ({ value, onChange, disabled }: { value: number, onChange: 
     const [local, setLocal] = useState(value.toString());
 
     useEffect(() => {
-        const p = parseFloat(local);
-        if (isNaN(p) || p !== value) {
+        const p = Number.parseFloat(local);
+        if (Number.isNaN(p) || p !== value) {
             setLocal(value.toString());
         }
     }, [value]);
@@ -26,16 +26,16 @@ const RolloutInput = ({ value, onChange, disabled }: { value: number, onChange: 
             value={local}
             onChange={(e) => {
                 setLocal(e.target.value);
-                const parsed = parseFloat(e.target.value);
-                if (!isNaN(parsed)) {
+                const parsed = Number.parseFloat(e.target.value);
+                if (!Number.isNaN(parsed)) {
                     onChange(Math.max(0, Math.min(100, parsed)));
                 } else if (e.target.value === '') {
                     onChange(0);
                 }
             }}
             onBlur={() => {
-                let parsed = parseFloat(local);
-                if (isNaN(parsed)) parsed = 0;
+                let parsed = Number.parseFloat(local);
+                if (Number.isNaN(parsed)) parsed = 0;
                 parsed = Math.max(0, Math.min(100, parsed));
                 setLocal(parsed.toString());
                 onChange(parsed);

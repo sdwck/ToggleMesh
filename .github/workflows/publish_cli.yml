@@ -1,24 +1,22 @@
-﻿name: Release & Publish CLI
+name: Release & Publish CLI
 
 on:
   push:
     tags:
       - 'cli-v*'
 
-permissions:
-  id-token: write
-  contents: write
-
 jobs:
   publish-nuget:
     name: Pack and Publish to NuGet
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
     steps:
       - name: Checkout Source Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup .NET SDK
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: '10.0.x'
 
@@ -26,7 +24,7 @@ jobs:
         run: dotnet pack src/ToggleMesh.CLI/ToggleMesh.CLI.csproj -c Release -o ./artifacts
 
       - name: NuGet Login
-        uses: NuGet/login@v1
+        uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1.2.0
         id: login
         with:
           user: sdwcktarakanov
@@ -41,6 +39,8 @@ jobs:
   build-and-release-native:
     name: Build Native AOT for ${{ matrix.rid }}
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
     strategy:
       matrix:
         include:
@@ -56,10 +56,10 @@ jobs:
             
     steps:
       - name: Checkout Source Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup .NET SDK
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: '10.0.x'
 
@@ -93,7 +93,7 @@ jobs:
           tar -czf ./${{ matrix.artifact_name }}.tar.gz -C ./publish ToggleMesh.CLI
 
       - name: Upload to GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@fe965f7af51af5f2602596916f38a38df2e33de0 # v3.0.2
         with:
           files: |
             togglemesh-*.zip

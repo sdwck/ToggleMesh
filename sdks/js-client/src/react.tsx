@@ -27,29 +27,31 @@ export const useToggleMeshClient = (): ToggleMeshClient => {
 export const useFeatureFlag = (flagKey: string, defaultValue = false): boolean => {
     const client = useContext(ToggleMeshContext);
 
-    if (!client) {
-        console.warn('[ToggleMesh] useFeatureFlag must be used within a ToggleMeshProvider.');
-        return defaultValue;
-    }
-
-    return useSyncExternalStore(
-        (callback) => client.subscribe(callback),
-        () => client.isEnabled(flagKey, defaultValue),
+    const value = useSyncExternalStore(
+        (callback) => (client ? client.subscribe(callback) : () => {}),
+        () => (client ? client.isEnabled(flagKey, defaultValue) : defaultValue),
         () => defaultValue
     );
+
+    if (!client) {
+        console.warn('[ToggleMesh] useFeatureFlag must be used within a ToggleMeshProvider.');
+    }
+
+    return value;
 };
 
 export const useFeatureFlagVariation = (flagKey: string, defaultValue = ""): string => {
     const client = useContext(ToggleMeshContext);
 
-    if (!client) {
-        console.warn('[ToggleMesh] useFeatureFlagVariation must be used within a ToggleMeshProvider.');
-        return defaultValue;
-    }
-
-    return useSyncExternalStore(
-        (callback) => client.subscribe(callback),
-        () => client.getVariation(flagKey, defaultValue),
+    const value = useSyncExternalStore(
+        (callback) => (client ? client.subscribe(callback) : () => {}),
+        () => (client ? client.getVariation(flagKey, defaultValue) : defaultValue),
         () => defaultValue
     );
+
+    if (!client) {
+        console.warn('[ToggleMesh] useFeatureFlagVariation must be used within a ToggleMeshProvider.');
+    }
+
+    return value;
 };

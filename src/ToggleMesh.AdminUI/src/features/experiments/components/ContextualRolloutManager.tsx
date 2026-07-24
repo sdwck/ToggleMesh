@@ -27,7 +27,6 @@ export function ContextualRolloutManager({
     variationsConfig,
     isBoolean
 }: ContextualRolloutManagerProps) {
-    if (!displayContextual || displayContextual.length === 0) return null;
     const [showLowTraffic, setShowLowTraffic] = useState(false);
 
     const { highTrafficSlices, lowTrafficSlices, aggregatedIter, otherExposures } = useMemo(() => {
@@ -212,8 +211,8 @@ export function ContextualRolloutManager({
                                                             className={`peer w-[4ch] bg-transparent outline-none border-b border-dashed border-primary/40 hover:border-primary/80 focus:border-primary transition-colors text-right appearance-none [&::-webkit-inner-spin-button]:appearance-none font-mono text-[10px] font-semibold cursor-text text-primary/80 focus:text-primary ${!canEditEnv || setContextualRollout?.isPending || !!historicalSnapshot ? 'cursor-not-allowed opacity-50' : ''}`}
                                                             onBlur={(e) => {
                                                                 if (!!historicalSnapshot) return;
-                                                                let val = parseInt(e.target.value || '0', 10);
-                                                                if (isNaN(val)) val = 0;
+                                                                let val = Number.parseInt(e.target.value || '0', 10);
+                                                                if (Number.isNaN(val)) val = 0;
                                                                 val = Math.max(0, Math.min(100, val));
                                                                 
                                                                 const oldVal = Math.round(weight / 100);

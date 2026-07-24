@@ -18,4 +18,4 @@ builder.ConfigureServices((context, services) =>
 });
 
 var app = builder.Build();
-app.Run();
+await app.RunAsync();

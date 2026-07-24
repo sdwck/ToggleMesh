@@ -136,7 +136,7 @@ export function AuditLogViewer({
                 let fromDate = new Date();
                 const match = rangeType.match(/^(\d+)([mhd])$/);
                 if (match) {
-                    const val = parseInt(match[1]);
+                    const val = Number.parseInt(match[1], 10);
                     const unit = match[2];
                     if (unit === 'm') fromDate.setMinutes(now.getMinutes() - val);
                     else if (unit === 'h') fromDate.setHours(now.getHours() - val);
@@ -292,6 +292,7 @@ export function AuditLogViewer({
                                         </div>
                                         <div className="grid grid-cols-2 md:grid-cols-1 gap-0.5 max-h-[11rem] overflow-y-auto pr-1 flex-1">
                                             <button
+                                                type="button"
                                                 onClick={() => handleQuickRangeSelect('all')}
                                                 className={`w-full text-left px-2 py-1.5 rounded-md text-xs font-medium transition-colors flex items-center justify-between cursor-pointer ${rangeType === 'all' ? 'bg-primary/10 text-primary' : 'text-zinc-400 hover:bg-muted/30 hover:text-zinc-200'}`}
                                             >
@@ -302,6 +303,7 @@ export function AuditLogViewer({
                                                 const isSelected = rangeType === range.value;
                                                 return (
                                                     <button
+                                                        type="button"
                                                         key={range.value}
                                                         onClick={() => handleQuickRangeSelect(range.value)}
                                                         className={`w-full text-left px-2 py-1.5 rounded-md text-xs font-medium transition-colors flex items-center justify-between cursor-pointer ${isSelected ? 'bg-primary/10 text-primary' : 'text-zinc-400 hover:bg-muted/30 hover:text-zinc-200'}`}

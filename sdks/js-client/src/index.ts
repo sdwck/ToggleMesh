@@ -134,8 +134,8 @@ export class ToggleMeshClient {
     getNumber(flagKey: string, defaultValue = 0): number {
         const str = this.getVariation(flagKey, "");
         if (!str) return defaultValue;
-        const parsed = parseFloat(str);
-        return isNaN(parsed) ? defaultValue : parsed;
+        const parsed = Number.parseFloat(str);
+        return Number.isNaN(parsed) ? defaultValue : parsed;
     }
 
     getJson<T>(flagKey: string, defaultValue: T): T {

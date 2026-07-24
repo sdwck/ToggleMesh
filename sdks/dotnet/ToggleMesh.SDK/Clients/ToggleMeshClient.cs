@@ -556,7 +556,7 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService, ISegmentProvi
                     return cachedTyped;
 
             var deserialized = JsonSerializer.Deserialize<T>(val, JsonOptions);
-            if (deserialized != null)
+            if (deserialized is not null)
             {
                 flag.ParsedJsonVariations[variationId.Value] = deserialized;
                 return deserialized;
@@ -1149,7 +1149,7 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService, ISegmentProvi
             if (!File.Exists(_fallbackFilePath))
                 return;
 
-            var content = await File.ReadAllTextAsync(_fallbackFilePath);
+            var content = await File.ReadAllTextAsync(_fallbackFilePath, _sdkLifetimeCts.Token);
             var response = JsonSerializer.Deserialize<SdkGetFlagsResponse>(content);
 
             if (response != null)
@@ -1197,7 +1197,7 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService, ISegmentProvi
                 Segments = segmentsPayload
             };
             var content = JsonSerializer.Serialize(payload);
-            await File.WriteAllTextAsync(tempFilePath, content);
+            await File.WriteAllTextAsync(tempFilePath, content, _sdkLifetimeCts.Token);
             File.Move(tempFilePath, _fallbackFilePath, overwrite: true);
         }
         catch (IOException)

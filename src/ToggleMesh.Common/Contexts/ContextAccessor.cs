@@ -81,7 +81,7 @@ public readonly struct ContextAccessor<T> : IContextAccessor
 
     public bool TryGetValue(string key, out string? value)
     {
-        if (_instance == null)
+        if (_instance is null)
         {
             value = null;
             return false;

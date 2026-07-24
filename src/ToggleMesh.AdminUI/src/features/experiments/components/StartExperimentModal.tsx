@@ -261,7 +261,7 @@ export function StartExperimentModal({ projectId, envId, flagKey, currentRollout
                                                 <FormControl>
                                                     <Select
                                                         value={field.value.toString()}
-                                                        onValueChange={(v) => field.onChange(parseInt(v) as 0 | 1)}
+                                                        onValueChange={(v) => field.onChange(Number.parseInt(v, 10) as 0 | 1)}
                                                     >
                                                         <SelectTrigger>
                                                             <SelectValue placeholder="Optimization Type" />

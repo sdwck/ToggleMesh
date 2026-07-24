@@ -114,7 +114,7 @@ export function ProjectMembersTab({ project, isLoading }: { project?: ProjectDet
 
     const handleAddMemberSubmit = async (values: AddMemberValues) => {
         try {
-            await addMember.mutateAsync({ email: values.email, role: parseInt(values.role) });
+            await addMember.mutateAsync({ email: values.email, role: Number.parseInt(values.role, 10) });
             toast.success('Member added');
             addForm.reset({ email: '', role: '3' });
             setIsAddMemberOpen(false);
@@ -128,7 +128,7 @@ export function ProjectMembersTab({ project, isLoading }: { project?: ProjectDet
         try {
             await updateMember.mutateAsync({
                 userId: memberToEdit.userId,
-                role: parseInt(values.role),
+                role: Number.parseInt(values.role, 10),
                 environmentRoles: values.environmentRoles.length > 0 ? values.environmentRoles : null
             });
             toast.success('Member updated');
@@ -145,9 +145,9 @@ export function ProjectMembersTab({ project, isLoading }: { project?: ProjectDet
         } else {
             const existing = newRoles.find(r => r.environmentId === envId);
             if (existing) {
-                existing.role = parseInt(value);
+                existing.role = Number.parseInt(value, 10);
             } else {
-                newRoles.push({ environmentId: envId, role: parseInt(value) });
+                newRoles.push({ environmentId: envId, role: Number.parseInt(value, 10) });
             }
         }
         editForm.setValue('environmentRoles', newRoles, { shouldDirty: true });
@@ -425,7 +425,7 @@ export function ProjectMembersTab({ project, isLoading }: { project?: ProjectDet
                                                             </SelectTrigger>
                                                             <SelectContent>
                                                                 <SelectItem value="inherit">Inherit
-                                                                    ({getRoleName(parseInt(editForm.watch('role')) as ProjectRole)})</SelectItem>
+                                                                    ({getRoleName(Number.parseInt(editForm.watch('role'), 10) as ProjectRole)})</SelectItem>
                                                                 <SelectItem value="1">Admin</SelectItem>
                                                                 <SelectItem value="2">Editor</SelectItem>
                                                                 <SelectItem value="3">Viewer</SelectItem>

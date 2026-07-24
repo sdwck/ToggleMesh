@@ -270,7 +270,7 @@ export class ToggleMeshClient implements ISegmentProvider {
     getNumberValue(flagKey: string, defaultValue: number, options?: EvalOptions): number {
         const val = this.getVariationInternal(flagKey, options?.identity || "", options?.context, String(defaultValue));
         const parsed = Number(val);
-        return isNaN(parsed) ? defaultValue : parsed;
+        return Number.isNaN(parsed) ? defaultValue : parsed;
     }
 
     getJsonValue<T>(flagKey: string, defaultValue: T, options?: EvalOptions): T {

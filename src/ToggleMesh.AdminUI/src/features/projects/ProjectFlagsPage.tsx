@@ -216,6 +216,7 @@ export function ProjectFlagsPage() {
 
                         <div className="relative h-full shrink-0" ref={tagsRef}>
                             <button
+                                type="button"
                                 onClick={() => setIsTagsOpen(!isTagsOpen)}
                                 className={`h-full cursor-pointer px-3 text-sm text-muted-foreground hover:text-foreground transition-colors flex items-center gap-2 border-none bg-transparent select-none outline-none focus:outline-none ${selectedTags.length > 0 ? "text-primary hover:text-primary/80" : ""
                                     }`}
@@ -241,7 +242,7 @@ export function ProjectFlagsPage() {
                                             className="w-full bg-transparent text-sm border-none outline-none focus:ring-0 placeholder:text-muted-foreground/60 text-foreground"
                                         />
                                         {tagSearch && (
-                                            <button onClick={() => setTagSearch('')} className="text-muted-foreground hover:text-foreground">
+                                            <button type="button" onClick={() => setTagSearch('')} className="text-muted-foreground hover:text-foreground">
                                                 <X className="h-3.5 w-3.5" />
                                             </button>
                                         )}
@@ -293,6 +294,7 @@ export function ProjectFlagsPage() {
                                         <div className="border-t border-border/10 pt-2 mt-2 flex justify-between items-center px-1">
                                             <span className="text-[10px] text-muted-foreground">{selectedTags.length} selected</span>
                                             <button
+                                                type="button"
                                                 onClick={() => setSelectedTags([])}
                                                 className="text-[10px] text-primary hover:underline cursor-pointer font-medium"
                                             >
@@ -364,7 +366,7 @@ export function ProjectFlagsPage() {
                                                 render={({ field }) => (
                                                     <FormItem>
                                                         <span className="text-sm font-medium">Flag Type</span>
-                                                        <Select value={field.value.toString()} onValueChange={(v) => field.onChange(parseInt(v))}>
+                                                        <Select value={field.value.toString()} onValueChange={(v) => field.onChange(Number.parseInt(v, 10))}>
                                                             <FormControl>
                                                                 <SelectTrigger>
                                                                     <SelectValue placeholder="Select type" />

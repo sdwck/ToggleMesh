@@ -61,44 +61,46 @@ export class RegexOperator implements RuleOperator {
 
 export class GreaterThanOperator implements RuleOperator {
     name = "GreaterThan";
-    compile(ruleValue: string) { return parseFloat(ruleValue); }
+    compile(ruleValue: string) {
+        return Number.parseFloat(ruleValue);
+    }
     evaluate(userValue: string, compiledRuleValue: any) {
-        if (isNaN(compiledRuleValue)) return false;
-        const uv = parseFloat(userValue);
-        if (isNaN(uv)) return false;
+        if (Number.isNaN(compiledRuleValue)) return false;
+        const uv = Number.parseFloat(userValue);
+        if (Number.isNaN(uv)) return false;
         return uv > compiledRuleValue;
     }
 }
 
 export class GreaterThanOrEqualOperator implements RuleOperator {
     name = "GreaterThanOrEqual";
-    compile(ruleValue: string) { return parseFloat(ruleValue); }
+    compile(ruleValue: string) { return Number.parseFloat(ruleValue); }
     evaluate(userValue: string, compiledRuleValue: any) {
-        if (isNaN(compiledRuleValue)) return false;
-        const uv = parseFloat(userValue);
-        if (isNaN(uv)) return false;
+        if (Number.isNaN(compiledRuleValue)) return false;
+        const uv = Number.parseFloat(userValue);
+        if (Number.isNaN(uv)) return false;
         return uv >= compiledRuleValue;
     }
 }
 
 export class LessThanOperator implements RuleOperator {
     name = "LessThan";
-    compile(ruleValue: string) { return parseFloat(ruleValue); }
+    compile(ruleValue: string) { return Number.parseFloat(ruleValue); }
     evaluate(userValue: string, compiledRuleValue: any) {
-        if (isNaN(compiledRuleValue)) return false;
-        const uv = parseFloat(userValue);
-        if (isNaN(uv)) return false;
+        if (Number.isNaN(compiledRuleValue)) return false;
+        const uv = Number.parseFloat(userValue);
+        if (Number.isNaN(uv)) return false;
         return uv < compiledRuleValue;
     }
 }
 
 export class LessThanOrEqualOperator implements RuleOperator {
     name = "LessThanOrEqual";
-    compile(ruleValue: string) { return parseFloat(ruleValue); }
+    compile(ruleValue: string) { return Number.parseFloat(ruleValue); }
     evaluate(userValue: string, compiledRuleValue: any) {
-        if (isNaN(compiledRuleValue)) return false;
-        const uv = parseFloat(userValue);
-        if (isNaN(uv)) return false;
+        if (Number.isNaN(compiledRuleValue)) return false;
+        const uv = Number.parseFloat(userValue);
+        if (Number.isNaN(uv)) return false;
         return uv <= compiledRuleValue;
     }
 }

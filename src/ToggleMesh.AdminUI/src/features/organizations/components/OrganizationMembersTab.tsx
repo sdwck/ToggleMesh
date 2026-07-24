@@ -89,7 +89,7 @@ export function OrganizationMembersTab({ activeOrganizationId, activeOrgName, us
             await inviteMember.mutateAsync({
                 organizationId: activeOrganizationId,
                 email: values.email.trim(),
-                role: parseInt(values.role),
+                role: Number.parseInt(values.role, 10),
             });
             toast.success(`Invitation sent to ${values.email}`);
             setIsInviteOpen(false);
@@ -196,7 +196,7 @@ export function OrganizationMembersTab({ activeOrganizationId, activeOrgName, us
                                                                 await updateMember.mutateAsync({
                                                                     organizationId: activeOrganizationId,
                                                                     userId: member.userId,
-                                                                    role: parseInt(value),
+                                                                    role: Number.parseInt(value, 10),
                                                                 });
                                                                 toast.success(`Updated role for ${member.email}`);
                                                             } catch {

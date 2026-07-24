@@ -27,9 +27,6 @@ import { RequireTwoFactorOverlay } from '@/features/auth/components/RequireTwoFa
 
 export function AppLayout() {
     const token = localStorage.getItem('accessToken');
-    if (!token) {
-        return <Navigate to="/login" replace />;
-    }
 
     useRealTimeStream();
     const { data: profile } = useUserProfile();
@@ -65,9 +62,9 @@ export function AppLayout() {
 
     const userEmail = useMemo(() => {
         try {
-            const token = localStorage.getItem('accessToken');
-            if (!token) return 'User';
-            const parsed: any = jwtDecode(token);
+            const currentToken = localStorage.getItem('accessToken');
+            if (!currentToken) return 'User';
+            const parsed: any = jwtDecode(currentToken);
             return parsed.email || parsed['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress'] || 'User';
         } catch {
             return 'User';
@@ -78,14 +75,18 @@ export function AppLayout() {
 
     const userRole = useMemo(() => {
         try {
-            const token = localStorage.getItem('accessToken');
-            if (!token) return 'Member';
-            const parsed: any = jwtDecode(token);
+            const currentToken = localStorage.getItem('accessToken');
+            if (!currentToken) return 'Member';
+            const parsed: any = jwtDecode(currentToken);
             return parsed.role || parsed['http://schemas.microsoft.com/ws/2008/06/identity/claims/role'] || 'Member';
         } catch {
             return 'Member';
         }
     }, []);
+
+    if (!token) {
+        return <Navigate to="/login" replace />;
+    }
 
     const handleLogout = async () => {
         localStorage.removeItem('accessToken');

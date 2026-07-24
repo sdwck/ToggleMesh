@@ -42,7 +42,7 @@ export function ProjectsPage() {
 
             {isLoading ? (
                 <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-                    {[...Array(6)].map((_, i) => (
+                    {Array.from({ length: 6 }).map((_, i) => (
                         <Card key={i} className="border-border/40 h-full">
                             <CardContent className="p-5 h-full flex flex-col space-y-4">
                                 <div className="flex items-center gap-3">

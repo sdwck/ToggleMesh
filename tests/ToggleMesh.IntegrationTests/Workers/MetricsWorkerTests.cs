@@ -65,10 +65,9 @@ public class MetricsWorkerTests : IAsyncLifetime
         await _channel.Writer.WriteAsync(metricEvent2);
 
         // Act
-        _factory.TimeProvider.Advance(TimeSpan.FromSeconds(35));
-        var cts = new CancellationTokenSource(TimeSpan.FromSeconds(1));
+        var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
         var task = _worker.StartAsync(cts.Token);
-        _factory.TimeProvider.Advance(TimeSpan.FromSeconds(6));
+        _factory.TimeProvider.Advance(TimeSpan.FromSeconds(10));
         try
         {
             await task;

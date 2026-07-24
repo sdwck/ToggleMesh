@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en" class="dark">
 <head>
     <meta charset="UTF-8">
@@ -57,9 +57,10 @@
     </div>
 
     <div class="space-y-1 bg-zinc-900/40 border border-zinc-800/40 p-4 rounded-lg">
-        <div class="text-[10px] uppercase font-semibold text-zinc-500 tracking-wider">
+    <div class="space-y-2 bg-zinc-900/40 border border-zinc-800/40 p-4 rounded-lg">
+        <label for="user-identity" class="block text-[10px] uppercase font-semibold text-zinc-500 tracking-wider">
             User Identity
-        </div>
+        </label>
 
         <input
                 id="user-identity"
@@ -73,8 +74,8 @@
             User Context
         </div>
 
-        <div class="flex justify-between gap-3">
-            <span class="text-zinc-500">Country</span>
+        <div class="flex justify-between gap-3 items-center">
+            <label for="country" class="text-zinc-500 text-xs">Country</label>
             <input
                     id="country"
                     value="US"
@@ -82,8 +83,8 @@
             />
         </div>
 
-        <div class="flex justify-between gap-3">
-            <span class="text-zinc-500">Plan</span>
+        <div class="flex justify-between gap-3 items-center">
+            <label for="plan" class="text-zinc-500 text-xs">Plan</label>
             <input
                     id="plan"
                     value="Pro"

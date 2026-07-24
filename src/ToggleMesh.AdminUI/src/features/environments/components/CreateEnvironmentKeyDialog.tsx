@@ -96,7 +96,7 @@ export function CreateEnvironmentKeyDialog({ open, onOpenChange, projectId, envi
                                             <FormLabel>Key Type</FormLabel>
                                             <Select 
                                                 value={field.value.toString()} 
-                                                onValueChange={(val) => field.onChange(parseInt(val))}
+                                                onValueChange={(val) => field.onChange(Number.parseInt(val, 10))}
                                             >
                                                 <FormControl>
                                                     <SelectTrigger>

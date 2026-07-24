@@ -55,7 +55,7 @@ export function PersonalAccessTokensCard() {
 
     const handleCreateTokenSubmit = async (values: CreateTokenValues) => {
         try {
-            const expiresInDays = values.expiresIn === "never" ? null : parseInt(values.expiresIn, 10);
+            const expiresInDays = values.expiresIn === "never" ? null : Number.parseInt(values.expiresIn, 10);
             const response = await createToken.mutateAsync({
                 name: values.name.trim(),
                 expiresInDays: expiresInDays

@@ -79,6 +79,9 @@ public class MetricsWorker : BackgroundService
                     batch[dictKey] = (item.Count, item.IsClientSideExposed);
             }
         }
+
+        if (batch.Count > 0)
+            await FlushToDatabaseAsync(batch, CancellationToken.None);
     }
 
     private async Task<bool> FlushToDatabaseAsync(Dictionary<(Guid, string, Guid), (long Count, bool IsClient)> batch,

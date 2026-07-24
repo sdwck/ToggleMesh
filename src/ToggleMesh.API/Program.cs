@@ -380,4 +380,4 @@ app.UseFastEndpoints(c =>
     c.Versioning.DefaultVersion = 1;
     c.Versioning.PrependToRoute = true;
 });
-app.Run();
+await app.RunAsync();

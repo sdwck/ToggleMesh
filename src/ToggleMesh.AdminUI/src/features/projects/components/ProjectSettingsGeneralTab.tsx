@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useUpdateProject, useDeleteProject } from '@/api/queries';
+import { useNavigate, Link } from 'react-router-dom';
+import { useUpdateProject, useDeleteProject, useProjectMembers } from '@/api/queries';
 import type { ProjectDetails } from '@/api/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -49,6 +49,8 @@ export function ProjectSettingsGeneralTab({
     const navigate = useNavigate();
     const updateProject = useUpdateProject(project?.id || '');
     const deleteProject = useDeleteProject();
+
+    const { data: members, isLoading: isMembersLoading } = useProjectMembers(project?.id || '');
 
     const [isDeleteProjectOpen, setIsDeleteProjectOpen] = useState(false);
     const [dashboardEnv, setDashboardEnv] = useState<string>(() => {
@@ -192,14 +194,17 @@ export function ProjectSettingsGeneralTab({
 
                             <div className={`flex justify-between items-center text-xs py-1 ${canManageProject ? '' : 'invisible pointer-events-none'}`} aria-hidden={!canManageProject}>
                                 <span className="text-muted-foreground font-medium">Members</span>
-                                <button
-                                    type="button"
-                                    onClick={() => onTabChange('members')}
-                                    className="flex items-center gap-1.5 font-mono text-zinc-300 hover:text-emerald-400 bg-zinc-900/30 hover:bg-emerald-500/10 px-2 py-1 rounded border border-border/10 hover:border-emerald-500/20 transition-all text-[11px]"
-                                >
-                                    <Users className="h-3.5 w-3.5 text-emerald-500" />
-                                    <span>Manage Members</span>
-                                </button>
+                                {isMembersLoading ? (
+                                    <Skeleton className="h-6 w-24 rounded" />
+                                ) : (
+                                    <Link
+                                        to={`/projects/${project?.id}/members`}
+                                        className="flex items-center gap-1.5 font-mono text-zinc-300 hover:text-emerald-400 bg-zinc-900/30 hover:bg-emerald-500/10 px-2 py-1 rounded border border-border/10 hover:border-emerald-500/20 transition-all text-[11px]"
+                                    >
+                                        <Users className="h-3.5 w-3.5 text-emerald-500" />
+                                        <span>{members?.length === 1 ? '1 member' : `${members?.length ?? 0} members`}</span>
+                                    </Link>
+                                )}
                             </div>
 
                             <div className="flex justify-between items-center text-xs py-1">
@@ -353,7 +358,8 @@ export function ProjectSettingsGeneralTab({
                                             <div className="space-y-4 py-4">
                                                 <div className="rounded-lg bg-destructive/5 border border-destructive/20 p-3 text-xs text-destructive-foreground/90 space-y-1">
                                                     <span className="font-semibold block text-destructive">Warning:</span>
-                                                    This will immediately deactivate all SDK connections for project <span className="font-semibold text-foreground font-mono">{project?.name}</span>.
+                                                    {"This will immediately deactivate all SDK connections for project "}
+                                                    <span className="font-semibold text-foreground font-mono">{project?.name}</span>.
                                                 </div>
                                                 <div className="space-y-2">
                                                     <label className="text-xs font-medium text-zinc-300">
