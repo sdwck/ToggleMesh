@@ -5,7 +5,7 @@ namespace ToggleMesh.API.Infrastructure.Security;
 
 public static class ApiKeyHasher
 {
-    public static string Pepper { get; set; } = "DefaultToggleMeshPepperSecret123!";
+    public static string Pepper { get; set; } = InsecureDefaults.Pepper;
 
     public static string Hash(string plainKey)
     {

@@ -4,7 +4,7 @@ import { useUpdateOrganization, useDeleteOrganization } from '@/api/queries';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Building2, Trash2 } from 'lucide-react';
+import { Building2, Trash2, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
@@ -33,12 +33,12 @@ interface OrganizationGeneralTabProps {
     setActiveOrganizationId: (id: string | null) => void;
 }
 
-export function OrganizationGeneralTab({ 
-    activeOrganizationId, 
-    activeOrgName, 
-    isAdmin, 
+export function OrganizationGeneralTab({
+    activeOrganizationId,
+    activeOrgName,
+    isAdmin,
     organizations,
-    setActiveOrganizationId 
+    setActiveOrganizationId
 }: OrganizationGeneralTabProps) {
     const navigate = useNavigate();
     const updateOrg = useUpdateOrganization();
@@ -114,8 +114,8 @@ export function OrganizationGeneralTab({
     }
 
     return (
-        <div className="space-y-6 outline-none">
-            <Card className="border-border/40 bg-zinc-950/20">
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 outline-none">
+            <Card className="border-border/40 bg-zinc-950/20 flex flex-col">
                 <CardHeader>
                     <CardTitle className="text-base flex items-center gap-2">
                         <Building2 className="h-4 w-4 text-muted-foreground" />
@@ -123,9 +123,9 @@ export function OrganizationGeneralTab({
                     </CardTitle>
                     <CardDescription>Update your organization details.</CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className="space-y-4 flex-1 flex flex-col">
                     <Form {...renameForm}>
-                        <form onSubmit={renameForm.handleSubmit(handleRenameSubmit)} className="space-y-6">
+                        <form onSubmit={renameForm.handleSubmit(handleRenameSubmit)} className="space-y-6 flex-1 flex flex-col">
                             {renameForm.formState.errors.root && (
                                 <div className="p-3 text-sm rounded-md bg-destructive/15 text-destructive border border-destructive/20">
                                     {renameForm.formState.errors.root.message}
@@ -156,15 +156,16 @@ export function OrganizationGeneralTab({
                                         control={renameForm.control}
                                         name="requireTwoFactor"
                                         render={({ field }) => (
-                                            <FormItem className="flex flex-row items-center justify-between rounded-lg border border-border/40 bg-zinc-950/40 p-4">
-                                                <div className="space-y-0.5">
+                                            <FormItem className="flex flex-row items-center justify-between rounded-lg border border-border/40 bg-zinc-950/40 p-4 gap-4 pt-[0.65rem]">
+                                                <div className="space-y-0.5 max-w-[80%]">
                                                     <label className="text-sm font-medium text-foreground">Require Two-Factor Authentication</label>
-                                                    <p className="text-xs text-muted-foreground">Enforce strict mode. Users without 2FA will not be able to access any projects in this organization.</p>
+                                                    <p className="text-xs text-muted-foreground leading-relaxed">Enforce strict mode. Users without 2FA will not be able to access any projects in this organization.</p>
                                                 </div>
                                                 <FormControl>
                                                     <Switch
                                                         checked={field.value}
                                                         onCheckedChange={field.onChange}
+                                                        className="mt-0"
                                                     />
                                                 </FormControl>
                                             </FormItem>
@@ -172,7 +173,7 @@ export function OrganizationGeneralTab({
                                     />
                                 </div>
                             </div>
-                            <div className="flex justify-end">
+                            <div className="flex justify-end mt-auto pt-6">
                                 <Button
                                     type="submit"
                                     disabled={updateOrg.isPending || (!renameForm.formState.isDirty && renameForm.watch('name') === activeOrgName && renameForm.watch('requireTwoFactor') === (currentOrg?.requireTwoFactor ?? false))}
@@ -186,7 +187,7 @@ export function OrganizationGeneralTab({
                 </CardContent>
             </Card>
 
-            <Card className="border-destructive/20 bg-red-950/5">
+            <Card className="border-destructive/20 bg-red-950/5 flex flex-col">
                 <CardHeader>
                     <CardTitle className="text-base text-red-400 flex items-center gap-2">
                         <Trash2 className="h-4 w-4 text-red-400" />
@@ -196,7 +197,14 @@ export function OrganizationGeneralTab({
                         Irreversible actions for this organization.
                     </CardDescription>
                 </CardHeader>
-                <CardContent className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-t border-destructive/10 pt-6">
+                <div className="flex-1 flex flex-col items-center justify-center p-6 text-center opacity-70 pointer-events-none select-none">
+                    <div className="relative">
+                        <AlertTriangle className="h-16 w-16 text-destructive/10 mb-3 drop-shadow-sm" />
+                        <div className="absolute inset-0 bg-destructive/10 blur-xl rounded-full" />
+                    </div>
+                    <p className="text-[13px] text-destructive/40 font-medium tracking-wide uppercase mt-2">Proceed with caution</p>
+                </div>
+                <CardContent className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-t border-destructive/10 pt-6 mt-auto">
                     <div className="space-y-1">
                         <h4 className="text-sm font-semibold text-foreground">Delete Organization</h4>
                         <p className="text-xs text-muted-foreground max-w-lg">

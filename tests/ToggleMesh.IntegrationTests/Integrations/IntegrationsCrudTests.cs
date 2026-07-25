@@ -92,6 +92,7 @@ public class IntegrationsCrudTests : IAsyncLifetime
 
         var listAfterDeleteRes = await _client.GetAsync($"/api/v1/projects/{project.Id}/integrations");
         var listAfterDelete = await listAfterDeleteRes.Content.ReadFromJsonAsync<List<IntegrationDto>>();
+        Assert.NotNull(listAfterDelete);
         Assert.Empty(listAfterDelete);
     }
 }

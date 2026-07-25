@@ -1,25 +1,20 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Linq.Expressions;
 using System.Reflection;
 
 namespace ToggleMesh.Common.Contexts;
 
-public readonly struct ContextAccessor<T> : IContextAccessor
+public readonly struct ContextAccessor<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties | DynamicallyAccessedMemberTypes.PublicMethods)] T> : IContextAccessor
 {
     private readonly T _instance;
     private static readonly Dictionary<string, Func<T, string?>> Getters;
-    // ReSharper disable once StaticMemberInGenericType
-    private static readonly bool IsDictionary;
-
     static ContextAccessor()
     {
         Getters = new Dictionary<string, Func<T, string?>>(StringComparer.OrdinalIgnoreCase);
         var type = typeof(T);
 
         if (typeof(IDictionary<string, string>).IsAssignableFrom(type))
-        {
-            IsDictionary = true;
             return;
-        }
 
         var input = Expression.Parameter(type, "obj");
         foreach (var property in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))

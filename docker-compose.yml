@@ -29,13 +29,14 @@ services:
       timeout: 3s
       retries: 5
 
-  api:
+  togglemesh:
+    image: togglemesh:latest
     build:
       context: .
       dockerfile: src/ToggleMesh.API/Dockerfile
-    container_name: togglemesh-api
+    container_name: togglemesh
     ports:
-      - "${API_PORT:-5264}:8080"
+      - "${TM_PORT:-5264}:8080"
     environment:
       # Core Settings
       ASPNETCORE_ENVIRONMENT: Production
@@ -48,7 +49,7 @@ services:
       DEFAULT_ADMIN_PASSWORD: ${TM_DEFAULT_ADMIN_PASSWORD:-Admin123!}
       
       # Security & JWT
-      Security__ApiKeyPepper: ${TM_API_KEY_PEPPER:-YourVeryLongAndRandomPepperStringHere_12345!}
+      Security__ApiKeyPepper: ${TM_API_KEY_PEPPER:-ToggleMeshDefaultPepper123!}
       Webhooks__MasterKey: ${TM_WEBHOOK_MASTER_KEY:-dG9nZ2xlbWVzaHNhbXBsZXRvZ2dsZW1lc2hzYW1wbGU=}
       Jwt__Issuer: ${TM_JWT_ISSUER:-ToggleMesh}
       Jwt__Audience: ${TM_JWT_AUDIENCE:-ToggleMeshClient}
@@ -88,17 +89,6 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    restart: unless-stopped
-
-  admin-ui:
-    build:
-      context: ./src/ToggleMesh.AdminUI
-      dockerfile: Dockerfile
-    container_name: togglemesh-ui
-    ports:
-      - "${UI_PORT:-5173}:80"
-    depends_on:
-      - api
     restart: unless-stopped
 
 volumes:

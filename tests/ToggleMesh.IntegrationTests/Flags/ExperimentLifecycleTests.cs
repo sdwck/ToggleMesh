@@ -88,8 +88,8 @@ public class ExperimentLifecycleTests : IAsyncLifetime
             IsExperimentActive = isExperimentActive,
             IsMabEnabled = isMabEnabled,
             MabGoalEvent = mabGoalEvent,
-            ContextualRollouts = contextualRollouts,
-            FallthroughRollout = rolloutPercentage.HasValue ? new List<VariationWeight> { new() { VariationId = Guid.Empty, Weight = rolloutPercentage.Value * 100 } } : null,
+            ContextualRollouts = contextualRollouts ?? new List<ContextualRollout>(),
+            FallthroughRollout = rolloutPercentage.HasValue ? new List<VariationWeight> { new() { VariationId = Guid.Empty, Weight = rolloutPercentage.Value * 100 } } : new List<VariationWeight>(),
             ExperimentStartedAt = isExperimentActive ? DateTimeOffset.UtcNow : null
         };
         db.FlagEnvironmentStates.Add(state);

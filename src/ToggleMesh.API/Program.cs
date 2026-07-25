@@ -40,7 +40,7 @@ using ToggleMesh.API.Features.Flags.Experiments.Stop;
 
 
 var builder = WebApplication.CreateBuilder(args);
-ApiKeyHasher.Pepper = builder.Configuration["Security:ApiKeyPepper"] ?? "DefaultToggleMeshPepperSecret123!";
+ApiKeyHasher.Pepper = builder.Configuration["Security:ApiKeyPepper"] ?? InsecureDefaults.Pepper;
 builder.Services.AddOpenApi();
 builder.Services.AddSingleton<ISseConnectionManager, SseConnectionManager>();
 builder.Services.AddSingleton<IAesEncryptionService, AesEncryptionService>();
@@ -339,6 +339,8 @@ builder.Services.AddScoped<IMabTrafficShifterService, MabTrafficShifterService>(
 
 var app = builder.Build();
 
+AuditSecurityConfiguration(app);
+
 await app.ApplyMigrationsAndSeedAsync();
 
 app.UseExceptionHandler();
@@ -373,6 +375,9 @@ app.UseAuthorization();
 app.MapOpenApi();
 app.MapScalarApiReference("/docs");
 
+app.UseDefaultFiles();
+app.UseStaticFiles();
+
 app.UseFastEndpoints(c =>
 {
     c.Endpoints.RoutePrefix = "api";
@@ -380,4 +385,37 @@ app.UseFastEndpoints(c =>
     c.Versioning.DefaultVersion = 1;
     c.Versioning.PrependToRoute = true;
 });
+
+app.MapFallbackToFile("index.html");
+
 await app.RunAsync();
+
+static void AuditSecurityConfiguration(WebApplication app)
+{
+    var logger = app.Services.GetRequiredService<ILogger<Program>>();
+    var config = app.Configuration;
+
+    var pepper = config["Security:ApiKeyPepper"];
+    var masterKey = config["Webhooks:MasterKey"];
+    var jwtPrivateKey = config["Jwt:PrivateKeyPem"];
+    var adminEmail = config["DEFAULT_ADMIN_EMAIL"];
+    var adminPassword = config["DEFAULT_ADMIN_PASSWORD"];
+
+    if (app.Environment.IsProduction())
+    {
+        if (string.IsNullOrWhiteSpace(pepper) || pepper == InsecureDefaults.Pepper)
+            logger.LogWarning("Running in Production with default or empty Security:ApiKeyPepper! Please set TM_API_KEY_PEPPER in your environment.");
+
+        if (string.IsNullOrWhiteSpace(masterKey) || masterKey == InsecureDefaults.MasterKey)
+            logger.LogWarning("Running in Production with default or empty Webhooks:MasterKey! Please set TM_WEBHOOK_MASTER_KEY in your environment.");
+
+        if (!string.IsNullOrWhiteSpace(adminEmail) && string.Equals(adminEmail, InsecureDefaults.AdminEmail, StringComparison.OrdinalIgnoreCase))
+            logger.LogWarning("Running in Production with default Admin Email! Please set TM_DEFAULT_ADMIN_EMAIL in your environment.");
+
+        if (!string.IsNullOrWhiteSpace(adminPassword) && adminPassword == InsecureDefaults.AdminPassword)
+            logger.LogWarning("Running in Production with default Admin Password! Please set TM_DEFAULT_ADMIN_PASSWORD in your environment.");
+    }
+
+    if (string.IsNullOrWhiteSpace(jwtPrivateKey))
+        logger.LogInformation("No explicit Jwt:PrivateKeyPem configured. RSA key will be auto-generated or loaded from local disk (keys/jwt_private.pem).");
+}

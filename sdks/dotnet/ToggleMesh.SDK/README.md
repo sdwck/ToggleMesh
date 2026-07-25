@@ -16,11 +16,11 @@ ToggleMesh SDK is engineered for **hardcore, high-throughput backend services**.
 
 | Method | Mean | StdDev | Max | P95 | Allocated |
 | :--- | :---: | :---: | :---: | :---: | :---: |
-| **Evaluate_NoRules_AOT** *(Baseline)* | **7.04 ns** | 0.04 ns | 7.11 ns | 7.10 ns | **-** |
-| **Evaluate_1Rule_AOT** *(Typical)* | **28.20 ns** | 0.11 ns | 28.34 ns | 28.33 ns | **-** |
-| **Evaluate_ComplexRule_AOT** *(MAB/Rollout)* | **94.32 ns** | 0.52 ns | 95.09 ns | 95.08 ns | **-** |
-| **Evaluate_10Rules_AOT** *(Worst-case)* | **121.14 ns** | 0.69 ns | 121.93 ns | 121.91 ns | **-** |
-| **TrackEvent_10Rules_AOT** *(Metrics Buffer)*| **46.22 ns** | 0.22 ns | 46.61 ns | 46.54 ns | **-** |
+| **Evaluate_NoRules_AOT** *(Baseline)* | **6.73 ns** | 0.02 ns | 6.76 ns | 6.76 ns | **-** |
+| **Evaluate_1Rule_AOT** *(Typical)* | **28.13 ns** | 0.08 ns | 28.29 ns | 28.24 ns | **-** |
+| **Evaluate_ComplexRule_AOT** *(MAB/Rollout)* | **92.75 ns** | 0.35 ns | 93.19 ns | 93.15 ns | **-** |
+| **Evaluate_10Rules_AOT** *(Worst-case)* | **120.21 ns** | 0.37 ns | 120.75 ns | 120.57 ns | **-** |
+| **TrackEvent_10Rules_AOT** *(Metrics Buffer)*| **45.52 ns** | 0.15 ns | 45.77 ns | 45.77 ns | **-** |
 
 ---
 

@@ -9,8 +9,12 @@
         <InterceptorsNamespaces>
             $(InterceptorsNamespaces);Microsoft.AspNetCore.OpenApi.Generated
         </InterceptorsNamespaces>
-      <UserSecretsId>0b919795-8a3e-49f0-8915-1a2a0eab9d6e</UserSecretsId>
-  </PropertyGroup>
+        <UserSecretsId>0b919795-8a3e-49f0-8915-1a2a0eab9d6e</UserSecretsId>
+        <PublishTrimmed>true</PublishTrimmed>
+        <TrimMode>partial</TrimMode>
+        <SelfContained>true</SelfContained>
+        <InvariantGlobalization>true</InvariantGlobalization>
+    </PropertyGroup>
 
     <ItemGroup>
         <PackageReference Include="ClickHouse.Client" Version="7.14.0" />

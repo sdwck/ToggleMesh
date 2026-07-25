@@ -139,12 +139,20 @@ public class CloneEnvironmentTests : IAsyncLifetime
     public async Task CloneEnvironment_WithNonExistentTarget_ShouldReturn404()
     {
         // Arrange
-        var projectId = Guid.CreateVersion7();
-        var sourceEnvId = Guid.CreateVersion7();
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        var project = new Project { Name = "Clone 404 Project" };
+        db.Projects.Add(project);
+        db.ProjectMembers.Add(new ProjectMember { Project = project, UserId = Guid.Parse(TestAuthHandler.TestUserId), Role = ProjectRole.Owner });
+        var sourceEnv = new ProjectEnvironment { Name = "Source 404", Project = project };
+        db.Environments.Add(sourceEnv);
+        await db.SaveChangesAsync();
+
         var targetEnvId = Guid.CreateVersion7();
 
         // Act
-        var response = await _client.PostAsync($"/api/projects/{projectId}/environments/{sourceEnvId}/clone-to/{targetEnvId}", null);
+        var response = await _client.PostAsync($"/api/v1/projects/{project.Id}/environments/{sourceEnv.Id}/clone-to/{targetEnvId}", null);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
