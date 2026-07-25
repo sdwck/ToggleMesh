@@ -130,11 +130,11 @@ By leveraging compiled Expression Trees, pre-computed rule groups, C# Source Gen
 
 | Method | Mean | StdDev | Max | P95 | Allocated |
 | :--- | :---: | :---: | :---: | :---: | :---: |
-| **Evaluate_NoRules_AOT** *(Baseline)* | **7.28 ns** | 0.03 ns | 7.34 ns | 7.33 ns | **-** |
-| **Evaluate_1Rule_AOT** *(Typical)* | **29.84 ns** | 0.72 ns | 30.73 ns | 30.65 ns | **-** |
-| **Evaluate_ComplexRule_AOT** *(MAB/Rollout)* | **94.68 ns** | 0.15 ns | 94.94 ns | 94.87 ns | **-** |
-| **Evaluate_10Rules_AOT** *(Worst-case)* | **117.11 ns** | 1.08 ns | 118.85 ns | 118.71 ns | **-** |
-| **TrackEvent_10Rules_AOT** *(Metrics Buffer)*| **46.43 ns** | 0.13 ns | 46.66 ns | 46.63 ns | **-** |
+| **Evaluate_NoRules_AOT** *(Baseline)* | **7.04 ns** | 0.04 ns | 7.11 ns | 7.10 ns | **-** |
+| **Evaluate_1Rule_AOT** *(Typical)* | **28.20 ns** | 0.11 ns | 28.34 ns | 28.33 ns | **-** |
+| **Evaluate_ComplexRule_AOT** *(MAB/Rollout)* | **94.32 ns** | 0.52 ns | 95.09 ns | 95.08 ns | **-** |
+| **Evaluate_10Rules_AOT** *(Worst-case)* | **121.14 ns** | 0.69 ns | 121.93 ns | 121.91 ns | **-** |
+| **TrackEvent_10Rules_AOT** *(Metrics Buffer)*| **46.22 ns** | 0.22 ns | 46.61 ns | 46.54 ns | **-** |
 
 > **Hardware Specs:** Intel Core i7-14700K, 20 Physical Cores, Windows 11 x64, .NET 10.0 Release Build.
 

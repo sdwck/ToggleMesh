@@ -28,6 +28,11 @@ public class FlagMetrics
             return;
         }
         
+        AddCountSlow(variationId, amount);
+    }
+
+    private void AddCountSlow(Guid variationId, long amount)
+    {
         lock (_lock)
         {
             if (Slot0Id == Guid.Empty)
@@ -57,6 +62,10 @@ public class FlagMetrics
             Overflow ??= new ConcurrentDictionary<Guid, long>();
         }
         
-        Overflow.AddOrUpdate(variationId, amount, (_, count) => count + amount);
+        Overflow.AddOrUpdate(
+            variationId, 
+            static (k, a) => a, 
+            static (k, count, a) => count + a, 
+            amount);
     }
 }
