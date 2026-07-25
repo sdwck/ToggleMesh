@@ -288,7 +288,9 @@ public class AuditInterceptor : SaveChangesInterceptor
                 || name == "UpdatedAt"
                 || name == "CreatedAt"
                 || name == "LastTriggeredAt"
-                || name == "ConsecutiveFailures") 
+                || name == "ConsecutiveFailures"
+                || name.StartsWith("__")
+                || property.Metadata.IsShadowProperty()) 
                 continue;
 
             switch (entry.State)
