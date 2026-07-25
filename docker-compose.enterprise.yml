@@ -38,7 +38,7 @@ services:
     volumes:
       - kafka_data:/var/lib/kafka/data
 
-  api:
+  togglemesh:
     environment:
       # Enterprise Analytics
       Analytics__Kafka__BootstrapServers: ${TM_KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}

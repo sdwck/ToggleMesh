@@ -22,6 +22,18 @@ public class PartitioningWorker : BackgroundService
             {
                 using var scope = _serviceProvider.CreateScope();
                 var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+                var configuration = scope.ServiceProvider.GetRequiredService<IConfiguration>();
+
+                var retentionDays = configuration.GetValue("AuditLogs:RetentionDays", 0);
+                if (retentionDays > 0)
+                {
+                    var thresholdDate = DateTime.UtcNow.AddDays(-retentionDays);
+                    await db.Database.ExecuteSqlAsync($@"
+                        DELETE FROM ""AuditLogs"" 
+                        WHERE ""Timestamp"" < {thresholdDate};
+                    ", stoppingToken);
+                    _logger.LogInformation("Cleaned up AuditLogs older than {RetentionDays} days", retentionDays);
+                }
 
                 var nextMonth = DateTime.UtcNow.AddMonths(1);
                 var startDate = new DateTime(nextMonth.Year, nextMonth.Month, 1, 0, 0, 0, DateTimeKind.Utc);

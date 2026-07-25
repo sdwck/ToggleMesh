@@ -64,7 +64,7 @@ export function TimeSeriesChart({ projectId, envId, flagKey, eventName, variatio
                                         <Tooltip
                                             contentStyle={{ backgroundColor: '#18181b', borderColor: '#333', color: '#fff', borderRadius: '8px' }}
                                             itemStyle={{ color: '#fff' }}
-                                            labelFormatter={(val) => format(new Date(val), 'MMM d, HH:mm')}
+                                            labelFormatter={(val: any) => val ? format(new Date(val), 'MMM d, HH:mm') : ''}
                                             formatter={(val: any, name: any) => {
                                                 const label = getVariationName(name, uniqueVariationIds.indexOf(name), variationsConfig);
                                                 return typeof val === 'number' ? [`${val.toFixed(2)}%`, label] : [val, label];
@@ -168,7 +168,7 @@ export function SnapshotTimeSeriesChart({ data, variationsConfig }: { data: any[
                                 <Tooltip
                                     contentStyle={{ backgroundColor: '#18181b', borderColor: '#333', color: '#fff', borderRadius: '8px' }}
                                     itemStyle={{ color: '#fff' }}
-                                    labelFormatter={(val) => format(new Date(val), 'MMM d, HH:mm')}
+                                    labelFormatter={(val: any) => val ? format(new Date(val), 'MMM d, HH:mm') : ''}
                                     formatter={(val: any, name: any) => {
                                         const label = getVariationName(name, uniqueVariationIds.indexOf(name), variationsConfig);
                                         return typeof val === 'number' ? [`${val.toFixed(2)}%`, label] : [val, label];

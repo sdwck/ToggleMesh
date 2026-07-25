@@ -7,7 +7,7 @@ namespace ToggleMesh.API.Infrastructure.BackgroundServices.Email;
 
 public class EmailOutboxWorker : BackgroundService
 {
-    private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(15);
+    private static readonly TimeSpan FallbackPollInterval = TimeSpan.FromMinutes(5);
     private const int BatchSize = 20;
     private const int MaxAttempts = 5;
 
@@ -19,12 +19,14 @@ public class EmailOutboxWorker : BackgroundService
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<EmailOutboxWorker> _logger;
     private readonly TimeProvider _timeProvider;
+    private readonly EmailOutboxChannel _channel;
 
-    public EmailOutboxWorker(IServiceProvider serviceProvider, ILogger<EmailOutboxWorker> logger, TimeProvider timeProvider)
+    public EmailOutboxWorker(IServiceProvider serviceProvider, ILogger<EmailOutboxWorker> logger, TimeProvider timeProvider, EmailOutboxChannel channel)
     {
         _serviceProvider = serviceProvider;
         _logger = logger;
         _timeProvider = timeProvider;
+        _channel = channel;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -34,6 +36,19 @@ public class EmailOutboxWorker : BackgroundService
             try
             {
                 await ProcessOutboxAsync(stoppingToken);
+
+                using var cts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
+                cts.CancelAfter(FallbackPollInterval);
+
+                try
+                {
+                    await _channel.WaitToReadAsync(cts.Token);
+                    while (_channel.TryRead(out _)) { }
+                }
+                catch (OperationCanceledException) when (!stoppingToken.IsCancellationRequested)
+                {
+                    // ignore
+                }
             }
             catch (OperationCanceledException)
             {
@@ -46,9 +61,8 @@ public class EmailOutboxWorker : BackgroundService
             catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
             {
                 _logger.LogError(ex, "Error processing email outbox messages.");
+                await Task.Delay(TimeSpan.FromSeconds(15), _timeProvider, stoppingToken);
             }
-
-            await Task.Delay(PollInterval, _timeProvider, stoppingToken);
         }
     }
 

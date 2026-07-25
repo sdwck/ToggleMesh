@@ -35,9 +35,12 @@ public class MetricsWorker : BackgroundService
         if (!int.TryParse(maxMetricsString, out var maxMetrics))
             maxMetrics = 10_000;
 
+        var pollIntervalSeconds = _configuration.GetValue("Metrics:PollIntervalSeconds", 5);
+        var pollInterval = TimeSpan.FromSeconds(pollIntervalSeconds);
+
         while (!stoppingToken.IsCancellationRequested)
         {
-            var timeToWait = TimeSpan.FromSeconds(5) - (_timeProvider.GetUtcNow() - lastFlush);
+            var timeToWait = pollInterval - (_timeProvider.GetUtcNow() - lastFlush);
 
             if (timeToWait <= TimeSpan.Zero || batch.Count >= 100)
             {
@@ -51,7 +54,7 @@ public class MetricsWorker : BackgroundService
                         batch.Clear();
                     }
                     else
-                        await Task.Delay(TimeSpan.FromSeconds(5), _timeProvider, stoppingToken);
+                        await Task.Delay(pollInterval, _timeProvider, stoppingToken);
                 }
                 lastFlush = _timeProvider.GetUtcNow();
                 continue;

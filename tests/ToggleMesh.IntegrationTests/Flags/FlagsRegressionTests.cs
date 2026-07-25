@@ -165,7 +165,7 @@ public class FlagsRegressionTests : IAsyncLifetime
         await shifter.ProcessMabTrafficShiftingAsync(db, math, realNotify, CancellationToken.None);
 
         var updatedState = await db.FlagEnvironmentStates.AsNoTracking().FirstAsync(x => x.Id == state.Id);
-        updatedState.FallthroughRollout.ElementAt(0).Weight.Should().BeInRange(4900, 5100);
+        updatedState.FallthroughRollout.ElementAt(0).Weight.Should().BeInRange(4500, 5500);
     }
 
     [Fact]

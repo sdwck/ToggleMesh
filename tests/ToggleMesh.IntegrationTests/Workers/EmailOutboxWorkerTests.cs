@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using ToggleMesh.API.Infrastructure.BackgroundServices.Email;
 using ToggleMesh.API.Infrastructure.Data;
 using ToggleMesh.API.Infrastructure.Email.Models;
+using ToggleMesh.API.Infrastructure.Email;
 using ToggleMesh.IntegrationTests.Infrastructure;
 
 namespace ToggleMesh.IntegrationTests.Workers;
@@ -27,7 +28,8 @@ public class EmailOutboxWorkerTests : IAsyncLifetime
         _db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
         var logger = scope.ServiceProvider.GetRequiredService<ILogger<EmailOutboxWorker>>();
-        _worker = new EmailOutboxWorker(_factory.Services, logger, _factory.TimeProvider);
+        var channel = scope.ServiceProvider.GetRequiredService<EmailOutboxChannel>();
+        _worker = new EmailOutboxWorker(_factory.Services, logger, _factory.TimeProvider, channel);
     }
 
     public Task DisposeAsync() => Task.CompletedTask;

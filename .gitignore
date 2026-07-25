@@ -3,6 +3,8 @@
 
 # Environment secrets
 .env
+keys/
+*.pem
 
 # Local utility scripts
 .local/

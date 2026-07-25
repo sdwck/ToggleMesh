@@ -179,7 +179,7 @@ ToggleMesh provides native SDKs and tooling for your entire microservice fleet.
 - 🔬 **Sample Ratio Mismatch (SRM) Detection:** Automated background statistical checks (Chi-Square) to detect tracking bugs or critical assignment skews in your A/B tests before they ruin your data.
 - 📈 **High-Throughput Analytics Ingestion:** SDKs buffer metrics client-side. The API ingests telemetry into bounded `System.Threading.Channels` with `DropOldest` backpressure, flushing to PostgreSQL or horizontally scalable **Kafka + ClickHouse** clusters.
 - 🔌 **Integrations & Webhooks:** Native Slack and MS Teams notifications, plus SSRF-Protected outbound webhook dispatcher with Polly-powered exponential backoff and Dead-Letter Queues (DLQ).
-- 🔐 **Multi-Tenancy & RBAC:** Organization and Project-level isolation with strict Role-Based Access Control.
+- 🔐 **Multi-Tenancy & Security:** Organization and Project-level isolation with strict Role-Based Access Control and Two-Factor Authentication.
 - 🔑 **Personal Access Tokens (PATs):** SHA-256 hashed PATs for secure CI/CD and CLI integrations.
 - 📜 **Immutable Audit Logs:** EF Core `SaveChangesInterceptors` capture deep JSON diffs of every mutation.
 - 💾 **Offline Resilience:** SDKs persist the latest synchronized state to a local JSON fallback file, ensuring safe boot-ups during complete network partitions.
@@ -193,14 +193,12 @@ ToggleMesh provides native SDKs and tooling for your entire microservice fleet.
 Deploying the core ToggleMesh stack takes under a minute.
 
 ```bash
-git clone https://github.com/sdwck/ToggleMesh.git
-cd ToggleMesh
-cp .env.example .env    # Review and customize your secrets here
+curl -o docker-compose.yml https://raw.githubusercontent.com/sdwck/ToggleMesh/main/docker-compose.yml
+curl -o .env https://raw.githubusercontent.com/sdwck/ToggleMesh/main/.env.example
 docker compose up -d
 ```
 
-* **Admin UI:** `http://localhost:5173`
-* **API:** `http://localhost:5264`
+* **Admin UI & API:** `http://localhost:5264`
 * **API Docs (Scalar):** `http://localhost:5264/docs`
 
 ### Enterprise Stack (+ Kafka & ClickHouse)
@@ -208,6 +206,7 @@ docker compose up -d
 For production deployments requiring high-throughput analytics and horizontal OLAP scaling, boot the stack using the enterprise override:
 
 ```bash
+curl -o docker-compose.enterprise.yml https://raw.githubusercontent.com/sdwck/ToggleMesh/main/docker-compose.enterprise.yml
 docker compose -f docker-compose.yml -f docker-compose.enterprise.yml up -d
 ```
 

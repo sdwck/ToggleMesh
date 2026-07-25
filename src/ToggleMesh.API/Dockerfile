@@ -1,13 +1,15 @@
 FROM node:22-alpine AS build-ui
 WORKDIR /ui
 COPY src/ToggleMesh.AdminUI/package*.json ./
-RUN npm install
+RUN npm install --legacy-peer-deps
 COPY src/ToggleMesh.AdminUI/ .
 RUN npm run build
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0-alpine AS base
-USER $APP_UID
+RUN apk add --no-cache krb5-libs
 WORKDIR /app
+RUN mkdir -p /app/keys && chown -R $APP_UID:$APP_UID /app
+USER $APP_UID
 EXPOSE 8080
 
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build

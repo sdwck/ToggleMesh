@@ -1,3 +1,5 @@
+name: togglemesh
+
 services:
   db:
     image: postgres:18-alpine
@@ -30,10 +32,7 @@ services:
       retries: 5
 
   togglemesh:
-    image: togglemesh:latest
-    build:
-      context: .
-      dockerfile: src/ToggleMesh.API/Dockerfile
+    image: ghcr.io/sdwck/togglemesh:${TM_VERSION:-latest}
     container_name: togglemesh
     ports:
       - "${TM_PORT:-5264}:8080"
@@ -69,12 +68,16 @@ services:
       # Rate Limits
       RateLimits__Auth: ${TM_RATELIMIT_AUTH:-10}
       RateLimits__Sdk: ${TM_RATELIMIT_SDK:-1000}
+      RateLimits__Global: ${TM_RATELIMIT_GLOBAL:-600}
       
       # Performance & Ingestion
       Metrics__MaxMetrics: ${TM_METRICS_MAX_LIMIT:-10000}
+      Metrics__PollIntervalSeconds: ${TM_METRICS_POLL_INTERVAL:-5}
       Ingestion__MaxBatchSize: ${TM_INGESTION_MAX_BATCH_SIZE:-10000}
       Ingestion__MaxPayloadSizeBytes: ${TM_INGESTION_MAX_PAYLOAD_BYTES:-5242880}
+      Analytics__Enabled: ${TM_ENABLE_ANALYTICS:-true}
       Analytics__RollupInterval: ${TM_ANALYTICS_ROLLUP_INTERVAL:-00:15:00}
+      AuditLogs__RetentionDays: ${TM_AUDIT_LOG_RETENTION_DAYS:-0}
       
       # SMTP Email
       Email__EnableEmails: ${TM_ENABLE_EMAILS:-false}
@@ -90,6 +93,9 @@ services:
       redis:
         condition: service_healthy
     restart: unless-stopped
+    volumes:
+      - togglemesh_keys:/app/keys
 
 volumes:
   postgres_data:
+  togglemesh_keys:

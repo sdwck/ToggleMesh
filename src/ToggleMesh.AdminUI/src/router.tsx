@@ -130,6 +130,10 @@ export const router = createBrowserRouter([
                         path: 'projects/:projectId/playground',
                         element: <PlaygroundPage />,
                     },
+                    {
+                        path: '*',
+                        element: <Navigate to="/projects" replace />,
+                    },
                 ],
             }
         ]

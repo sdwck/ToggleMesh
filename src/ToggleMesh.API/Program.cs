@@ -4,6 +4,7 @@ using System.Threading.RateLimiting;
 using FastEndpoints;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -40,6 +41,13 @@ using ToggleMesh.API.Features.Flags.Experiments.Stop;
 
 
 var builder = WebApplication.CreateBuilder(args);
+
+var dataProtectionKeysFolder = Path.Combine(builder.Environment.ContentRootPath, "keys", "dataprotection");
+Directory.CreateDirectory(dataProtectionKeysFolder);
+builder.Services.AddDataProtection()
+    .PersistKeysToFileSystem(new DirectoryInfo(dataProtectionKeysFolder))
+    .SetApplicationName("ToggleMesh");
+
 ApiKeyHasher.Pepper = builder.Configuration["Security:ApiKeyPepper"] ?? InsecureDefaults.Pepper;
 builder.Services.AddOpenApi();
 builder.Services.AddSingleton<ISseConnectionManager, SseConnectionManager>();
@@ -71,6 +79,7 @@ builder.Services.AddSingleton<IRuleEngine, RuleEngine>();
 builder.Services.AddScoped<ISdkEvaluatorService, SdkEvaluatorService>();
 builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
 builder.Services.AddScoped<IEmailSender, DatabaseOutboxEmailSender>();
+builder.Services.AddSingleton<EmailOutboxChannel>();
 builder.Services.AddSingleton<IEmailTemplateService, ScribanEmailTemplateService>();
 
 builder.Services.AddScoped<IApiKeyCacheService, ApiKeyCacheService>();
@@ -200,7 +209,23 @@ builder.Services.AddRateLimiter(options =>
     
     var authLimit = builder.Configuration.GetValue("RateLimits:Auth", 10);
     var sdkLimit = builder.Configuration.GetValue("RateLimits:Sdk", 1000);
-    
+    var globalLimit = builder.Configuration.GetValue("RateLimits:Global", 600);
+
+    options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
+    {
+        var ip = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        if (globalLimit <= 0) 
+            return RateLimitPartition.GetNoLimiter(ip);
+
+        return RateLimitPartition.GetSlidingWindowLimiter(ip, _ => new SlidingWindowRateLimiterOptions
+        {
+            PermitLimit = globalLimit,
+            Window = TimeSpan.FromMinutes(1),
+            SegmentsPerWindow = 4,
+            QueueLimit = 0
+        });
+    });
+
     options.AddPolicy("auth", context =>
     {
         var ip = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
@@ -305,21 +330,25 @@ builder.Services.AddHostedService<AnomalyWorker>();
 builder.Services.AddHostedService<SrmWorker>();
 builder.Services.AddHostedService<WebhookDispatcherService>();
 builder.Services.AddHostedService<WebhookDeliveryWorker>();
-builder.Services.AddHostedService<RollupWorker>();
 
+var analyticsEnabled = builder.Configuration.GetValue("Analytics:Enabled", true);
 var kafkaServers = builder.Configuration["Analytics:Kafka:BootstrapServers"];
 var clickHouseConn = builder.Configuration["Analytics:ClickHouse:ConnectionString"];
 
-if (!string.IsNullOrWhiteSpace(kafkaServers))
+if (!analyticsEnabled)
+    builder.Services.AddSingleton<IAnalyticsEventPublisher, NoOpAnalyticsPublisher>();
+else if (!string.IsNullOrWhiteSpace(kafkaServers))
 {
     builder.Services.AddSingleton<IAnalyticsEventPublisher, KafkaAnalyticsPublisher>();
     builder.Services.AddHostedService<KafkaAnalyticsConsumerWorker>();
+    builder.Services.AddHostedService<RollupWorker>();
 }
 else
 {
     builder.Services.AddSingleton<InMemoryAnalyticsQueue>();
     builder.Services.AddSingleton<IAnalyticsEventPublisher>(sp => sp.GetRequiredService<InMemoryAnalyticsQueue>());
     builder.Services.AddHostedService<AnalyticsWorker>();
+    builder.Services.AddHostedService<RollupWorker>();
 }
 
 if (!string.IsNullOrWhiteSpace(clickHouseConn))
@@ -345,7 +374,7 @@ await app.ApplyMigrationsAndSeedAsync();
 
 app.UseExceptionHandler();
 
-if (app.Environment.IsStaging() || app.Environment.IsProduction())
+if (!string.IsNullOrEmpty(builder.Configuration["HTTPS_PORT"]))
 {
     app.UseHttpsRedirection();
 }
