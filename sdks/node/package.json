@@ -1,6 +1,6 @@
 {
   "name": "togglemesh-node",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "ToggleMesh Server SDK for Node.js",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

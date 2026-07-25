@@ -65,7 +65,10 @@ export class ToggleMeshClient {
                 const metricPayload: any[] = [];
                 for (const [key, m] of this.metricsBuffer.entries()) {
                     if (Object.keys(m.variationsCount).length > 0) {
-                        metricPayload.push({ Key: key, VariationsCount: { ...m.variationsCount } });
+                        metricPayload.push({
+                            Key: key,
+                            Variations: Object.entries(m.variationsCount).map(([vId, count]) => ({ VariationId: vId, Count: count }))
+                        });
                     }
                 }
                 if (metricPayload.length > 0 && navigator.sendBeacon) {
@@ -206,7 +209,10 @@ export class ToggleMeshClient {
         const payload: any[] = [];
         for (const [key, m] of this.metricsBuffer.entries()) {
             if (Object.keys(m.variationsCount).length > 0) {
-                payload.push({ Key: key, VariationsCount: { ...m.variationsCount } });
+                payload.push({
+                    Key: key,
+                    Variations: Object.entries(m.variationsCount).map(([vId, count]) => ({ VariationId: vId, Count: count }))
+                });
                 m.variationsCount = {};
             }
         }

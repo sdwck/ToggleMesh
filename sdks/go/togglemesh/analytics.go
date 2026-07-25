@@ -124,13 +124,16 @@ func (q *analyticsQueue) flushMetrics() {
 	payload := make([]map[string]any, 0, len(q.metricsBuffer))
 	for key, m := range q.metricsBuffer {
 		if len(m.VariationsCount) > 0 {
-			vCountCopy := make(map[string]int)
+			vars := make([]map[string]any, 0, len(m.VariationsCount))
 			for k, v := range m.VariationsCount {
-				vCountCopy[k] = v
+				vars = append(vars, map[string]any{
+					"VariationId": k,
+					"Count":       v,
+				})
 			}
 			payload = append(payload, map[string]any{
-				"Key":             key,
-				"VariationsCount": vCountCopy,
+				"Key":        key,
+				"Variations": vars,
 			})
 			m.VariationsCount = make(map[string]int)
 		}

@@ -382,7 +382,10 @@ class ToggleMeshClient:
             with self._metrics_lock:
                 for key, m in list(self._metrics_buffer.items()):
                     if m.variations_count:
-                        payload.append({"Key": key, "VariationsCount": dict(m.variations_count)})
+                        payload.append({
+                            "Key": key,
+                            "Variations": [{"VariationId": v_id, "Count": count} for v_id, count in m.variations_count.items()]
+                        })
                         m.variations_count.clear()
                         
             if not payload: continue
@@ -395,7 +398,8 @@ class ToggleMeshClient:
                     for item in payload:
                         if item["Key"] not in self._metrics_buffer:
                             self._metrics_buffer[item["Key"]] = FlagMetrics()
-                        for v_id, count in item["VariationsCount"].items():
+                        for v in item["Variations"]:
+                            v_id, count = v["VariationId"], v["Count"]
                             self._metrics_buffer[item["Key"]].variations_count[v_id] = self._metrics_buffer[item["Key"]].variations_count.get(v_id, 0) + count
 
     def _events_flusher(self):
