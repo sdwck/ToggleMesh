@@ -120,9 +120,9 @@ public class SsoCallbackEndpoint : EndpointWithoutRequest
         
         await _redis.StringSetAsync(key, data, TimeSpan.FromSeconds(30));
 
-        var frontendUrl = _configuration["Auth:FrontendUrl"] 
-                          ?? "http://localhost:5173";
-        var redirectUrl = $"{frontendUrl.TrimEnd('/')}/login?ticket={ticket}";
+        var appUrl = _configuration["Auth:AppUrl"] 
+                      ?? "http://localhost:5264";
+        var redirectUrl = $"{appUrl.TrimEnd('/')}/login?ticket={ticket}";
 
         await Send.RedirectAsync(redirectUrl, allowRemoteRedirects: true);
     }

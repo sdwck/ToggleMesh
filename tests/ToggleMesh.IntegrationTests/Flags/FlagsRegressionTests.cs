@@ -223,6 +223,6 @@ public class FlagsRegressionTests : IAsyncLifetime
             .FirstOrDefaultAsync(x => x.EntityFriendlyName == "audit-flag" && x.EntityName == "FlagEnvironmentState" && x.Action == "Modified");
 
         auditLog.Should().NotBeNull();
-        auditLog.PerformedByEmail.Should().Be("mab-automation@togglemesh.com");
+        auditLog.PerformedByEmail.Should().Be("mab-automation@togglemesh.dev");
     }
 }

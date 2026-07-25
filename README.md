@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="src/ToggleMesh.AdminUI/src/assets/icon.png" alt="ToggleMesh Logo" width="120" />
+  <img src="docs/assets/icon.png" alt="ToggleMesh Logo" width="120" />
   <h1>ToggleMesh</h1>
   <p><b>Enterprise Feature Flag & Contextual Experimentation Engine</b></p>
   <p>A high-performance, data-private, self-hosted alternative to LaunchDarkly and Statsig. Powered by .NET Core, featuring native SDKs for C#, Python, Go, Node.js, and C++.</p>

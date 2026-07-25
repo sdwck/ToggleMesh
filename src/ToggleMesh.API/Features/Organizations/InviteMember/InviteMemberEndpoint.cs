@@ -69,8 +69,8 @@ public class InviteMemberEndpoint : ToggleEndpoint<InviteMemberRequest>
         _db.OrganizationInvitations.Add(invitation);
         await _db.SaveChangesAsync(ct);
 
-        var frontendUrl = _configuration["Auth:FrontendUrl"] ?? "http://localhost:5173";
-        var inviteUrl = $"{frontendUrl}/invites/{token}";
+        var appUrl = _configuration["Auth:AppUrl"] ?? "http://localhost:5264";
+        var inviteUrl = $"{appUrl}/invites/{token}";
 
         var startYear = 2026;
         var currentYear = DateTimeOffset.UtcNow.Year;
@@ -80,9 +80,9 @@ public class InviteMemberEndpoint : ToggleEndpoint<InviteMemberRequest>
         { 
             OrganizationName = organization.Name, 
             InviteUrl = inviteUrl,
-            ToggleMeshLogoUrl = "https://raw.githubusercontent.com/sdwck/ToggleMesh/main/src/ToggleMesh.AdminUI/src/assets/icon.png",
+            ToggleMeshLogoUrl = "https://raw.githubusercontent.com/sdwck/ToggleMesh/main/docs/assets/icon.png",
             CopyrightYear = copyrightYear,
-            DashboardUrl = frontendUrl
+            DashboardUrl = appUrl
         }, ct);
 
         await _emailSender.SendEmailAsync(req.Email, $"Invitation to join {organization.Name}", emailBody, ct);

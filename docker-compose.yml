@@ -9,7 +9,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     restart: unless-stopped
     volumes:
       - postgres_data:/var/lib/postgresql
@@ -23,7 +23,7 @@ services:
     image: redis:7-alpine
     container_name: togglemesh-redis
     ports:
-      - "${REDIS_PORT:-6379}:6379"
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
@@ -55,7 +55,7 @@ services:
       Jwt__PrivateKeyPem: ${TM_JWT_PRIVATE_KEY_PEM:-}
       
       # Auth & Registration
-      Auth__FrontendUrl: ${TM_FRONTEND_URL:-http://localhost:5173}
+      Auth__AppUrl: ${TM_APP_URL:-http://localhost:5264}
       Auth__AllowOpenRegistration: ${TM_ALLOW_OPEN_REGISTRATION:-false}
       Auth__AllowUserOrganizationCreation: ${TM_ALLOW_ORG_CREATION:-false}
       Auth__RefreshTokenLifetimeDays: ${TM_REFRESH_TOKEN_LIFETIME_DAYS:-7}
@@ -85,7 +85,7 @@ services:
       Email__Smtp__Port: ${TM_SMTP_PORT:-587}
       Email__Smtp__Username: ${TM_SMTP_USERNAME:-}
       Email__Smtp__Password: ${TM_SMTP_PASSWORD:-}
-      Email__Smtp__FromEmail: ${TM_SMTP_FROM:-noreply@togglemesh.com}
+      Email__Smtp__FromEmail: ${TM_SMTP_FROM:-noreply@togglemesh.dev}
       Email__Smtp__EnableSsl: ${TM_SMTP_ENABLE_SSL:-true}
     depends_on:
       db:

@@ -49,8 +49,8 @@ public class ForgotPasswordEndpoint : ToggleEndpoint<ForgotPasswordRequest>
         var token = await _userManager.GeneratePasswordResetTokenAsync(user);
         var encodedToken = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(token));
 
-        var frontendUrl = _configuration["Auth:FrontendUrl"] ?? "http://localhost:5173";
-        var resetUrl = $"{frontendUrl}/auth/reset-password?email={Uri.EscapeDataString(user.Email!)}&token={encodedToken}";
+        var appUrl = _configuration["Auth:AppUrl"] ?? "http://localhost:5264";
+        var resetUrl = $"{appUrl}/auth/reset-password?email={Uri.EscapeDataString(user.Email!)}&token={encodedToken}";
 
         var startYear = 2026;
         var currentYear = _timeProvider.GetUtcNow().Year;
@@ -59,9 +59,9 @@ public class ForgotPasswordEndpoint : ToggleEndpoint<ForgotPasswordRequest>
         var emailBody = await _templateService.RenderAsync("ForgotPasswordTemplate", new 
         { 
             ResetUrl = resetUrl,
-            ToggleMeshLogoUrl = "https://raw.githubusercontent.com/sdwck/ToggleMesh/main/src/ToggleMesh.AdminUI/src/assets/icon.png",
+            ToggleMeshLogoUrl = "https://raw.githubusercontent.com/sdwck/ToggleMesh/main/docs/assets/icon.png",
             CopyrightYear = copyrightYear,
-            DashboardUrl = frontendUrl
+            DashboardUrl = appUrl
         }, ct);
 
         await _emailSender.SendEmailAsync(user.Email!, "Reset your ToggleMesh password", emailBody, ct);

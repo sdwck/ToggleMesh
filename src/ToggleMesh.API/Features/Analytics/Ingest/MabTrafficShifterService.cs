@@ -21,7 +21,7 @@ public class MabTrafficShifterService : IMabTrafficShifterService
         NotifyFlagUpdatedCommandHandler notifyHandler,
         CancellationToken ct)
     {
-        db.SystemActorEmail = "mab-automation@togglemesh.com";
+        db.SystemActorEmail = "mab-automation@togglemesh.dev";
         var stateIds = await db.FlagEnvironmentStates
             .AsNoTracking()
             .Where(x => 
@@ -210,7 +210,7 @@ public class MabTrafficShifterService : IMabTrafficShifterService
         NotifyFlagUpdatedCommandHandler notifyHandler,
         CancellationToken ct)
     {
-        db.SystemActorEmail = "mab-automation@togglemesh.com";
+        db.SystemActorEmail = "mab-automation@togglemesh.dev";
         var stateIds = await db.FlagEnvironmentStates
             .AsNoTracking()
             .Where(x => x.IsEnabled && x.IsMabEnabled && x.IsExperimentActive)

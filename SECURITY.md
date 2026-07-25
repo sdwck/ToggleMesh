@@ -15,7 +15,7 @@ Currently, the following versions of ToggleMesh are supported with security upda
 
 If you discover a security vulnerability within ToggleMesh, please **DO NOT** open a public issue. 
 
-Instead, please send an email directly to the maintainer at **sdwcktarakanov@gmail.com**.
+Instead, please send an email directly to the maintainers at **security@togglemesh.dev**.
 
 Please include:
 - A description of the vulnerability.

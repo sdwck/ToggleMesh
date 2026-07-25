@@ -79,7 +79,7 @@ the community.
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
 reported to the community leaders responsible for enforcement at
-**sdwcktarakanov@gmail.com**. All complaints will be reviewed and investigated promptly and fairly.
+**conduct@togglemesh.dev**. All complaints will be reviewed and investigated promptly and fairly.
 
 ## Attribution
 

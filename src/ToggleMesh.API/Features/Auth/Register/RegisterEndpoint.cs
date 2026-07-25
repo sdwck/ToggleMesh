@@ -76,8 +76,8 @@ public class RegisterEndpoint : ToggleEndpoint<RegisterRequest, RegisterResponse
             var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
             var encodedToken = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(token));
 
-            var frontendUrl = _configuration["Auth:FrontendUrl"] ?? "http://localhost:5173";
-            var confirmUrl = $"{frontendUrl}/auth/confirm-email?userId={user.Id}&token={encodedToken}";
+            var appUrl = _configuration["Auth:AppUrl"] ?? "http://localhost:5264";
+            var confirmUrl = $"{appUrl}/auth/confirm-email?userId={user.Id}&token={encodedToken}";
 
             var startYear = 2026;
             var currentYear = _timeProvider.GetUtcNow().Year;
@@ -86,9 +86,9 @@ public class RegisterEndpoint : ToggleEndpoint<RegisterRequest, RegisterResponse
             var emailBody = await _templateService.RenderAsync("ConfirmEmailTemplate", new 
             { 
                 ConfirmUrl = confirmUrl,
-                ToggleMeshLogoUrl = "https://raw.githubusercontent.com/sdwck/ToggleMesh/main/src/ToggleMesh.AdminUI/src/assets/icon.png",
+                ToggleMeshLogoUrl = "https://raw.githubusercontent.com/sdwck/ToggleMesh/main/docs/assets/icon.png",
                 CopyrightYear = copyrightYear,
-                DashboardUrl = frontendUrl
+                DashboardUrl = appUrl
             }, ct);
 
             await _emailSender.SendEmailAsync(user.Email, "Confirm your ToggleMesh account", emailBody, ct);
