@@ -6,4 +6,5 @@ public class ProjectEnvironmentDto
     public string Name { get; set; } = string.Empty;
     public int ActiveFlagsCount { get; set; }
     public int TotalFlagsCount { get; set; }
+    public string? LastPiiBlockedContext { get; set; }
 }

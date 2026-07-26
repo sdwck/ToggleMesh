@@ -66,12 +66,19 @@ public class SsoCallbackEndpoint : EndpointWithoutRequest
             {
                 UserName = email,
                 Email = email,
-                EmailConfirmed = true
+                EmailConfirmed = true,
+                EmailVerificationMethod = EmailVerificationMethod.Sso
             };
 
             var createResult = await _userManager.CreateAsync(user);
             if (!createResult.Succeeded)
                 ThrowError("Could not provision SSO user");
+        }
+        else if (user.EmailVerificationMethod == EmailVerificationMethod.SkippedNoSmtp || user.EmailVerificationMethod == EmailVerificationMethod.None)
+        {
+            user.EmailConfirmed = true;
+            user.EmailVerificationMethod = EmailVerificationMethod.Sso;
+            await _userManager.UpdateAsync(user);
         }
 
         var ticket = Guid.CreateVersion7().ToString();

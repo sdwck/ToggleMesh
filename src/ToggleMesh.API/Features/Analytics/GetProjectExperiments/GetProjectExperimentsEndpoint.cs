@@ -215,6 +215,34 @@ public class GetProjectExperimentsEndpoint : ToggleEndpoint<GetProjectExperiment
             });
         }
 
+        foreach (var state in states)
+        {
+            if (req.IsActiveOnly && !state.IsExperimentActive) 
+                continue;
+            if (!state.IsExperimentActive) 
+                continue;
+
+            var isProcessed = groupedMetrics.Any(g => g.Key.EnvironmentId == state.EnvironmentId && g.Key.FlagKey == state.FeatureFlag.Key);
+            if (!isProcessed)
+                summaries.Add(new ProjectExperimentSummaryDto
+                {
+                    EnvironmentId = state.EnvironmentId,
+                    EnvironmentName = envs.TryGetValue(state.EnvironmentId, out var name) ? name : state.EnvironmentId.ToString(),
+                    FlagKey = state.FeatureFlag.Key,
+                    EventName = state.MabGoalEvent ?? "$exposure",
+                    TotalParticipants = 0,
+                    LastCalculatedAt = DateTimeOffset.UtcNow,
+                    ProbabilityToBeatBaseline = 0.5,
+                    ExpectedUplift = 0,
+                    ExpectedValueUplift = 0,
+                    IsRevenueBased = state.MabOptimizationType == MabOptimizationType.Revenue,
+                    IsPrimaryGoal = true,
+                    IsExperimentActive = state.IsExperimentActive,
+                    IsMabEnabled = state.IsMabEnabled,
+                    HasRollout = state.FallthroughRollout.Count > 0
+                });
+        }
+
         var finalResponse = summaries
             .OrderByDescending(x => x.LastCalculatedAt)
             .ToList();

@@ -38,12 +38,15 @@ public class GetConfigEndpoint : ToggleEndpoint<EmptyRequest, SystemConfigRespon
             && User.Identity?.IsAuthenticated == true 
             && User.TryGetUserId(out var userId))
         {
-            var adminEmail = _configuration["DEFAULT_ADMIN_EMAIL"];
+            var adminEmail = _configuration["TM_DEFAULT_ADMIN_EMAIL"];
             var user = await _db.Users.FindAsync([userId], ct);
             if (user != null && string.Equals(user.Email, adminEmail, StringComparison.OrdinalIgnoreCase))
                 allowUserOrganizationCreation = true;
         }
 
-        await Send.OkAsync(new SystemConfigResponse(allowOpenRegistration, allowUserOrganizationCreation, passwordPolicy), cancellation: ct);
+        var analyticsEnabled = _configuration.GetValue("Analytics:Enabled", true);
+        var enableEmails = _configuration.GetValue("Email:EnableEmails", false);
+
+        await Send.OkAsync(new SystemConfigResponse(allowOpenRegistration, allowUserOrganizationCreation, passwordPolicy, analyticsEnabled, enableEmails), cancellation: ct);
     }
 }

@@ -29,6 +29,10 @@ export function ContextualRolloutManager({
 }: ContextualRolloutManagerProps) {
     const [showLowTraffic, setShowLowTraffic] = useState(false);
 
+    if (!displayContextual || displayContextual.length === 0 || (displayContextual.length === 1 && displayContextual[0].contextSlice === '{}')) {
+        return null;
+    }
+
     const { highTrafficSlices, lowTrafficSlices, aggregatedIter, otherExposures } = useMemo(() => {
         const high = [];
         const low = [];

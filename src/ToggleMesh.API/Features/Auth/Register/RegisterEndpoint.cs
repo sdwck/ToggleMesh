@@ -55,11 +55,17 @@ public class RegisterEndpoint : ToggleEndpoint<RegisterRequest, RegisterResponse
             return;
         }
 
+        var enableEmails = _configuration.GetValue("Email:EnableEmails", false);
+        var verificationMethod = isInviteValid ? EmailVerificationMethod.Admin :
+                                 !enableEmails ? EmailVerificationMethod.SkippedNoSmtp :
+                                 EmailVerificationMethod.None;
+
         var user = new ApplicationUser
         {
             UserName = req.Email,
             Email = req.Email,
-            EmailConfirmed = isInviteValid
+            EmailConfirmed = verificationMethod != EmailVerificationMethod.None,
+            EmailVerificationMethod = verificationMethod
         };
 
         var result = await _userManager.CreateAsync(user, req.Password);
@@ -71,7 +77,7 @@ public class RegisterEndpoint : ToggleEndpoint<RegisterRequest, RegisterResponse
             ThrowIfAnyErrors();
         }
 
-        if (!isInviteValid)
+        if (!user.EmailConfirmed)
         {
             var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
             var encodedToken = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(token));

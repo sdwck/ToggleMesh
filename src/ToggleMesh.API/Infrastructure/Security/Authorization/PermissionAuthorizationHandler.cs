@@ -53,6 +53,8 @@ public class PermissionAuthorizationHandler : AuthorizationHandler<PermissionReq
 
         if (routeData.TryGetValue("projectId", out var projectIdValue) && Guid.TryParse(projectIdValue?.ToString(), out var parsedId))
             projectId = parsedId;
+        else if (httpContext.Request.Headers.TryGetValue("X-Project-Id", out var headerProjectId) && Guid.TryParse(headerProjectId.ToString(), out var parsedHeaderId))
+            projectId = parsedHeaderId;
 
         if (routeData.TryGetValue("environmentId", out var envIdValue) && Guid.TryParse(envIdValue?.ToString(), out var parsedEnvId))
             environmentId = parsedEnvId;

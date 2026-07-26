@@ -98,20 +98,27 @@ export function Register() {
       return response.data;
     },
     onSuccess: async (data: any) => {
-      if (inviteToken && data?.token) {
+      if (data?.token) {
         localStorage.setItem('accessToken', data.token);
         localStorage.setItem('refreshToken', data.refreshToken);
-        try {
-          const res = await api.post(`/organizations/invites/${inviteToken}/accept`, {});
-          useOrganizationStore.getState().setActiveOrganizationId(res.data.organizationId);
-          queryClient.invalidateQueries({ queryKey: ['organizations'] });
-          queryClient.invalidateQueries({ queryKey: ['projects'] });
-
-          toast.success('Account created and invitation accepted!');
-          navigate('/projects');
-        } catch {
-          navigate(`/invites/${inviteToken}`);
+        
+        if (inviteToken) {
+          try {
+            const res = await api.post(`/organizations/invites/${inviteToken}/accept`, {});
+            useOrganizationStore.getState().setActiveOrganizationId(res.data.organizationId);
+            queryClient.invalidateQueries({ queryKey: ['organizations'] });
+            queryClient.invalidateQueries({ queryKey: ['projects'] });
+            toast.success('Account created and invitation accepted!');
+            navigate('/projects');
+            return;
+          } catch {
+            navigate(`/invites/${inviteToken}`);
+            return;
+          }
         }
+        
+        toast.success('Account created successfully!');
+        navigate('/projects');
       } else {
         setIsSuccess(true);
         toast.success('Account created! Please check your email.');

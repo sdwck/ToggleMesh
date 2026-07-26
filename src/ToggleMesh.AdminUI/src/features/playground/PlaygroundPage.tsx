@@ -30,9 +30,29 @@ export function PlaygroundPage() {
         }
     }, [logs]);
 
+    useEffect(() => {
+        return () => {
+            if (client) {
+                client.destroy();
+            }
+        };
+    }, [client]);
+
     const handleConnect = async () => {
         if (!clientKey.trim()) {
             toast.error('API Key is required');
+            return;
+        }
+
+        let parsedUrl: URL;
+        try {
+            parsedUrl = new URL(baseUrl.trim());
+            if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
+                throw new Error('Only HTTP and HTTPS protocols are supported');
+            }
+        } catch (err: any) {
+            toast.error('Invalid Base API URL');
+            addLog(`Invalid URL: ${err.message}`, 'error');
             return;
         }
 
@@ -45,8 +65,26 @@ export function PlaygroundPage() {
                 return;
             }
             
+            addLog(`Validating connection to ${parsedUrl.origin}...`, 'info');
+            const testResponse = await fetch(`${parsedUrl.origin}/api/v1/sdk/evaluate`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-api-key': clientKey.trim()
+                },
+                body: JSON.stringify({ identity, context: parsedContext })
+            });
+
+            if (!testResponse.ok) {
+                throw new Error(`Server returned ${testResponse.status} ${testResponse.statusText}`);
+            }
+
+            if (client) {
+                client.destroy();
+            }
+
             const tmClient = new ToggleMeshClient({
-                baseUrl,
+                baseUrl: parsedUrl.origin,
                 clientKey: clientKey.trim(),
                 refreshInterval: 5
             });
@@ -61,7 +99,7 @@ export function PlaygroundPage() {
             toast.success('Connected to ToggleMesh SDK');
         } catch (err: any) {
             addLog(`Connection failed: ${err.message}`, 'error');
-            toast.error('Failed to initialize SDK');
+            toast.error('Failed to connect SDK: ' + err.message);
         }
     };
 

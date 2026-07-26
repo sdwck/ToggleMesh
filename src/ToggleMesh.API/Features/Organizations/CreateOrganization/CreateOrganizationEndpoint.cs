@@ -27,7 +27,7 @@ public class CreateOrganizationEndpoint : ToggleEndpoint<CreateOrganizationReque
         var allowCreation = _configuration.GetValue("Auth:AllowUserOrganizationCreation", true);
         if (!allowCreation)
         {
-            var adminEmail = _configuration["DEFAULT_ADMIN_EMAIL"];
+            var adminEmail = _configuration["TM_DEFAULT_ADMIN_EMAIL"];
             var user = await _db.Users.FindAsync(new object[] { UserId }, ct);
             if (user == null || !string.Equals(user.Email, adminEmail, StringComparison.OrdinalIgnoreCase))
                 ThrowError("User organization creation is disabled in this environment.", 403);

@@ -180,8 +180,9 @@ ToggleMesh provides native SDKs and tooling for your entire microservice fleet.
 - 📈 **High-Throughput Analytics Ingestion:** SDKs buffer metrics client-side. The API ingests telemetry into bounded `System.Threading.Channels` with `DropOldest` backpressure, flushing to PostgreSQL or horizontally scalable **Kafka + ClickHouse** clusters.
 - 🔌 **Integrations & Webhooks:** Native Slack and MS Teams notifications, plus SSRF-Protected outbound webhook dispatcher with Polly-powered exponential backoff and Dead-Letter Queues (DLQ).
 - 🔐 **Multi-Tenancy & Security:** Organization and Project-level isolation with strict Role-Based Access Control and Two-Factor Authentication.
+- 🔒 **GDPR-Ready by Design:** Identity pseudonymization, automatic data retention, PII property redaction, and one-click user data erasure.
 - 🔑 **Personal Access Tokens (PATs):** SHA-256 hashed PATs for secure CI/CD and CLI integrations.
-- 📜 **Immutable Audit Logs:** EF Core `SaveChangesInterceptors` capture deep JSON diffs of every mutation.
+- 📜 **Immutable Audit Logs:** Every configuration change is captured with deep before/after JSON diffs.
 - 💾 **Offline Resilience:** SDKs persist the latest synchronized state to a local JSON fallback file, ensuring safe boot-ups during complete network partitions.
 
 ---

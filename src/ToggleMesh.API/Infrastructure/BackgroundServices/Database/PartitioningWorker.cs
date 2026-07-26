@@ -1,3 +1,4 @@
+using ClickHouse.Client.ADO;
 using Microsoft.EntityFrameworkCore;
 using ToggleMesh.API.Infrastructure.Data;
 
@@ -33,6 +34,49 @@ public class PartitioningWorker : BackgroundService
                         WHERE ""Timestamp"" < {thresholdDate};
                     ", stoppingToken);
                     _logger.LogInformation("Cleaned up AuditLogs older than {RetentionDays} days", retentionDays);
+                }
+
+                var analyticsRetentionDays = configuration.GetValue("Analytics:RetentionDays", 90);
+                if (analyticsRetentionDays > 0)
+                {
+                    var analyticsThreshold = DateTimeOffset.UtcNow.AddDays(-analyticsRetentionDays);
+                    var exposuresDeleted = await db.AnalyticsExposures
+                        .Where(e => e.Timestamp < analyticsThreshold)
+                        .ExecuteDeleteAsync(stoppingToken);
+                    var tracksDeleted = await db.AnalyticsTracks
+                        .Where(t => t.Timestamp < analyticsThreshold)
+                        .ExecuteDeleteAsync(stoppingToken);
+
+                    if (exposuresDeleted > 0 || tracksDeleted > 0)
+                    {
+                        _logger.LogInformation("Cleaned up raw analytics older than {Days} days (exposures: {Exposures}, tracks: {Tracks})", 
+                            analyticsRetentionDays, exposuresDeleted, tracksDeleted);
+                    }
+
+                    var chConnectionString = configuration["Analytics:ClickHouse:ConnectionString"];
+                    if (!string.IsNullOrWhiteSpace(chConnectionString))
+                    {
+                        try
+                        {
+                            await using var chConn = new ClickHouseConnection(chConnectionString);
+                            await chConn.OpenAsync(stoppingToken);
+
+                            var cutoffStr = analyticsThreshold.UtcDateTime.ToString("yyyy-MM-dd HH:mm:ss");
+                            await using var cmd1 = chConn.CreateCommand();
+                            cmd1.CommandText = $"ALTER TABLE AnalyticsExposures DELETE WHERE Timestamp < '{cutoffStr}'";
+                            await cmd1.ExecuteNonQueryAsync(stoppingToken);
+
+                            await using var cmd2 = chConn.CreateCommand();
+                            cmd2.CommandText = $"ALTER TABLE AnalyticsTracks DELETE WHERE Timestamp < '{cutoffStr}'";
+                            await cmd2.ExecuteNonQueryAsync(stoppingToken);
+
+                            _logger.LogInformation("Cleaned up ClickHouse analytics records older than {Days} days", analyticsRetentionDays);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogError(ex, "Failed to execute ClickHouse analytics retention cleanup");
+                        }
+                    }
                 }
 
                 var nextMonth = DateTime.UtcNow.AddMonths(1);

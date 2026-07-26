@@ -25,7 +25,8 @@ import {
     FormLabel,
     FormMessage,
 } from '@/components/ui/form';
-import { useUniqueEvents, useAnalyticsSchema } from '@/api/queries';
+import { useUniqueEvents, useAnalyticsSchema, useSystemConfig } from '@/api/queries';
+import { AnalyticsDisabledBanner } from '@/components/AnalyticsDisabledBanner';
 
 const formSchema = z.object({
     mode: z.enum(['classic', 'mab']),
@@ -53,6 +54,7 @@ interface Props {
 export function StartExperimentModal({ projectId, envId, flagKey, currentRolloutPercentage, isLoading, rulesCount = 0, onStart, canEditEnv = true, variationsCount = 2 }: Props) {
     const [open, setOpen] = useState(false);
     const { data: uniqueEvents } = useUniqueEvents(projectId, envId);
+    const { data: sysConfig } = useSystemConfig();
 
     const form = useForm<FormValues>({
         resolver: zodResolver(formSchema),
@@ -100,12 +102,18 @@ export function StartExperimentModal({ projectId, envId, flagKey, currentRollout
                     </DialogDescription>
                 </DialogHeader>
 
+                <AnalyticsDisabledBanner
+                    className="mt-1"
+                    title="Analytics Engine Disabled"
+                    description="Starting experiments is disabled because telemetry collection is turned off on this server (TM_ENABLE_ANALYTICS=false)."
+                />
+
                 <Form {...form}>
-                    <form 
+                    <form
                         onSubmit={(e) => {
                             e.stopPropagation();
                             form.handleSubmit(handleSubmit)(e);
-                        }} 
+                        }}
                         className="space-y-6 py-4"
                     >
                         <div className="space-y-4">
@@ -167,11 +175,11 @@ export function StartExperimentModal({ projectId, envId, flagKey, currentRollout
                                         <FormLabel className="text-xs text-muted-foreground">Primary Metric (Goal)</FormLabel>
                                         <FormControl>
                                             <div className="relative">
-                                                <Input 
-                                                    list="unique-events-list" 
-                                                    {...field} 
+                                                <Input
+                                                    list="unique-events-list"
+                                                    {...field}
                                                     className="bg-zinc-950 border-zinc-800 w-full"
-                                                    placeholder="Enter event name (e.g. checkout_completed)" 
+                                                    placeholder="Enter event name (e.g. checkout_completed)"
                                                 />
                                                 <datalist id="unique-events-list">
                                                     {uniqueEvents?.map(ev => (
@@ -206,7 +214,7 @@ export function StartExperimentModal({ projectId, envId, flagKey, currentRollout
                                                     <div className="flex items-start gap-2 text-[13px] text-amber-500 bg-amber-500/10 p-3 rounded-md border border-amber-500/20">
                                                         <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
                                                         <p>
-                                                            <strong>Warning:</strong> You have <strong>{rulesCount} targeting rules</strong> with custom weights. 
+                                                            <strong>Warning:</strong> You have <strong>{rulesCount} targeting rules</strong> with custom weights.
                                                             "Reset to Even Split" will only balance the <em>Default Rollout</em>. This might skew your experiment traffic if users hit the targeting rules instead. We recommend balancing your rules manually or deleting them before starting.
                                                         </p>
                                                     </div>
@@ -348,7 +356,7 @@ export function StartExperimentModal({ projectId, envId, flagKey, currentRollout
                             )}
                         </div>
                         <DialogFooter>
-                            <Button type="submit" disabled={isLoading} className="w-full">
+                            <Button type="submit" disabled={isLoading || sysConfig?.analyticsEnabled === false} className="w-full">
                                 Start Experiment
                             </Button>
                         </DialogFooter>

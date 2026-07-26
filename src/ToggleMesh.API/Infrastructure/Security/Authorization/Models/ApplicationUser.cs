@@ -16,6 +16,7 @@ public class ApplicationUser : IdentityUser<Guid>, ISoftDeletable
 
     // ReSharper disable once CollectionNeverUpdated.Global
     public ICollection<RefreshToken> RefreshTokens { get; set; } = [];
-
     public bool IsDeleted { get; set; }
+
+    public EmailVerificationMethod EmailVerificationMethod { get; set; } = EmailVerificationMethod.None;
 }

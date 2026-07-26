@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Confluent.Kafka;
+using ToggleMesh.API.Features.Analytics.Services;
 
 namespace ToggleMesh.API.Features.Analytics.Ingest;
 
@@ -8,10 +9,12 @@ public class KafkaAnalyticsPublisher : IAnalyticsEventPublisher, IDisposable
     private readonly IProducer<string, string> _producer;
     private readonly string _topic;
     private readonly ILogger<KafkaAnalyticsPublisher> _logger;
+    private readonly IIdentityHasher _identityHasher;
 
-    public KafkaAnalyticsPublisher(IConfiguration configuration, ILogger<KafkaAnalyticsPublisher> logger)
+    public KafkaAnalyticsPublisher(IConfiguration configuration, ILogger<KafkaAnalyticsPublisher> logger, IIdentityHasher identityHasher)
     {
         _logger = logger;
+        _identityHasher = identityHasher;
         _topic = configuration["Analytics:Kafka:Topic"] ?? "togglemesh-events";
         var bootstrapServers = configuration["Analytics:Kafka:BootstrapServers"] ?? "localhost:9092";
 
@@ -30,10 +33,23 @@ public class KafkaAnalyticsPublisher : IAnalyticsEventPublisher, IDisposable
     {
         if (events == null || events.Count == 0) return;
 
+        var hashedEvents = events.Select(e => new RawAnalyticsEventDto
+        {
+            Type = e.Type,
+            Timestamp = e.Timestamp,
+            Identity = _identityHasher.HashIdentity(e.Identity),
+            FlagKey = e.FlagKey,
+            VariationId = e.VariationId,
+            VariationValue = e.VariationValue,
+            EventName = e.EventName,
+            Value = e.Value,
+            Properties = e.Properties
+        }).ToList();
+
         var payload = new KafkaMessagePayload
         {
             EnvironmentId = environmentId,
-            Events = events
+            Events = hashedEvents
         };
 
         var message = new Message<string, string>

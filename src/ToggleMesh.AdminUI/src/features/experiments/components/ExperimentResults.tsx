@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useExperimentDetails, useStartExperiment, useStopExperiment, useExperimentIterations, useDeleteExperimentIteration, useContextualExperimentDetails, useDeleteContextualRollout, useSetContextualRollout, useFeatureFlag } from '@/api/queries';
+import { useExperimentDetails, useStartExperiment, useStopExperiment, useExperimentIterations, useDeleteExperimentIteration, useContextualExperimentDetails, useDeleteContextualRollout, useSetContextualRollout, useFeatureFlag, useSystemConfig } from '@/api/queries';
 import type { ExperimentIterationDto } from '@/api/types';
 import { InsightsWidget } from './InsightsWidget';
 import { StartExperimentModal } from './StartExperimentModal';
@@ -8,11 +8,12 @@ import { MetricCard } from './MetricCard';
 import { TimeSeriesChart, SnapshotTimeSeriesChart } from './TimeSeriesChart';
 import { ContextualRolloutManager } from './ContextualRolloutManager';
 import { ExperimentHistoryTable } from './ExperimentHistoryTable';
-import { Zap, Beaker, ChevronDown, ChevronUp, Square, History, Loader2, Download, Undo2, AlertTriangle } from 'lucide-react';
+import { Zap, Beaker, ChevronDown, ChevronUp, Square, History, Loader2, Download, Undo2, AlertTriangle, Activity } from 'lucide-react';
 import { ToggleMeshIcon } from '@/components/icons/ToggleMeshIcon';
 import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { useReactToPrint } from 'react-to-print';
+import { AnalyticsDisabledBanner } from '@/components/AnalyticsDisabledBanner';
 import {
     AlertDialog,
     AlertDialogAction,
@@ -51,6 +52,7 @@ export function ExperimentResults({ projectId, envId, flagKey, mabGoalEvent, hig
     const { data: contextualResults } = useContextualExperimentDetails(projectId, envId, flagKey);
     const { data: iterations, isLoading: isLoadingIterations } = useExperimentIterations(projectId, envId, flagKey);
     const { data: flagState } = useFeatureFlag(projectId, envId, flagKey);
+    const { data: sysConfig } = useSystemConfig();
 
     const variationsConfig = flagState?.variations || [];
     const isBoolean = flagState?.type === 0;
@@ -201,7 +203,12 @@ export function ExperimentResults({ projectId, envId, flagKey, mabGoalEvent, hig
     const secondaryMetrics = displayResults ? displayResults.filter((r: any) => (r.eventName || r.EventName) !== mabGoalEvent) : [];
 
     return (
-        <div className="space-y-4 print:bg-white print:p-8" ref={contentRef}>
+        <div className="space-y-4 pb-12 print:pb-0 print:bg-white print:p-8" ref={contentRef}>
+            <AnalyticsDisabledBanner
+                className="print:hidden mb-4"
+                title="Analytics & Metric Ingestion Disabled"
+                description="Telemetry collection is currently turned off on this server instance (TM_ENABLE_ANALYTICS=false). Feature flag rules, variant allocations, and Multi-Armed Bandit (MAB) rollouts operate normally, but conversion tracking and probability charts are inactive."
+            />
             <div className="hidden print:flex items-center gap-3 border-b border-zinc-200 pb-6 mb-8">
                 <div className="bg-zinc-900 text-white p-2 rounded-lg flex items-center justify-center print:bg-zinc-900 print:text-white print:color-exact print:border-none">
                     <ToggleMeshIcon className="h-6 w-6 print:text-white" />

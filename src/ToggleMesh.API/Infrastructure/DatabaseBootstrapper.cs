@@ -19,7 +19,7 @@ public static class DatabaseBootstrapper
 
         try
         {
-            var shouldRunMigrations = config.GetValue("RUN_MIGRATIONS_ON_STARTUP", true);
+            var shouldRunMigrations = config.GetValue("TM_RUN_MIGRATIONS_ON_STARTUP", true);
 
             if (shouldRunMigrations && context.Database.IsRelational())
             {
@@ -27,10 +27,10 @@ public static class DatabaseBootstrapper
                 logger.LogInformation("Database migrations applied successfully.");
             }
             else if (!shouldRunMigrations)
-                logger.LogInformation("Skipping database migrations because RUN_MIGRATIONS_ON_STARTUP is set to false.");
+                logger.LogInformation("Skipping database migrations because TM_RUN_MIGRATIONS_ON_STARTUP is set to false.");
 
-            var adminEmail = config["DEFAULT_ADMIN_EMAIL"];
-            var adminPassword = config["DEFAULT_ADMIN_PASSWORD"];
+            var adminEmail = config["TM_DEFAULT_ADMIN_EMAIL"];
+            var adminPassword = config["TM_DEFAULT_ADMIN_PASSWORD"];
 
             if (!string.IsNullOrWhiteSpace(adminEmail) && !string.IsNullOrWhiteSpace(adminPassword))
             {

@@ -178,6 +178,17 @@ export class ToggleMeshClient {
         this.notifyListeners();
     }
 
+    destroy(): void {
+        this.stopPolling();
+        if (this.flushIntervalId) {
+            clearInterval(this.flushIntervalId);
+            this.flushIntervalId = null;
+        }
+        this.listeners.clear();
+        this.eventBuffer = [];
+        this.metricsBuffer.clear();
+    }
+
     subscribe(listener: ToggleMeshListener): () => void {
         this.listeners.add(listener);
         return () => this.listeners.delete(listener);

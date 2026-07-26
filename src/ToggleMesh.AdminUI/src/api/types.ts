@@ -40,6 +40,7 @@ export interface ProjectEnvironmentDto {
     name: string;
     activeFlagsCount: number;
     totalFlagsCount: number;
+    lastPiiBlockedContext?: string | null;
 }
 
 export interface ProjectHistoricalExperimentDto {
@@ -85,6 +86,7 @@ export interface Environment {
     name: string;
     keys: EnvironmentKey[];
     userRole: ProjectRole;
+    lastPiiBlockedContext?: string | null;
 }
 
 export interface ProjectDetails {
@@ -330,12 +332,23 @@ export interface ChangePasswordRequest {
     newPassword: string;
 }
 
+export const EmailVerificationMethod = {
+    None: 0,
+    Email: 1,
+    Admin: 2,
+    SkippedNoSmtp: 3,
+    Sso: 4
+} as const;
+
+export type EmailVerificationMethod = typeof EmailVerificationMethod[keyof typeof EmailVerificationMethod];
+
 export interface UserProfile {
     id: string;
     email: string;
     username: string;
     twoFactorEnabled: boolean;
     recoveryCodesLeft: number;
+    emailVerificationMethod: EmailVerificationMethod;
 }
 
 export const WebhookStatus = {

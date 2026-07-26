@@ -7,10 +7,11 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Settings, Cable } from 'lucide-react';
+import { Settings, Cable, ShieldCheck } from 'lucide-react';
 import { ProjectSettingsGeneralTab } from './components/ProjectSettingsGeneralTab';
 import { ProjectSettingsWebhooksTab } from './components/ProjectSettingsWebhooksTab';
 import { ProjectSettingsIntegrationsTab } from './components/ProjectSettingsIntegrationsTab';
+import { ProjectSettingsPrivacyTab } from './components/ProjectSettingsPrivacyTab';
 
 export function ProjectSettingsPage() {
     const { projectId } = useParams<{ projectId: string }>();
@@ -32,7 +33,7 @@ export function ProjectSettingsPage() {
             <div>
                 <h2 className="text-2xl font-bold tracking-tight">Project Settings</h2>
                 <p className="text-muted-foreground mt-1">
-                    Manage {isProjectLoading ? <Skeleton className="h-4 w-24 inline-block align-middle" /> : <span className="font-semibold text-zinc-300">{project?.name}</span>} configuration, webhooks and integrations.
+                    Manage {isProjectLoading ? <Skeleton className="h-4 w-24 inline-block align-middle" /> : <span className="font-semibold text-zinc-300">{project?.name}</span>} configuration, webhooks, integrations and privacy settings.
                 </p>
             </div>
 
@@ -52,6 +53,9 @@ export function ProjectSettingsPage() {
                                 <Badge variant="outline" className="px-1 py-0 text-[10px] bg-zinc-900 border-zinc-800">
                                     {integrations?.length ?? 0}
                                 </Badge>
+                            </TabsTrigger>
+                            <TabsTrigger value="privacy" className="text-xs gap-1.5">
+                                <ShieldCheck className="h-3.5 w-3.5" /> Privacy
                             </TabsTrigger>
                         </>
                     )}
@@ -74,6 +78,10 @@ export function ProjectSettingsPage() {
 
                 <TabsContent value="integrations" className="space-y-6 m-0">
                     <ProjectSettingsIntegrationsTab projectId={projectId!} />
+                </TabsContent>
+
+                <TabsContent value="privacy" className="space-y-6 m-0">
+                    <ProjectSettingsPrivacyTab projectId={projectId!} project={project} canManageProject={canManageProject} />
                 </TabsContent>
             </Tabs>
         </div>

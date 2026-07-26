@@ -48,8 +48,11 @@ public class KafkaPublisherTests : IAsyncLifetime
             }
         };
 
+        var identityHasher = new ToggleMesh.API.Features.Analytics.Services.IdentityHasher(new ConfigurationBuilder().Build(), NullLogger<ToggleMesh.API.Features.Analytics.Services.IdentityHasher>.Instance);
+        var expectedHashedIdentity = identityHasher.HashIdentity("user-1");
+
         // Act
-        using (var publisher = new KafkaAnalyticsPublisher(configuration, NullLogger<KafkaAnalyticsPublisher>.Instance))
+        using (var publisher = new KafkaAnalyticsPublisher(configuration, NullLogger<KafkaAnalyticsPublisher>.Instance, identityHasher))
         {
             await publisher.PublishBatchAsync(environmentId, events);
         }
@@ -75,6 +78,6 @@ public class KafkaPublisherTests : IAsyncLifetime
         payload.Should().NotBeNull();
         payload.EnvironmentId.Should().Be(environmentId);
         payload.Events.Should().HaveCount(1);
-        payload.Events[0].Identity.Should().Be("user-1");
+        payload.Events[0].Identity.Should().Be(expectedHashedIdentity);
     }
 }

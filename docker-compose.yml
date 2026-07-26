@@ -41,11 +41,11 @@ services:
       ASPNETCORE_ENVIRONMENT: Production
       ConnectionStrings__DefaultConnection: Host=${TM_DB_HOST:-db};Port=${TM_DB_PORT:-5432};Database=${POSTGRES_DB:-togglemesh};Username=${POSTGRES_USER:-postgres};Password=${POSTGRES_PASSWORD:-changeme}
       ConnectionStrings__Redis: ${TM_REDIS:-redis:6379}
-      RUN_MIGRATIONS_ON_STARTUP: ${TM_RUN_MIGRATIONS_ON_STARTUP:-true}
+      TM_RUN_MIGRATIONS_ON_STARTUP: ${TM_RUN_MIGRATIONS_ON_STARTUP:-true}
       
       # Admin Account
-      DEFAULT_ADMIN_EMAIL: ${TM_DEFAULT_ADMIN_EMAIL:-admin@togglemesh.local}
-      DEFAULT_ADMIN_PASSWORD: ${TM_DEFAULT_ADMIN_PASSWORD:-Admin123!}
+      TM_DEFAULT_ADMIN_EMAIL: ${TM_DEFAULT_ADMIN_EMAIL:-admin@togglemesh.local}
+      TM_DEFAULT_ADMIN_PASSWORD: ${TM_DEFAULT_ADMIN_PASSWORD:-Admin123!}
       
       # Security & JWT
       Security__ApiKeyPepper: ${TM_API_KEY_PEPPER:-ToggleMeshDefaultPepper123!}
@@ -77,6 +77,9 @@ services:
       Ingestion__MaxPayloadSizeBytes: ${TM_INGESTION_MAX_PAYLOAD_BYTES:-5242880}
       Analytics__Enabled: ${TM_ENABLE_ANALYTICS:-true}
       Analytics__RollupInterval: ${TM_ANALYTICS_ROLLUP_INTERVAL:-00:15:00}
+      Analytics__BlockPiiEmails: ${TM_BLOCK_PII_EMAILS:-true}
+      Analytics__HashIdentities: ${TM_ANALYTICS_HASH_IDENTITIES:-true}
+      Analytics__RetentionDays: ${TM_ANALYTICS_RETENTION_DAYS:-90}
       AuditLogs__RetentionDays: ${TM_AUDIT_LOG_RETENTION_DAYS:-0}
       
       # SMTP Email

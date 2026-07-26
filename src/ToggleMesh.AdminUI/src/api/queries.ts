@@ -39,7 +39,7 @@ export const useSystemConfig = () => {
     return useQuery({
         queryKey: ['system', 'config'],
         queryFn: async () => {
-            const { data } = await api.get<{ allowOpenRegistration: boolean, allowUserOrganizationCreation: boolean, passwordPolicy: { minimumLength: number, requireDigit: boolean, requireLowercase: boolean, requireUppercase: boolean, requireNonAlphanumeric: boolean } }>('/system/config');
+            const { data } = await api.get<{ allowOpenRegistration: boolean, allowUserOrganizationCreation: boolean, passwordPolicy: { minimumLength: number, requireDigit: boolean, requireLowercase: boolean, requireUppercase: boolean, requireNonAlphanumeric: boolean }, analyticsEnabled?: boolean, enableEmails?: boolean }>('/system/config');
             return data;
         }
     });
@@ -242,6 +242,19 @@ export const useCreateEnvironment = (projectId: string) => {
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['projects', projectId] });
+            queryClient.invalidateQueries({ queryKey: ['projects'] });
+        },
+    });
+};
+
+export const useClearPiiAlert = () => {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async (req: { projectId: string; envId: string }) => {
+            await api.post(`/projects/${req.projectId}/environments/${req.envId}/clear-pii-alert`);
+        },
+        onSuccess: (_, variables) => {
+            queryClient.invalidateQueries({ queryKey: ['projects', variables.projectId] });
             queryClient.invalidateQueries({ queryKey: ['projects'] });
         },
     });
@@ -1140,6 +1153,18 @@ export const useTestIntegration = (projectId: string) => {
     return useMutation({
         mutationFn: async (id: string) => {
             await api.post(`/projects/${projectId}/integrations/${id}/test`, {});
+        }
+    });
+};
+
+export const usePurgeIdentity = () => {
+    return useMutation({
+        mutationFn: async (req: { projectId: string; identity: string; environmentId?: string }) => {
+            const { data } = await api.post<{ exposuresPurged: number; tracksPurged: number; totalPurged: number; executedAt: string }>(`/projects/${req.projectId}/privacy/purge-identity`, {
+                identity: req.identity,
+                environmentId: req.environmentId
+            });
+            return data;
         }
     });
 };

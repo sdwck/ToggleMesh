@@ -30,7 +30,12 @@ public class ConfirmEmailEndpoint : ToggleEndpoint<ConfirmEmailRequest>
         var decodedToken = Encoding.UTF8.GetString(WebEncoders.Base64UrlDecode(req.Token));
         var result = await _userManager.ConfirmEmailAsync(user, decodedToken);
 
-        if (!result.Succeeded)
+        if (result.Succeeded)
+        {
+            user.EmailVerificationMethod = EmailVerificationMethod.Email;
+            await _userManager.UpdateAsync(user);
+        }
+        else
         {
             if (result.Errors.Any(e => e.Code == "ConcurrencyFailure"))
             {

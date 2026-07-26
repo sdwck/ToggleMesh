@@ -2,6 +2,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Caching.Memory;
 using StackExchange.Redis;
 using ToggleMesh.API.Features.Analytics.Domain;
+using ToggleMesh.API.Features.Analytics.Services;
 using ToggleMesh.API.Infrastructure.Caching;
 
 namespace ToggleMesh.API.Features.Analytics.Ingest;
@@ -13,14 +14,16 @@ public class AnalyticsWorker : BackgroundService
     private readonly ILogger<AnalyticsWorker> _logger;
     private readonly IConnectionMultiplexer _redis;
     private readonly IMemoryCache _memoryCache;
+    private readonly IIdentityHasher _identityHasher;
 
-    public AnalyticsWorker(InMemoryAnalyticsQueue queue, IAnalyticsStorageSink sink, ILogger<AnalyticsWorker> logger, IConnectionMultiplexer redis, IMemoryCache memoryCache)
+    public AnalyticsWorker(InMemoryAnalyticsQueue queue, IAnalyticsStorageSink sink, ILogger<AnalyticsWorker> logger, IConnectionMultiplexer redis, IMemoryCache memoryCache, IIdentityHasher identityHasher)
     {
         _queue = queue;
         _sink = sink;
         _logger = logger;
         _redis = redis;
         _memoryCache = memoryCache;
+        _identityHasher = identityHasher;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -77,13 +80,15 @@ public class AnalyticsWorker : BackgroundService
         {
             foreach (var evt in msg.Events)
             {
+                var hashedIdentity = _identityHasher.HashIdentity(evt.Identity);
+
                 if (evt.Type == AnalyticsEventType.Exposure)
                 {
                     exposures.Add(new AnalyticsExposure
                     {
                         Id = Guid.CreateVersion7(),
                         EnvironmentId = msg.EnvironmentId,
-                        Identity = evt.Identity,
+                        Identity = hashedIdentity,
                         FlagKey = evt.FlagKey ?? string.Empty,
                         VariationId = evt.VariationId.GetValueOrDefault(),
                         Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(evt.Timestamp),
@@ -96,7 +101,7 @@ public class AnalyticsWorker : BackgroundService
                     {
                         Id = Guid.CreateVersion7(),
                         EnvironmentId = msg.EnvironmentId,
-                        Identity = evt.Identity,
+                        Identity = hashedIdentity,
                         EventName = evt.EventName ?? string.Empty,
                         Value = evt.Value,
                         Properties = evt.Properties != null ? JsonSerializer.SerializeToDocument(evt.Properties) : null,

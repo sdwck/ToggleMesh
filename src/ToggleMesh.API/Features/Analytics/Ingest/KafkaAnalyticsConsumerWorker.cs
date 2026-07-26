@@ -3,6 +3,7 @@ using Confluent.Kafka;
 using Microsoft.Extensions.Caching.Memory;
 using StackExchange.Redis;
 using ToggleMesh.API.Features.Analytics.Domain;
+using ToggleMesh.API.Features.Analytics.Services;
 using ToggleMesh.API.Infrastructure.Caching;
 
 namespace ToggleMesh.API.Features.Analytics.Ingest;
@@ -12,15 +13,17 @@ public class KafkaAnalyticsConsumerWorker : BackgroundService
     private readonly ILogger<KafkaAnalyticsConsumerWorker> _logger;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IMemoryCache _memoryCache;
+    private readonly IIdentityHasher _identityHasher;
     private readonly string _topic;
     private readonly string _bootstrapServers;
     private readonly string _groupId;
 
-    public KafkaAnalyticsConsumerWorker(IConfiguration configuration, ILogger<KafkaAnalyticsConsumerWorker> logger, IServiceScopeFactory scopeFactory, IMemoryCache memoryCache)
+    public KafkaAnalyticsConsumerWorker(IConfiguration configuration, ILogger<KafkaAnalyticsConsumerWorker> logger, IServiceScopeFactory scopeFactory, IMemoryCache memoryCache, IIdentityHasher identityHasher)
     {
         _logger = logger;
         _scopeFactory = scopeFactory;
         _memoryCache = memoryCache;
+        _identityHasher = identityHasher;
         
         _topic = configuration["Analytics:Kafka:Topic"] ?? "togglemesh-events";
         _bootstrapServers = configuration["Analytics:Kafka:BootstrapServers"] ?? "localhost:9092";
@@ -95,6 +98,7 @@ public class KafkaAnalyticsConsumerWorker : BackgroundService
                         foreach (var e in payload.Events)
                         {
                             var timestamp = DateTimeOffset.FromUnixTimeMilliseconds(e.Timestamp);
+                            var hashedIdentity = _identityHasher.HashIdentity(e.Identity);
                             if (e.Type == AnalyticsEventType.Exposure)
                             {
                                 batchExposures.Add(new AnalyticsExposure
@@ -102,7 +106,7 @@ public class KafkaAnalyticsConsumerWorker : BackgroundService
                                     Id = Guid.CreateVersion7(),
                                     EnvironmentId = payload.EnvironmentId,
                                     FlagKey = e.FlagKey!,
-                                    Identity = e.Identity,
+                                    Identity = hashedIdentity,
                                     VariationId = e.VariationId.GetValueOrDefault(),
                                     Properties = e.Properties != null ? JsonDocument.Parse(JsonSerializer.Serialize(e.Properties)) : null,
                                     Timestamp = timestamp
@@ -114,7 +118,7 @@ public class KafkaAnalyticsConsumerWorker : BackgroundService
                                 {
                                     Id = Guid.CreateVersion7(),
                                     EnvironmentId = payload.EnvironmentId,
-                                    Identity = e.Identity,
+                                    Identity = hashedIdentity,
                                     EventName = e.EventName!,
                                     Value = e.Value,
                                     Properties = e.Properties != null ? JsonDocument.Parse(JsonSerializer.Serialize(e.Properties)) : null,

@@ -30,6 +30,6 @@ public class GetProfileEndpoint : ToggleEndpointWithoutRequest<UserProfileDto>
 
         var recoveryCodesLeft = user.TwoFactorEnabled ? await _userManager.CountRecoveryCodesAsync(user) : 0;
 
-        await Send.OkAsync(new UserProfileDto(user.Id, user.Email ?? "", user.UserName ?? "", user.TwoFactorEnabled, recoveryCodesLeft), ct);
+        await Send.OkAsync(new UserProfileDto(user.Id, user.Email ?? "", user.UserName ?? "", user.TwoFactorEnabled, recoveryCodesLeft, user.EmailVerificationMethod), ct);
     }
 }

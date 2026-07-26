@@ -1,8 +1,11 @@
+using System.Globalization;
+using System.Text.Json;
 using ToggleMesh.API.Extensions;
 using ToggleMesh.API.Features.Analytics.Domain;
 using ToggleMesh.API.Infrastructure.Data;
 using ToggleMesh.API.Infrastructure.Endpoints;
 using ToggleMesh.API.Features.Analytics.Ingest;
+using ToggleMesh.API.Features.Analytics.Services;
 using AuthModels = ToggleMesh.API.Infrastructure.Security.Authorization.Models;
 
 namespace ToggleMesh.API.Features.Analytics.Simulate;
@@ -102,7 +105,7 @@ public class SimulateExperimentEndpoint : ToggleEndpoint<SimulateExperimentReque
                     '{environmentId}', 
                     e.Identity, 
                     '{eventName}', 
-                    {(explicitValue.HasValue ? explicitValue.Value.ToString(global::System.Globalization.CultureInfo.InvariantCulture) : "(rand() % 45) + 5")}, 
+                    {(explicitValue.HasValue ? explicitValue.Value.ToString(CultureInfo.InvariantCulture) : "(rand() % 45) + 5")}, 
                     e.Properties,
                     e.Timestamp + interval (rand() % 600 + 1) second
                 FROM AnalyticsExposures e
@@ -126,23 +129,21 @@ public class SimulateExperimentEndpoint : ToggleEndpoint<SimulateExperimentReque
 
             await using var connection = new ClickHouse.Client.ADO.ClickHouseConnection(connectionString);
             await connection.OpenAsync(ct);
-            
             await using var command1 = connection.CreateCommand();
             command1.CommandText = sql1;
             await command1.ExecuteNonQueryAsync(ct);
-
-            await using var command3 = connection.CreateCommand();
-            command3.CommandText = sql3;
-            await command3.ExecuteNonQueryAsync(ct);
-
             await using var command2 = connection.CreateCommand();
             command2.CommandText = sql2;
             await command2.ExecuteNonQueryAsync(ct);
+            await using var command3 = connection.CreateCommand();
+            command3.CommandText = sql3;
+            await command3.ExecuteNonQueryAsync(ct);
         }
         else
         {
             using var scope = Resolve<IServiceScopeFactory>().CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var identityHasher = scope.ServiceProvider.GetRequiredService<IIdentityHasher>();
 
             var rand = new Random();
             var now = DateTime.UtcNow;
@@ -155,7 +156,8 @@ public class SimulateExperimentEndpoint : ToggleEndpoint<SimulateExperimentReque
                 if (i % 1000 == 0) 
                     ct.ThrowIfCancellationRequested();
 
-                var identity = $"sim-{variationId}-{i}";
+                var rawIdentity = $"sim-{variationId}-{i}";
+                var identity = identityHasher.HashIdentity(rawIdentity);
 
                 var propsDict = new Dictionary<string, string>();
                 if (contextProperties is { Count: > 0 })
@@ -166,8 +168,8 @@ public class SimulateExperimentEndpoint : ToggleEndpoint<SimulateExperimentReque
                 }
                 else
                     propsDict["country"] = new[] { "US", "CA", "GB", "AU" }[rand.Next(0, 4)];
-                var jsonProps = global::System.Text.Json.JsonSerializer.Serialize(propsDict);
-                var props = global::System.Text.Json.JsonDocument.Parse(jsonProps);
+                var jsonProps = JsonSerializer.Serialize(propsDict);
+                var props = JsonDocument.Parse(jsonProps);
                 
                 var exposureTime = now.AddSeconds(-rand.Next(0, 3600));
                 

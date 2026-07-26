@@ -1,4 +1,7 @@
 using System.IdentityModel.Tokens.Jwt;
+using System.Net;
+using System.Net.Sockets;
+using System.Security;
 using System.Threading.Channels;
 using System.Threading.RateLimiting;
 using FastEndpoints;
@@ -52,6 +55,7 @@ ApiKeyHasher.Pepper = builder.Configuration["Security:ApiKeyPepper"] ?? Insecure
 builder.Services.AddOpenApi();
 builder.Services.AddSingleton<ISseConnectionManager, SseConnectionManager>();
 builder.Services.AddSingleton<IAesEncryptionService, AesEncryptionService>();
+builder.Services.AddSingleton<IPropertySanitizer, PropertySanitizer>();
 builder.Services.AddSingleton<IToggleEventPublisher, RedisToggleEventPublisher>();
 
 builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
@@ -76,6 +80,7 @@ builder.Services.AddSingleton<IRuleOperator, SemVerLessThanOperator>();
 builder.Services.AddSingleton<IRuleOperator, SemVerLessThanOrEqualOperator>();
 builder.Services.AddSingleton<IRuleOperator, StartsWithOperator>();
 builder.Services.AddSingleton<IRuleEngine, RuleEngine>();
+builder.Services.AddSingleton<IIdentityHasher, IdentityHasher>();
 builder.Services.AddScoped<ISdkEvaluatorService, SdkEvaluatorService>();
 builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
 builder.Services.AddScoped<IEmailSender, DatabaseOutboxEmailSender>();
@@ -285,23 +290,19 @@ builder.Services.AddHttpClient("WebhookClient", client =>
         ConnectCallback = async (context, ct) =>
         {
             var host = context.DnsEndPoint.Host;
-            var addresses = await System.Net.Dns.GetHostAddressesAsync(host, ct);
+            var addresses = await Dns.GetHostAddressesAsync(host, ct);
 
             foreach (var ip in addresses)
-            {
                 if (SsrfValidator.IsPrivateOrLocal(ip))
-                {
-                    throw new System.Security.SecurityException($"DNS Rebinding Protection: IP {ip} is private or local.");
-                }
-            }
+                    throw new SecurityException($"DNS Rebinding Protection: IP {ip} is private or local.");
 
             var targetIp = addresses[0];
-            var socket = new System.Net.Sockets.Socket(targetIp.AddressFamily, System.Net.Sockets.SocketType.Stream, System.Net.Sockets.ProtocolType.Tcp);
+            var socket = new Socket(targetIp.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
             try
             {
                 socket.NoDelay = true;
-                await socket.ConnectAsync(new System.Net.IPEndPoint(targetIp, context.DnsEndPoint.Port), ct);
-                return new System.Net.Sockets.NetworkStream(socket, ownsSocket: true);
+                await socket.ConnectAsync(new IPEndPoint(targetIp, context.DnsEndPoint.Port), ct);
+                return new NetworkStream(socket, ownsSocket: true);
             }
             catch
             {
@@ -427,8 +428,8 @@ static void AuditSecurityConfiguration(WebApplication app)
     var pepper = config["Security:ApiKeyPepper"];
     var masterKey = config["Webhooks:MasterKey"];
     var jwtPrivateKey = config["Jwt:PrivateKeyPem"];
-    var adminEmail = config["DEFAULT_ADMIN_EMAIL"];
-    var adminPassword = config["DEFAULT_ADMIN_PASSWORD"];
+    var adminEmail = config["TM_DEFAULT_ADMIN_EMAIL"];
+    var adminPassword = config["TM_DEFAULT_ADMIN_PASSWORD"];
 
     if (app.Environment.IsProduction())
     {

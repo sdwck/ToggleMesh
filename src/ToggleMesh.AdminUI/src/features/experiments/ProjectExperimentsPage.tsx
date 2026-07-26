@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { useProjectExperiments, useProjectHistoricalExperiments } from '@/api/queries';
+import { useProjectExperiments, useProjectHistoricalExperiments, useProjectDetails, useClearPiiAlert, useSystemConfig } from '@/api/queries';
 import { Card } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Activity, Beaker, AlertTriangle, CheckCircle2, TrendingUp, TrendingDown, Star, ExternalLink, History } from 'lucide-react';
+import { ArrowLeft, Activity, Beaker, AlertTriangle, CheckCircle2, TrendingUp, TrendingDown, Star, ExternalLink, History, X } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ExperimentResults } from './components/ExperimentResults';
@@ -12,7 +12,8 @@ import type { ProjectExperimentSummaryDto } from '@/api/types';
 import { ProjectRole } from '@/api/types';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from "@/components/EmptyState.tsx";
-import { useProjectDetails } from '@/api/queries';
+import { AnalyticsDisabledBanner } from '@/components/AnalyticsDisabledBanner';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 export function ProjectExperimentsPage() {
     const { projectId } = useParams<{ projectId: string }>();
@@ -21,6 +22,7 @@ export function ProjectExperimentsPage() {
     const { data: experiments, isLoading } = useProjectExperiments(projectId!);
     const { data: historical, isLoading: isHistoricalLoading } = useProjectHistoricalExperiments(projectId!);
     const { data: project } = useProjectDetails(projectId!);
+    const clearPiiAlert = useClearPiiAlert();
 
     const [selectedExp, setSelectedExp] = useState<ProjectExperimentSummaryDto | null>(null);
     const [searchParams, setSearchParams] = useSearchParams();
@@ -38,14 +40,20 @@ export function ProjectExperimentsPage() {
 
     if (hasNoExperiments) {
         return (
-            <div className="flex flex-col items-center justify-center py-20 text-center">
-                <div className="h-16 w-16 bg-muted/30 rounded-full flex items-center justify-center mb-4">
-                    <Beaker className="h-8 w-8 text-muted-foreground" />
+            <div className="space-y-6">
+                <AnalyticsDisabledBanner
+                    title="Analytics & Conversion Tracking Disabled"
+                    description="Conversion metric collection is currently paused (TM_ENABLE_ANALYTICS=false). Feature flag rules and A/B variant assignments continue to work normally, but conversion probabilities and experiment insights are inactive."
+                />
+                <div className="flex flex-col items-center justify-center py-16 text-center">
+                    <div className="h-16 w-16 bg-muted/30 rounded-full flex items-center justify-center mb-4">
+                        <Beaker className="h-8 w-8 text-muted-foreground" />
+                    </div>
+                    <h3 className="text-xl font-semibold tracking-tight">No Experiments Yet</h3>
+                    <p className="text-muted-foreground mt-2 max-w-sm">
+                        Connect the SDK and track events to start seeing A/B test results across your feature flags.
+                    </p>
                 </div>
-                <h3 className="text-xl font-semibold tracking-tight">No Experiments Yet</h3>
-                <p className="text-muted-foreground mt-2 max-w-sm">
-                    Connect the SDK and track events to start seeing A/B test results across your feature flags.
-                </p>
             </div>
         );
     }
@@ -90,7 +98,10 @@ export function ProjectExperimentsPage() {
                         isMabEnabled={selectedExp.isMabEnabled}
                         rolloutPercentage={selectedExp.rolloutPercentage ?? undefined}
                         disableScroll={true}
-                        onStopSuccess={() => setSelectedExp(null)}
+                        onStopSuccess={() => {
+                            setSelectedExp(null);
+                            setActiveTab('historical');
+                        }}
                         isHistoricalView={!selectedExp.isExperimentActive && selectedExp.totalParticipants === 0 && selectedExp.expectedUplift === 0 && !selectedExp.isPrimaryGoal && selectedExp.rolloutPercentage === 100}
                         initialHistoricalSnapshot={(selectedExp as any)._historicalSnapshot}
                         canEditEnv={project?.environments?.find(e => e.id === selectedExp.environmentId)?.userRole === ProjectRole.Owner || project?.environments?.find(e => e.id === selectedExp.environmentId)?.userRole === ProjectRole.Admin || project?.environments?.find(e => e.id === selectedExp.environmentId)?.userRole === ProjectRole.Editor}
@@ -110,6 +121,40 @@ export function ProjectExperimentsPage() {
                     </p>
                 </div>
             </div>
+
+            {project?.environments.map(env => {
+                if (!env.lastPiiBlockedContext) return null;
+
+                try {
+                    const ctx = JSON.parse(env.lastPiiBlockedContext);
+                    return (
+                        <Alert key={env.id} variant="default" className="border-amber-500/30 bg-amber-500/10 text-amber-200 py-3 relative">
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className="absolute right-2 top-2 h-6 w-6 p-0 hover:bg-amber-500/20 text-amber-400"
+                                onClick={() => clearPiiAlert.mutate({ projectId: projectId!, envId: env.id })}
+                                disabled={clearPiiAlert.isPending}
+                            >
+                                <X className="h-4 w-4" />
+                            </Button>
+                            <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0" />
+                            <div>
+                                <AlertTitle className="font-semibold text-amber-300 text-xs">Analytics PII Protection Blocked an Event in {env.name}!</AlertTitle>
+                                <AlertDescription className="text-xs text-amber-200/80 mt-0.5 leading-relaxed">
+                                    At {new Date(ctx.timestamp).toLocaleString()}, a <strong>{ctx.type}</strong> event
+                                    {ctx.eventName ? ` ('${ctx.eventName}')` : (ctx.flagKey ? ` for flag '${ctx.flagKey}'` : '')} attempted
+                                    to send an email (<strong>{ctx.maskedIdentity}</strong>) in the Identity field.
+                                    <br /><br />
+                                    Please ensure your SDK passes hashed values or UUIDs instead to comply with GDPR policies.
+                                </AlertDescription>
+                            </div>
+                        </Alert>
+                    );
+                } catch {
+                    return null;
+                }
+            })}
 
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
                 <TabsList className="bg-zinc-950 border border-border/40 p-1 mb-4">

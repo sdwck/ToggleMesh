@@ -9,5 +9,6 @@ public class ProjectEnvironment : AuditableEntity, ISoftDeletable
     public Project Project { get; set; } = null!;
     public int SortOrder { get; set; }
     public bool IsDeleted { get; set; }
+    public string? LastPiiBlockedContext { get; set; }
     public ICollection<EnvironmentKey> Keys { get; set; } = [];
 }

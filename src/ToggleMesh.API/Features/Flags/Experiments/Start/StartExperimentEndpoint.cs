@@ -49,6 +49,10 @@ public class StartExperimentEndpoint : ToggleEndpoint<StartExperimentRequest, Ge
             return;
         }
 
+        var analyticsEnabled = Config.GetValue<bool>("Analytics:Enabled", true);
+        if (!analyticsEnabled)
+            ThrowError("Cannot start experiment: Analytics engine is disabled on this server instance (TM_ENABLE_ANALYTICS=false).");
+
         if (state.IsExperimentActive)
             ThrowError("Experiment is already active.");
 
