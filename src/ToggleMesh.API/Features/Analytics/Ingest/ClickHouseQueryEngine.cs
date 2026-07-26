@@ -3,6 +3,7 @@ using System.Text.Json;
 using ClickHouse.Client.ADO;
 using Microsoft.EntityFrameworkCore;
 using ToggleMesh.API.Features.Analytics.Domain;
+using ToggleMesh.API.Features.Flags.Domain;
 using ToggleMesh.API.Infrastructure.Data;
 
 namespace ToggleMesh.API.Features.Analytics.Ingest;
@@ -28,7 +29,7 @@ public class ClickHouseQueryEngine : IAnalyticsQueryEngine
         var activeRollouts = await _db.FlagEnvironmentStates
             .Include(f => f.FeatureFlag)
             .Where(f => f.IsExperimentActive)
-            .Select(f => new { f.EnvironmentId, f.FeatureFlag.Key, f.ExperimentStartedAt })
+            .Select(f => new { f.EnvironmentId, f.FeatureFlag.Key, f.ExperimentStartedAt, f.MabGoalEvent, f.SecondaryMetrics })
             .ToListAsync(ct);
 
         if (activeRollouts.Count == 0) 
@@ -38,6 +39,18 @@ public class ClickHouseQueryEngine : IAnalyticsQueryEngine
             $"(toString(EnvironmentId) = '{r.EnvironmentId}' AND FlagKey = '{r.Key.Replace("'", "''")}' AND Timestamp >= '{r.ExperimentStartedAt?.ToString("yyyy-MM-dd HH:mm:ss") ?? "1970-01-01 00:00:00"}')"
         );
         var whereClause = string.Join(" OR ", conditions);
+
+        var eventConditions = activeRollouts.Select(r =>
+        {
+            var events = (new[] { r.MabGoalEvent }.Concat(r.SecondaryMetrics ?? []))
+                .Where(e => !string.IsNullOrWhiteSpace(e))
+                .Select(e => $"'{e!.Replace("'", "''")}'")
+                .ToList();
+            if (events.Count == 0)
+                return "1=0";
+            return $"(toString(t.EnvironmentId) = '{r.EnvironmentId}' AND t.EventName IN ({string.Join(", ", events)}))";
+        });
+        var eventWhereClause = string.Join(" OR ", eventConditions);
 
         var query = $@"
             WITH exposed_users AS (
@@ -64,7 +77,7 @@ public class ClickHouseQueryEngine : IAnalyticsQueryEngine
             JOIN AnalyticsTracks t 
               ON e.EnvironmentId = t.EnvironmentId 
              AND e.Identity = t.Identity
-            WHERE t.Timestamp >= e.FirstExposureTimestamp
+            WHERE t.Timestamp >= e.FirstExposureTimestamp AND ({eventWhereClause})
             GROUP BY e.EnvironmentId, e.FlagKey, t.EventName, e.VariationId
         ),
         exposures_count AS (
@@ -125,6 +138,8 @@ public class ClickHouseQueryEngine : IAnalyticsQueryEngine
                 VariationId = reader.GetGuid(3),
                 TotalExposures = Convert.ToInt64(reader.GetValue(4)),
                 TotalConversions = Convert.ToInt64(reader.GetValue(5)),
+                TotalValue = reader.IsDBNull(6) ? 0.0 : Convert.ToDouble(reader.GetValue(6)),
+                SumOfSquaredValues = reader.IsDBNull(7) ? 0.0 : Convert.ToDouble(reader.GetValue(7)),
                 LastCalculatedAt = DateTimeOffset.UtcNow
             });
         }
@@ -148,6 +163,8 @@ public class ClickHouseQueryEngine : IAnalyticsQueryEngine
                 {
                     existing.TotalExposures = m.TotalExposures;
                     existing.TotalConversions = m.TotalConversions;
+                    existing.TotalValue = m.TotalValue;
+                    existing.SumOfSquaredValues = m.SumOfSquaredValues;
                     existing.LastCalculatedAt = m.LastCalculatedAt;
                 }
                 else
@@ -174,9 +191,10 @@ public class ClickHouseQueryEngine : IAnalyticsQueryEngine
             .AsSplitQuery()
             .ToListAsync(ct);
 
-        if (activeRollouts.Count == 0) return;
+        if (activeRollouts.Count == 0)
+            return;
 
-        var allMetricsData = new List<(ToggleMesh.API.Features.Flags.Domain.FlagEnvironmentState State, List<(Guid VariationId, long Exposures, long Conversions, double Value, double SumSquared, string Slice)> Results)>();
+        var allMetricsData = new List<(FlagEnvironmentState State, List<(Guid VariationId, long Exposures, long Conversions, double Value, double SumSquared, string Slice)> Results)>();
         await using var connection = new ClickHouseConnection(_connectionString);
         await connection.OpenAsync(ct);
 
@@ -297,7 +315,8 @@ public class ClickHouseQueryEngine : IAnalyticsQueryEngine
         
         foreach (var data in allMetricsData)
         {
-            if (data.Results.Count == 0) continue;
+            if (data.Results.Count == 0)
+                continue;
 
             var state = data.State;
             var existingMetrics = await _db.ContextualExperimentMetrics

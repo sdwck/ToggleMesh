@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useProjectDashboard, useSystemConfig } from '@/api/queries';
+import { useProjectDashboard } from '@/api/queries';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Activity, AlertTriangle, Network, Flag, TrendingUp, ArrowRight, Sparkles, BarChart2 } from 'lucide-react';
 import { format } from 'date-fns';
@@ -8,7 +8,6 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 const CHART_MARGIN = { top: 5, right: 10, left: 10, bottom: 0 };
 
 export function ProjectDashboardPage() {
@@ -19,7 +18,6 @@ export function ProjectDashboardPage() {
     });
 
     const { data: dashboard, isLoading } = useProjectDashboard(projectId!, selectedEnv === 'all' ? undefined : selectedEnv);
-    const { data: sysConfig } = useSystemConfig();
 
     const mountTime = useRef(Date.now());
     const [chartData, setChartData] = useState(() => {

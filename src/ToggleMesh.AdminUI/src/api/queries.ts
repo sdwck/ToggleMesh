@@ -982,7 +982,7 @@ export const useUniqueEvents = (projectId: string, environmentId: string) => {
 export const useStartExperiment = (projectId: string, envId: string, flagKey: string) => {
     const queryClient = useQueryClient();
     return useMutation({
-        mutationFn: async (req: { mode: string; goalEvent: string; optimizationType: number; contextPartitionKeys: string[], initialRolloutPercentage?: number, mabExplorationFloor?: number, balanceWeights?: boolean }) => {
+        mutationFn: async (req: { mode: string; goalEvent: string; secondaryMetrics?: string[]; optimizationType: number; contextPartitionKeys: string[], initialRolloutPercentage?: number, mabExplorationFloor?: number, balanceWeights?: boolean }) => {
             const { data } = await api.post(`/projects/${projectId}/environments/${envId}/flags/${flagKey}/experiments/start`, req);
             return data;
         },

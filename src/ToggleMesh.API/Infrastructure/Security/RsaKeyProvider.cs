@@ -47,6 +47,7 @@ public static class RsaKeyProvider
 
             try
             {
+                pemKey = pemKey.Replace("\\r", "\r").Replace("\\n", "\n");
                 var rsa = RSA.Create();
                 rsa.ImportFromPem(pemKey);
 

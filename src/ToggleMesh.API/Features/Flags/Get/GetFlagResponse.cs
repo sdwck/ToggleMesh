@@ -24,5 +24,6 @@ public record GetFlagResponse(
     Dictionary<string, Guid>? IndividualTargets = null,
     FlagType Type = FlagType.Boolean,
     bool IsSrmAlertSent = false,
-    double? SrmPValue = null);
+    double? SrmPValue = null,
+    string[]? SecondaryMetrics = null);
 

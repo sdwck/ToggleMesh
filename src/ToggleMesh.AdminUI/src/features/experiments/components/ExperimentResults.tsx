@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useExperimentDetails, useStartExperiment, useStopExperiment, useExperimentIterations, useDeleteExperimentIteration, useContextualExperimentDetails, useDeleteContextualRollout, useSetContextualRollout, useFeatureFlag, useSystemConfig } from '@/api/queries';
+import { useExperimentDetails, useStartExperiment, useStopExperiment, useExperimentIterations, useDeleteExperimentIteration, useContextualExperimentDetails, useDeleteContextualRollout, useSetContextualRollout, useFeatureFlag } from '@/api/queries';
 import type { ExperimentIterationDto } from '@/api/types';
 import { InsightsWidget } from './InsightsWidget';
 import { StartExperimentModal } from './StartExperimentModal';
@@ -8,7 +8,7 @@ import { MetricCard } from './MetricCard';
 import { TimeSeriesChart, SnapshotTimeSeriesChart } from './TimeSeriesChart';
 import { ContextualRolloutManager } from './ContextualRolloutManager';
 import { ExperimentHistoryTable } from './ExperimentHistoryTable';
-import { Zap, Beaker, ChevronDown, ChevronUp, Square, History, Loader2, Download, Undo2, AlertTriangle, Activity } from 'lucide-react';
+import { Zap, Beaker, ChevronDown, ChevronUp, Square, History, Loader2, Download, Undo2, AlertTriangle } from 'lucide-react';
 import { ToggleMeshIcon } from '@/components/icons/ToggleMeshIcon';
 import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
@@ -52,7 +52,6 @@ export function ExperimentResults({ projectId, envId, flagKey, mabGoalEvent, hig
     const { data: contextualResults } = useContextualExperimentDetails(projectId, envId, flagKey);
     const { data: iterations, isLoading: isLoadingIterations } = useExperimentIterations(projectId, envId, flagKey);
     const { data: flagState } = useFeatureFlag(projectId, envId, flagKey);
-    const { data: sysConfig } = useSystemConfig();
 
     const variationsConfig = flagState?.variations || [];
     const isBoolean = flagState?.type === 0;

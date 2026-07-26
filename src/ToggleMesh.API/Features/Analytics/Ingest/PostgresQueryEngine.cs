@@ -20,7 +20,11 @@ public class PostgresQueryEngine : IAnalyticsQueryEngine
     {
         var sql = @"
             WITH active_rollouts AS (
-                SELECT fes.""EnvironmentId"", ff.""Key"" as ""FlagKey"", fes.""ExperimentStartedAt""
+                SELECT 
+                    fes.""EnvironmentId"", 
+                    ff.""Key"" as ""FlagKey"", 
+                    fes.""ExperimentStartedAt"",
+                    ARRAY_REMOVE(ARRAY_REMOVE(ARRAY[fes.""MabGoalEvent""] || fes.""SecondaryMetrics"", NULL), '') as ""AllowedEvents""
                 FROM ""FlagEnvironmentStates"" fes
                 JOIN ""ProjectFeatureFlags"" ff ON ff.""Id"" = fes.""FeatureFlagId""
                 WHERE fes.""IsExperimentActive"" = true
@@ -49,13 +53,14 @@ public class PostgresQueryEngine : IAnalyticsQueryEngine
                     SUM(COALESCE(t.""Value"", 0)) as ""TotalValue"",
                     SUM(COALESCE(t.""Value"", 0) * COALESCE(t.""Value"", 0)) as ""SumOfSquaredValues""
                 FROM exposed_users e
+                JOIN active_rollouts ar
+                  ON e.""EnvironmentId"" = ar.""EnvironmentId""
+                 AND e.""FlagKey"" = ar.""FlagKey""
                 JOIN ""AnalyticsTracks"" t 
                   ON e.""EnvironmentId"" = t.""EnvironmentId"" 
                  AND e.""Identity"" = t.""Identity""
                  AND t.""Timestamp"" >= e.""FirstExposureTimestamp""
-                JOIN active_rollouts ar
-                  ON e.""EnvironmentId"" = ar.""EnvironmentId""
-                 AND e.""FlagKey"" = ar.""FlagKey""
+                 AND t.""EventName"" = ANY(ar.""AllowedEvents"")
                 WHERE t.""Timestamp"" >= COALESCE(ar.""ExperimentStartedAt"", '1970-01-01'::timestamp)
                 GROUP BY e.""EnvironmentId"", e.""FlagKey"", t.""EventName"", e.""VariationId""
             ),
@@ -128,7 +133,8 @@ public class PostgresQueryEngine : IAnalyticsQueryEngine
 
         var connection = _db.Database.GetDbConnection();
         var wasClosed = connection.State == ConnectionState.Closed;
-        if (wasClosed) await connection.OpenAsync(ct);
+        if (wasClosed)
+            await connection.OpenAsync(ct);
 
         try
         {
@@ -257,7 +263,8 @@ public class PostgresQueryEngine : IAnalyticsQueryEngine
         }
         finally
         {
-            if (wasClosed) await connection.CloseAsync();
+            if (wasClosed)
+                await connection.CloseAsync();
         }
     }
 
@@ -287,9 +294,7 @@ public class PostgresQueryEngine : IAnalyticsQueryEngine
         var connection = _db.Database.GetDbConnection();
         var wasClosed = connection.State == ConnectionState.Closed;
         if (wasClosed)
-        {
             await connection.OpenAsync(ct);
-        }
 
         try
         {
@@ -359,9 +364,7 @@ public class PostgresQueryEngine : IAnalyticsQueryEngine
         finally
         {
             if (wasClosed)
-            {
                 await connection.CloseAsync();
-            }
         }
 
         return results;

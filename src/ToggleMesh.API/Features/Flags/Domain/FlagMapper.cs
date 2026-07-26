@@ -1,5 +1,7 @@
 using ToggleMesh.API.Features.Flags.Get;
 using ToggleMesh.Common;
+using SdkRuleDto = ToggleMesh.Common.Rules.RuleDto;
+using SdkVariationWeight = ToggleMesh.Common.VariationWeight;
 
 namespace ToggleMesh.API.Features.Flags.Domain;
 
@@ -28,7 +30,8 @@ public static class FlagMapper
             state.IndividualTargets.ToDictionary(x => x.IdentityKey, x => x.VariationId),
             state.FeatureFlag.Type,
             state.IsSrmAlertSent,
-            state.SrmPValue
+            state.SrmPValue,
+            state.SecondaryMetrics
         );
 
     }
@@ -38,12 +41,12 @@ public static class FlagMapper
         return new FeatureFlagDto(
             state.FeatureFlag.Key,
             state.IsEnabled,
-            state.Rules.Select(r => new Common.Rules.RuleDto(r.Priority, r.GroupId, r.Attribute, r.Operator, r.Value, r.Rollout.Select(w => new ToggleMesh.Common.VariationWeight(w.VariationId, w.Weight)).ToArray())),
+            state.Rules.Select(r => new SdkRuleDto(r.Priority, r.GroupId, r.Attribute, r.Operator, r.Value, r.Rollout.Select(w => new SdkVariationWeight(w.VariationId, w.Weight)).ToArray())),
             state.OffVariationId,
-            state.FallthroughRollout.Select(w => new Common.VariationWeight(w.VariationId, w.Weight)),
+            state.FallthroughRollout.Select(w => new SdkVariationWeight(w.VariationId, w.Weight)),
             state.FeatureFlag.Variations.ToDictionary(v => v.Id, v => v.Value),
             state.IsExperimentActive,
-            state.ContextualRollouts.ToDictionary(x => x.ContextSlice, x => (IEnumerable<Common.VariationWeight>)x.Rollout.Select(w => new Common.VariationWeight(w.VariationId, w.Weight)).ToList()),
+            state.ContextualRollouts.ToDictionary(x => x.ContextSlice, x => (IEnumerable<SdkVariationWeight>)x.Rollout.Select(w => new SdkVariationWeight(w.VariationId, w.Weight)).ToList()),
             state.ContextPartitionKeys,
             state.IndividualTargets.ToDictionary(x => x.IdentityKey, x => x.VariationId)
         );

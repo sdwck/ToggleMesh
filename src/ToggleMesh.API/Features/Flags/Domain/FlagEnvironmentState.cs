@@ -18,6 +18,7 @@ public class FlagEnvironmentState : AuditableEntity
     
     public bool IsMabEnabled { get; set; }
     public string? MabGoalEvent { get; set; }
+    public string[] SecondaryMetrics { get; set; } = [];
     public MabOptimizationType MabOptimizationType { get; set; } = MabOptimizationType.Conversion;
     public int MabExplorationFloor { get; set; } = 5;
     public string[] ContextPartitionKeys { get; set; } = [];

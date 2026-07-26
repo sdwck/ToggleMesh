@@ -29,11 +29,10 @@ export function ContextualRolloutManager({
 }: ContextualRolloutManagerProps) {
     const [showLowTraffic, setShowLowTraffic] = useState(false);
 
-    if (!displayContextual || displayContextual.length === 0 || (displayContextual.length === 1 && displayContextual[0].contextSlice === '{}')) {
-        return null;
-    }
-
     const { highTrafficSlices, lowTrafficSlices, aggregatedIter, otherExposures } = useMemo(() => {
+        if (!displayContextual || displayContextual.length === 0 || (displayContextual.length === 1 && displayContextual[0].contextSlice === '{}')) {
+            return { highTrafficSlices: [], lowTrafficSlices: [], aggregatedIter: null, otherExposures: 0 };
+        }
         const high = [];
         const low = [];
         let totalLowExposures = 0;
@@ -125,6 +124,10 @@ export function ContextualRolloutManager({
 
         return { highTrafficSlices: high, lowTrafficSlices: low, aggregatedIter, otherExposures: totalLowExposures };
     }, [displayContextual]);
+
+    if (!displayContextual || displayContextual.length === 0 || (displayContextual.length === 1 && displayContextual[0].contextSlice === '{}')) {
+        return null;
+    }
 
     const renderRow = (iter: any, i: number, isFaded: boolean = false, isAggregated: boolean = false) => {
         const variations = iter.variations || iter.Variations || [];

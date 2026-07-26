@@ -37,6 +37,25 @@ public class MabSimulationWorker : BackgroundService
                         userId, 
                         new { sdk = "csharp" }, 
                         10.0);
+                
+                if (Random.Shared.NextDouble() < 0.2 + prob)
+                    _client.Track(
+                        "credit", 
+                        userId, 
+                        new { sdk = "csharp" },
+                        50.0);
+                
+                if (Random.Shared.NextDouble() < prob * 2)
+                    _client.Track(
+                        "application", 
+                        userId, 
+                        new
+                        {
+                            sdk = "csharp", 
+                            type = Random.Shared.Next(1) == 0 
+                                ? "regular" 
+                                : "unique"
+                        });
             }
             await Task.Delay(1000, stoppingToken);
         }

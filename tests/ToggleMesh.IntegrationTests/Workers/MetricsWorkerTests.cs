@@ -65,22 +65,29 @@ public class MetricsWorkerTests : IAsyncLifetime
         await _channel.Writer.WriteAsync(metricEvent2);
 
         // Act
-        var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
         var task = _worker.StartAsync(cts.Token);
-        _factory.TimeProvider.Advance(TimeSpan.FromSeconds(10));
-        try
+
+        List<FlagMetricBucket> buckets = [];
+        for (var attempt = 0; attempt < 20; attempt++)
         {
-            await task;
+            await Task.Delay(25);
+            _factory.TimeProvider.Advance(TimeSpan.FromSeconds(10));
+            await Task.Delay(25);
+            buckets = await _db.FlagMetricBuckets.ToListAsync();
+            if (buckets.Count > 0) 
+                break;
         }
+
+        await cts.CancelAsync();
+        try { await task; }
         catch (OperationCanceledException) { }
 
         // Assert
-        var buckets = await _db.FlagMetricBuckets.ToListAsync(cancellationToken: cts.Token);
         buckets.Should().NotBeEmpty();
 
         var targetBucket = buckets.FirstOrDefault(b => b.FlagKey == flagKey);
         targetBucket.Should().NotBeNull();
-        targetBucket.Count.Should().BeGreaterThanOrEqualTo(1);
-        targetBucket.Count.Should().BeGreaterThanOrEqualTo(1);
+        targetBucket!.Count.Should().BeGreaterThanOrEqualTo(1);
     }
 }

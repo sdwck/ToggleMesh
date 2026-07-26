@@ -59,6 +59,9 @@ public class StartExperimentEndpoint : ToggleEndpoint<StartExperimentRequest, Ge
         if (req.MabExplorationFloor is < 0 or > 10)
             ThrowError("Exploration floor must be between 0 and 10.");
 
+        if (req.SecondaryMetrics is { Length: > 10 })
+            ThrowError("Cannot specify more than 10 secondary metrics.");
+
         await _db.ExperimentMetrics
             .Where(x => x.EnvironmentId == environmentId && x.FlagKey == flagKey)
             .ExecuteDeleteAsync(ct);
@@ -79,6 +82,9 @@ public class StartExperimentEndpoint : ToggleEndpoint<StartExperimentRequest, Ge
 
         state.IsMabEnabled = req.Mode == "mab";
         state.MabGoalEvent = req.GoalEvent;
+        state.SecondaryMetrics = req.SecondaryMetrics != null
+            ? req.SecondaryMetrics.Where(m => !string.IsNullOrWhiteSpace(m) && m != req.GoalEvent).Distinct().ToArray()
+            : [];
         state.MabOptimizationType = req.OptimizationType;
         state.MabExplorationFloor = req.MabExplorationFloor;
         if (req.ContextPartitionKeys is { Length: > 0 })

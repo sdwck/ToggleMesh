@@ -31,6 +31,7 @@ import { AnalyticsDisabledBanner } from '@/components/AnalyticsDisabledBanner';
 const formSchema = z.object({
     mode: z.enum(['classic', 'mab']),
     goalEvent: z.string().min(1, 'Goal event is required'),
+    secondaryMetrics: z.array(z.string()).max(10, 'Maximum 10 secondary metrics').optional(),
     optimizationType: z.union([z.literal(0), z.literal(1)]),
     contextPartitionKeys: z.array(z.string()),
     mabExplorationFloor: z.number().min(0).max(10).optional(),
@@ -61,6 +62,7 @@ export function StartExperimentModal({ projectId, envId, flagKey, currentRollout
         defaultValues: {
             mode: 'classic',
             goalEvent: '',
+            secondaryMetrics: [],
             optimizationType: 0,
             contextPartitionKeys: [],
             mabExplorationFloor: 5,
@@ -193,6 +195,77 @@ export function StartExperimentModal({ projectId, envId, flagKey, currentRollout
                                                 )}
                                             </div>
                                         </FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+
+                            <FormField
+                                control={form.control}
+                                name="secondaryMetrics"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel className="text-xs text-muted-foreground flex justify-between">
+                                            <span>Secondary Metrics (Optional)</span>
+                                            <span className="text-[10px] text-zinc-500">{field.value?.length || 0}/10</span>
+                                        </FormLabel>
+                                         <div className="flex gap-2">
+                                            <FormControl>
+                                                <Input
+                                                    placeholder={(field.value?.length || 0) >= 10 ? "Maximum 10 metrics reached" : "Enter event name (e.g. add_to_cart)"}
+                                                    id="secondary-metric-input"
+                                                    list="unique-events-list"
+                                                    disabled={(field.value?.length || 0) >= 10}
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === 'Enter') {
+                                                            e.preventDefault();
+                                                            const inputEl = e.currentTarget;
+                                                            const val = inputEl.value.trim();
+                                                            const current = field.value || [];
+                                                            if (val && val !== goalEvent && !current.includes(val) && current.length < 10) {
+                                                                field.onChange([...current, val]);
+                                                                inputEl.value = '';
+                                                                if (current.length + 1 < 10) {
+                                                                    setTimeout(() => inputEl.focus(), 0);
+                                                                }
+                                                            }
+                                                        }
+                                                    }}
+                                                />
+                                            </FormControl>
+                                            <Button
+                                                type="button"
+                                                variant="secondary"
+                                                disabled={(field.value?.length || 0) >= 10}
+                                                onClick={() => {
+                                                    const el = document.getElementById('secondary-metric-input') as HTMLInputElement;
+                                                    if (!el) return;
+                                                    const val = el.value.trim();
+                                                    const current = field.value || [];
+                                                    if (val && val !== goalEvent && !current.includes(val) && current.length < 10) {
+                                                        field.onChange([...current, val]);
+                                                        el.value = '';
+                                                        if (current.length + 1 < 10) {
+                                                            setTimeout(() => el.focus(), 0);
+                                                        }
+                                                    }
+                                                }}
+                                            >Add</Button>
+                                        </div>
+                                        <div className="flex flex-wrap gap-2 mt-2">
+                                            {field.value?.map(metric => (
+                                                <span key={metric} className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-muted text-xs">
+                                                    {metric}
+                                                    <button
+                                                        type="button"
+                                                        className="hover:text-foreground"
+                                                        onClick={() => {
+                                                            field.onChange((field.value || []).filter((m: string) => m !== metric));
+                                                        }}
+                                                    >&times;</button>
+                                                </span>
+                                            ))}
+                                        </div>
                                         <FormMessage />
                                     </FormItem>
                                 )}

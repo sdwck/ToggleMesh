@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { useUpdateProject, useDeleteProject, useProjectMembers, usePurgeIdentity } from '@/api/queries';
+import { useUpdateProject, useDeleteProject, useProjectMembers } from '@/api/queries';
 import type { ProjectDetails } from '@/api/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,7 +9,7 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Copy, AlertTriangle, Shield, Layers, Users, Flag, BookOpen, Globe, UserX } from 'lucide-react';
+import { Copy, AlertTriangle, Shield, Layers, Users, Flag, BookOpen, Globe } from 'lucide-react';
 import { toast } from 'sonner';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';

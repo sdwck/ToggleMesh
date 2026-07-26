@@ -6,6 +6,7 @@ public class StartExperimentRequest
 {
     public string Mode { get; set; } = "classic";
     public string GoalEvent { get; set; } = string.Empty;
+    public string[] SecondaryMetrics { get; set; } = [];
     public MabOptimizationType OptimizationType { get; set; } = MabOptimizationType.Conversion;
     public string[] ContextPartitionKeys { get; set; } = [];
     public int MabExplorationFloor { get; set; } = 5;

@@ -60,15 +60,22 @@ public class MetricsWorker : BackgroundService
                 continue;
             }
 
-            var readTask = _channel.Reader.WaitToReadAsync(stoppingToken).AsTask();
-            var delayTask = Task.Delay(timeToWait, _timeProvider, stoppingToken);
-            var completedTask = await Task.WhenAny(readTask, delayTask);
+            try
+            {
+                var readTask = _channel.Reader.WaitToReadAsync(stoppingToken).AsTask();
+                var delayTask = Task.Delay(timeToWait, _timeProvider, stoppingToken);
+                var completedTask = await Task.WhenAny(readTask, delayTask);
 
-            if (completedTask == delayTask)
-                continue;
+                if (completedTask == delayTask)
+                    continue;
 
-            if (!await readTask)
-                continue;
+                if (!await readTask)
+                    continue;
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
 
             while (batch.Count < 100 && _channel.Reader.TryRead(out var item))
             {

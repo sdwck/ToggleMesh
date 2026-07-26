@@ -62,13 +62,19 @@ public class PartitioningWorker : BackgroundService
                             await chConn.OpenAsync(stoppingToken);
 
                             var cutoffStr = analyticsThreshold.UtcDateTime.ToString("yyyy-MM-dd HH:mm:ss");
-                            await using var cmd1 = chConn.CreateCommand();
-                            cmd1.CommandText = $"ALTER TABLE AnalyticsExposures DELETE WHERE Timestamp < '{cutoffStr}'";
-                            await cmd1.ExecuteNonQueryAsync(stoppingToken);
+                            await using (var cmd1 = chConn.CreateCommand())
+                            {
+                                cmd1.CommandText = "ALTER TABLE AnalyticsExposures DELETE WHERE Timestamp < {cutoff:String}";
+                                var pCutoff = cmd1.CreateParameter(); pCutoff.ParameterName = "cutoff"; pCutoff.Value = cutoffStr; cmd1.Parameters.Add(pCutoff);
+                                await cmd1.ExecuteNonQueryAsync(stoppingToken);
+                            }
 
-                            await using var cmd2 = chConn.CreateCommand();
-                            cmd2.CommandText = $"ALTER TABLE AnalyticsTracks DELETE WHERE Timestamp < '{cutoffStr}'";
-                            await cmd2.ExecuteNonQueryAsync(stoppingToken);
+                            await using (var cmd2 = chConn.CreateCommand())
+                            {
+                                cmd2.CommandText = "ALTER TABLE AnalyticsTracks DELETE WHERE Timestamp < {cutoff:String}";
+                                var pCutoff = cmd2.CreateParameter(); pCutoff.ParameterName = "cutoff"; pCutoff.Value = cutoffStr; cmd2.Parameters.Add(pCutoff);
+                                await cmd2.ExecuteNonQueryAsync(stoppingToken);
+                            }
 
                             _logger.LogInformation("Cleaned up ClickHouse analytics records older than {Days} days", analyticsRetentionDays);
                         }

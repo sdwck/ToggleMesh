@@ -1,6 +1,7 @@
 using ClickHouse.Client.ADO;
 using FastEndpoints;
 using Microsoft.EntityFrameworkCore;
+using System.Text;
 using ToggleMesh.API.Extensions;
 using ToggleMesh.API.Features.Analytics.Services;
 using ToggleMesh.API.Infrastructure.Data;
@@ -67,20 +68,32 @@ public class PurgeIdentityEndpoint : ToggleEndpoint<PurgeIdentityRequest, PurgeI
                 await using var chConn = new ClickHouseConnection(chConnectionString);
                 await chConn.OpenAsync(ct);
 
+                void AddParam(ClickHouseCommand cmd, string name, string value)
+                {
+                    var p = cmd.CreateParameter();
+                    p.ParameterName = name;
+                    p.Value = value;
+                    cmd.Parameters.Add(p);
+                }
+
                 var envsList = string.Join("','", projectEnvs);
-                var projectEnvClause = $"EnvironmentId IN ('{envsList}')";
-                var specificEnvClause = req.EnvironmentId.HasValue ? $" AND EnvironmentId = '{req.EnvironmentId.Value}'" : "";
-                
-                var chExposureSql = $"ALTER TABLE AnalyticsExposures DELETE WHERE (Identity = '{hashedIdentity}' OR Identity = '{req.Identity.Replace("'", "''")}') AND {projectEnvClause}{specificEnvClause}";
-                var chTrackSql = $"ALTER TABLE AnalyticsTracks DELETE WHERE (Identity = '{hashedIdentity}' OR Identity = '{req.Identity.Replace("'", "''")}') AND {projectEnvClause}{specificEnvClause}";
+                var baseWhere = "WHERE (Identity = {hashedIdentity:String} OR Identity = {rawIdentity:String}) AND EnvironmentId IN ('" + envsList + "')";
+                if (req.EnvironmentId.HasValue)
+                    baseWhere += " AND EnvironmentId = {specificEnvId:String}";
 
-                await using var cmd1 = chConn.CreateCommand();
-                cmd1.CommandText = chExposureSql;
-                await cmd1.ExecuteNonQueryAsync(ct);
+                async Task PurgeTableAsync(string tableName)
+                {
+                    await using var cmd = chConn.CreateCommand();
+                    cmd.CommandText = "ALTER TABLE " + tableName + " DELETE " + baseWhere;
+                    AddParam(cmd, "hashedIdentity", hashedIdentity);
+                    AddParam(cmd, "rawIdentity", req.Identity);
+                    if (req.EnvironmentId.HasValue)
+                        AddParam(cmd, "specificEnvId", req.EnvironmentId.Value.ToString());
+                    await cmd.ExecuteNonQueryAsync(ct);
+                }
 
-                await using var cmd2 = chConn.CreateCommand();
-                cmd2.CommandText = chTrackSql;
-                await cmd2.ExecuteNonQueryAsync(ct);
+                await PurgeTableAsync("AnalyticsExposures");
+                await PurgeTableAsync("AnalyticsTracks");
             }
             catch (Exception ex)
             {

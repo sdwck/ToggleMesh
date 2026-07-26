@@ -109,7 +109,7 @@ public class ClickHouseSinkAndQueryTests : IAsyncLifetime
         var project = new Project { Name = "Test", Organization = org };
         var environment = new ProjectEnvironment { Id = environmentId, Name = "Test Env", Project = project };
         var flag = new FeatureFlag { Key = "flag-1", Project = project };
-        var state = new FlagEnvironmentState { Environment = environment, FeatureFlag = flag, FallthroughRollout = new List<VariationWeight> { new() { VariationId = Guid.Empty, Weight = 5000 } }, IsEnabled = true, IsExperimentActive = true, ExperimentStartedAt = DateTimeOffset.UtcNow.AddHours(-1) };
+        var state = new FlagEnvironmentState { Environment = environment, FeatureFlag = flag, FallthroughRollout = new List<VariationWeight> { new() { VariationId = Guid.Empty, Weight = 5000 } }, IsEnabled = true, IsExperimentActive = true, MabGoalEvent = "checkout", ExperimentStartedAt = DateTimeOffset.UtcNow.AddHours(-1) };
 
         db.Organizations.Add(org);
         db.Projects.Add(project);

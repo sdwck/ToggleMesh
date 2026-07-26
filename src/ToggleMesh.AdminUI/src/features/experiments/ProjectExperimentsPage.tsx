@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { useProjectExperiments, useProjectHistoricalExperiments, useProjectDetails, useClearPiiAlert, useSystemConfig } from '@/api/queries';
+import { useProjectExperiments, useProjectHistoricalExperiments, useProjectDetails, useClearPiiAlert } from '@/api/queries';
 import { Card } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
