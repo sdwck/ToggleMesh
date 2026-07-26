@@ -8,9 +8,6 @@ public class UpdateGlobalFlagSettingsValidator : Validator<UpdateGlobalFlagSetti
     public UpdateGlobalFlagSettingsValidator()
     {
         RuleFor(x => x.Variations)
-            .NotEmpty().WithMessage("At least one variation is required.");
-
-        RuleFor(x => x.Variations)
             .Must(v => v == null || v.Select(x => x.Value).All(val => !string.IsNullOrWhiteSpace(val)))
             .WithMessage("Variation values cannot be empty.");
             

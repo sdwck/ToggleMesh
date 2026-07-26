@@ -7,11 +7,13 @@ using System.Threading.RateLimiting;
 using FastEndpoints;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
 using StackExchange.Redis;
@@ -167,6 +169,16 @@ if (!string.IsNullOrEmpty(oidcSettings["ClientId"]))
             options.Scope.Add("profile");
             options.Scope.Add("email");
             options.CallbackPath = "/api/v1/auth/sso/callback";
+            options.Events = new OpenIdConnectEvents
+            {
+                OnRedirectToIdentityProvider = context =>
+                {
+                    var appUrl = builder.Configuration["Auth:AppUrl"];
+                    if (!string.IsNullOrEmpty(appUrl) && appUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+                        context.ProtocolMessage.RedirectUri = context.ProtocolMessage.RedirectUri.Replace("http://", "https://");
+                    return Task.CompletedTask;
+                }
+            };
         });
 }
 
@@ -368,6 +380,14 @@ builder.Services.AddScoped<ExperimentSnapshotBuilder>();
 builder.Services.AddScoped<IMabTrafficShifterService, MabTrafficShifterService>();
 
 var app = builder.Build();
+
+var forwardedHeadersOptions = new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
+};
+forwardedHeadersOptions.KnownIPNetworks.Clear();
+forwardedHeadersOptions.KnownProxies.Clear();
+app.UseForwardedHeaders(forwardedHeadersOptions);
 
 AuditSecurityConfiguration(app);
 

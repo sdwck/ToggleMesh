@@ -47,82 +47,88 @@ public class UpdateGlobalFlagSettingsEndpoint : ToggleEndpoint<UpdateGlobalFlagS
         flag.Description = req.Description;
         flag.Tags = req.Tags;
 
-        var existingVariations = flag.Variations.ToList();
-        var deletedVariationIds = existingVariations
-            .Select(v => v.Id)
-            .Except(req.Variations.Select(v => v.Id))
-            .ToList();
-
-        if (deletedVariationIds.Count > 0)
+        if (flag.Type != FlagType.Boolean)
         {
-            var flagStates = await _db.FlagEnvironmentStates
-                .Include(x => x.Environment)
-                .Include(x => x.Rules)
-                .Include(x => x.ContextualRollouts)
-                .Where(x => x.FeatureFlagId == flag.Id)
-                .ToListAsync(ct);
+            if (req.Variations == null || req.Variations.Count == 0)
+                ThrowError("At least one variation is required.", 400);
 
-            foreach (var state in flagStates)
+            var existingVariations = flag.Variations.ToList();
+            var deletedVariationIds = existingVariations
+                .Select(v => v.Id)
+                .Except(req.Variations.Select(v => v.Id))
+                .ToList();
+
+            if (deletedVariationIds.Count > 0)
             {
-                if (state.OffVariationId.HasValue && deletedVariationIds.Contains(state.OffVariationId.Value))
-                {
-                    var deletedVarValue = existingVariations.First(v => v.Id == state.OffVariationId.Value).Value;
-                    ThrowError($"Cannot delete variation '{deletedVarValue}' because it is configured as the Off variation in environment '{state.Environment.Name}'.", 400);
-                }
+                var flagStates = await _db.FlagEnvironmentStates
+                    .Include(x => x.Environment)
+                    .Include(x => x.Rules)
+                    .Include(x => x.ContextualRollouts)
+                    .Where(x => x.FeatureFlagId == flag.Id)
+                    .ToListAsync(ct);
 
-                foreach (var w in state.FallthroughRollout)
+                foreach (var state in flagStates)
                 {
-                    if (w.Weight > 0 && deletedVariationIds.Contains(w.VariationId))
+                    if (state.OffVariationId.HasValue && deletedVariationIds.Contains(state.OffVariationId.Value))
                     {
-                        var deletedVarValue = existingVariations.First(v => v.Id == w.VariationId).Value;
-                        ThrowError($"Cannot delete variation '{deletedVarValue}' because it has non-zero rollout weight in the default rollout of environment '{state.Environment.Name}'.", 400);
+                        var deletedVarValue = existingVariations.First(v => v.Id == state.OffVariationId.Value).Value;
+                        ThrowError($"Cannot delete variation '{deletedVarValue}' because it is configured as the Off variation in environment '{state.Environment.Name}'.", 400);
                     }
-                }
 
-                foreach (var r in state.Rules)
-                {
-                    foreach (var w in r.Rollout)
+                    foreach (var w in state.FallthroughRollout)
                     {
                         if (w.Weight > 0 && deletedVariationIds.Contains(w.VariationId))
                         {
                             var deletedVarValue = existingVariations.First(v => v.Id == w.VariationId).Value;
-                            ThrowError($"Cannot delete variation '{deletedVarValue}' because it is used in targeting rules in environment '{state.Environment.Name}'.", 400);
+                            ThrowError($"Cannot delete variation '{deletedVarValue}' because it has non-zero rollout weight in the default rollout of environment '{state.Environment.Name}'.", 400);
                         }
                     }
-                }
 
-                foreach (var cr in state.ContextualRollouts)
-                {
-                    foreach (var w in cr.Rollout)
+                    foreach (var r in state.Rules)
                     {
-                        if (w.Weight > 0 && deletedVariationIds.Contains(w.VariationId))
+                        foreach (var w in r.Rollout)
                         {
-                            var deletedVarValue = existingVariations.First(v => v.Id == w.VariationId).Value;
-                            ThrowError($"Cannot delete variation '{deletedVarValue}' because it is used in contextual rollouts in environment '{state.Environment.Name}'.", 400);
+                            if (w.Weight > 0 && deletedVariationIds.Contains(w.VariationId))
+                            {
+                                var deletedVarValue = existingVariations.First(v => v.Id == w.VariationId).Value;
+                                ThrowError($"Cannot delete variation '{deletedVarValue}' because it is used in targeting rules in environment '{state.Environment.Name}'.", 400);
+                            }
+                        }
+                    }
+
+                    foreach (var cr in state.ContextualRollouts)
+                    {
+                        foreach (var w in cr.Rollout)
+                        {
+                            if (w.Weight > 0 && deletedVariationIds.Contains(w.VariationId))
+                            {
+                                var deletedVarValue = existingVariations.First(v => v.Id == w.VariationId).Value;
+                                ThrowError($"Cannot delete variation '{deletedVarValue}' because it is used in contextual rollouts in environment '{state.Environment.Name}'.", 400);
+                            }
                         }
                     }
                 }
             }
-        }
-            
-        foreach (var oldVar in existingVariations)
-            if (!req.Variations.Any(v => v.Id == oldVar.Id))
-                _db.Remove(oldVar);
                 
-        for (var i = 0; i < req.Variations.Count; i++)
-        {
-            var newVar = req.Variations[i];
-            var existing = existingVariations.FirstOrDefault(v => v.Id == newVar.Id);
-            if (existing != null)
+            foreach (var oldVar in existingVariations)
+                if (!req.Variations.Any(v => v.Id == oldVar.Id))
+                    _db.Remove(oldVar);
+                    
+            for (var i = 0; i < req.Variations.Count; i++)
             {
-                existing.Value = newVar.Value;
-                existing.Sequence = i;
-            }
-            else
-            {
-                var newFlagVar = new FlagVariation { Id = newVar.Id, Key = newVar.Id.ToString(), Name = newVar.Id.ToString(), Value = newVar.Value, Sequence = i };
-                flag.Variations.Add(newFlagVar);
-                _db.Entry(newFlagVar).State = EntityState.Added;
+                var newVar = req.Variations[i];
+                var existing = existingVariations.FirstOrDefault(v => v.Id == newVar.Id);
+                if (existing != null)
+                {
+                    existing.Value = newVar.Value;
+                    existing.Sequence = i;
+                }
+                else
+                {
+                    var newFlagVar = new FlagVariation { Id = newVar.Id, Key = newVar.Id.ToString(), Name = newVar.Id.ToString(), Value = newVar.Value, Sequence = i };
+                    flag.Variations.Add(newFlagVar);
+                    _db.Entry(newFlagVar).State = EntityState.Added;
+                }
             }
         }
 
