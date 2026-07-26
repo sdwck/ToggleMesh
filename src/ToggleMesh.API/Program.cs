@@ -436,6 +436,8 @@ app.UseFastEndpoints(c =>
     c.Versioning.PrependToRoute = true;
 });
 
+app.MapGet("/healthz", () => Results.Ok(new { status = "healthy", timestamp = DateTime.UtcNow })).AllowAnonymous();
+
 app.MapFallbackToFile("index.html");
 
 await app.RunAsync();

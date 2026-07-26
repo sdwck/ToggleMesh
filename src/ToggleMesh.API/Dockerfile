@@ -6,19 +6,20 @@ COPY src/ToggleMesh.AdminUI/ .
 RUN npm run build
 
 FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+ARG TARGETARCH
 ARG BUILD_CONFIGURATION=Release
 WORKDIR /src
 
 COPY ["src/ToggleMesh.API/ToggleMesh.API.csproj", "src/ToggleMesh.API/"]
 COPY ["src/ToggleMesh.Common/ToggleMesh.Common.csproj", "src/ToggleMesh.Common/"]
-RUN dotnet restore "src/ToggleMesh.API/ToggleMesh.API.csproj"
+RUN dotnet restore "src/ToggleMesh.API/ToggleMesh.API.csproj" -a "$TARGETARCH"
 
 COPY . .
 WORKDIR "/src/src/ToggleMesh.API"
-RUN dotnet publish "./ToggleMesh.API.csproj" -c "$BUILD_CONFIGURATION" -o /app/publish
+RUN dotnet publish "./ToggleMesh.API.csproj" -c "$BUILD_CONFIGURATION" -a "$TARGETARCH" -o /app/publish
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS base
-RUN apt-get update && apt-get install -y --no-install-recommends libkrb5-3 && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends libkrb5-3 curl && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 RUN mkdir -p /app/keys && chown -R 1000:1000 /app
 USER 1000
