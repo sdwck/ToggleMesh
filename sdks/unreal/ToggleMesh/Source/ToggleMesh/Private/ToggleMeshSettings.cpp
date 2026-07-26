@@ -2,7 +2,7 @@
 
 UToggleMeshSettings::UToggleMeshSettings()
 {
-	BaseUrl = TEXT("https://api.togglemesh.dev");
+	BaseUrl = TEXT("https://app.togglemesh.dev");
 	ClientKey = TEXT("");
 	RefreshInterval = 60;
 	bIsMetricsEnabled = true;

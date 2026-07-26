@@ -23,7 +23,7 @@ Before using the SDK, you must configure your API keys.
 2. Go to **Edit > Project Settings**.
 3. Scroll down to the **Plugins** section and click on **ToggleMesh**.
 4. Set the following fields:
-   - **Base Url**: The URL of your ToggleMesh server (e.g. `https://api.togglemesh.dev`).
+   - **Base Url**: The URL of your ToggleMesh server (e.g. `https://app.togglemesh.dev`).
    - **Client Key**: Your ToggleMesh Client Key.
    - **Refresh Interval**: How often the SDK should synchronize flags and flush analytics buffers (in seconds). Default is 60.
 
