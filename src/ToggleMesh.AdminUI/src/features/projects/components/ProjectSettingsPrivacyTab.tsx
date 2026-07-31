@@ -93,7 +93,7 @@ export function ProjectSettingsPrivacyTab({ projectId, project, canManageProject
                                 value={purgeIdentity}
                                 onChange={(e) => setPurgeIdentity(e.target.value)}
                                 placeholder="e.g. user_123 or user@company.com"
-                                className="border-zinc-800 bg-zinc-950 text-xs text-zinc-200 h-9 font-mono focus-visible:ring-1 focus-visible:ring-emerald-500/50"
+                                className="border-zinc-800 bg-zinc-950 text-xs text-zinc-200 h-9 font-mono focus-visible:ring-1 focus-visible:ring-white/30"
                             />
                             <p className="text-[11px] text-muted-foreground">
                                 The unique identifier used during SDK evaluation calls (e.g. <code className="font-mono text-zinc-400">user_id</code> or email).

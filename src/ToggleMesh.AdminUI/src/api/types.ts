@@ -349,6 +349,7 @@ export interface UserProfile {
     twoFactorEnabled: boolean;
     recoveryCodesLeft: number;
     emailVerificationMethod: EmailVerificationMethod;
+    skipLandingPage: boolean;
 }
 
 export const WebhookStatus = {

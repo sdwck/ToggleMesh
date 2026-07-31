@@ -196,12 +196,6 @@ export function ProjectSettingsIntegrationsTab({ projectId }: { projectId: strin
                                         icon={Activity}
                                         title="No Integrations Configured"
                                         description="Set up Slack, Discord, or Teams to receive notifications."
-                                        action={
-                                            <Button onClick={() => setIsCreateOpen(true)} variant="outline">
-                                                <Plus className="mr-2 h-4 w-4" />
-                                                Add Integration
-                                            </Button>
-                                        }
                                     />
                                 </TableCell>
                             </TableRow>

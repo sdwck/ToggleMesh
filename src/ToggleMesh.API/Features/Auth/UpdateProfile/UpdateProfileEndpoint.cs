@@ -21,9 +21,6 @@ public class UpdateProfileEndpoint : ToggleEndpoint<UpdateProfileRequest>
 
     public override async Task HandleAsync(UpdateProfileRequest req, CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(req.Username))
-            ThrowError("Username cannot be empty.", 400);
-
         var user = await _userManager.FindByIdAsync(UserId.ToString());
         if (user == null)
         {
@@ -31,11 +28,18 @@ public class UpdateProfileEndpoint : ToggleEndpoint<UpdateProfileRequest>
             return;
         }
 
-        var existing = await _userManager.FindByNameAsync(req.Username.Trim());
-        if (existing != null && existing.Id != user.Id)
-            ThrowError("Username is already taken.", 400);
+        if (!string.IsNullOrWhiteSpace(req.Username))
+        {
+            var existing = await _userManager.FindByNameAsync(req.Username.Trim());
+            if (existing != null && existing.Id != user.Id)
+                ThrowError("Username is already taken.", 400);
 
-        user.UserName = req.Username.Trim();
+            user.UserName = req.Username.Trim();
+        }
+
+        if (req.SkipLandingPage.HasValue)
+            user.SkipLandingPage = req.SkipLandingPage.Value;
+
         var result = await _userManager.UpdateAsync(user);
         if (!result.Succeeded)
         {

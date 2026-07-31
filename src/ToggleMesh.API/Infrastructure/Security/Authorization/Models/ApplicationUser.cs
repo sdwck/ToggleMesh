@@ -19,4 +19,6 @@ public class ApplicationUser : IdentityUser<Guid>, ISoftDeletable
     public bool IsDeleted { get; set; }
 
     public EmailVerificationMethod EmailVerificationMethod { get; set; } = EmailVerificationMethod.None;
+
+    public bool SkipLandingPage { get; set; } = false;
 }

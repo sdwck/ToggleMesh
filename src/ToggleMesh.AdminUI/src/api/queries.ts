@@ -697,7 +697,7 @@ export const useUserProfile = () => {
 export const useUpdateUserProfile = () => {
     const queryClient = useQueryClient();
     return useMutation({
-        mutationFn: async (req: { username: string }) => {
+        mutationFn: async (req: { username?: string; skipLandingPage?: boolean }) => {
             await api.put('/user/profile', req);
         },
         onSuccess: () => {

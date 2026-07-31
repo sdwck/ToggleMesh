@@ -113,7 +113,7 @@ export function ProjectSettingsWebhooksTab({ projectId }: { projectId: string })
                     if (!open) setRevealedSecret(null);
                 }}>
                     <DialogTrigger asChild>
-                        <Button size="sm" className="self-start sm:self-auto">
+                        <Button>
                             <Plus className="mr-2 h-4 w-4" /> Add Webhook
                         </Button>
                     </DialogTrigger>
@@ -217,11 +217,11 @@ export function ProjectSettingsWebhooksTab({ projectId }: { projectId: string })
                     <TableBody>
                         {isWebhooksLoading ? (
                             <TableRow>
-                                <TableCell colSpan={4}><Skeleton className="h-12 w-full" /></TableCell>
+                                <TableCell colSpan={5}><Skeleton className="h-12 w-full" /></TableCell>
                             </TableRow>
                         ) : webhooks?.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={4} className="p-0">
+                                <TableCell colSpan={5} className="p-0">
                                     <EmptyState
                                         icon={Globe}
                                         title="No Webhooks Configured"
