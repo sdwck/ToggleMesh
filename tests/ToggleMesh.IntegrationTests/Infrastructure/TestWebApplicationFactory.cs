@@ -18,6 +18,9 @@ using ToggleMesh.API.Infrastructure.Data;
 using ToggleMesh.API.Infrastructure.Data.Interceptors;
 using ToggleMesh.API.Infrastructure.Email;
 using ToggleMesh.API.Infrastructure.Security.Authorization.Models;
+using Xunit;
+using Quartz;
+using Moq;
 
 using Npgsql;
 
@@ -89,11 +92,22 @@ public class TestWebApplicationFactory : WebApplicationFactory<Program>, IAsyncL
 
             var workersToRemove = services.Where(d => 
                 d.ServiceType == typeof(IHostedService) && 
-                ((d.ImplementationType?.Name != null && (d.ImplementationType.Name == "RollupWorker" || d.ImplementationType.Name == "AnomalyWorker" || d.ImplementationType.Name == "WebhookDispatcherService")) ||
-                 (d.ImplementationFactory != null && (d.ImplementationFactory.ToString()!.Contains("RollupWorker") || d.ImplementationFactory.ToString()!.Contains("AnomalyWorker") || d.ImplementationFactory.ToString()!.Contains("WebhookDispatcherService"))))
+                ((d.ImplementationType?.Name != null && (d.ImplementationType.Name == "RollupWorker" || d.ImplementationType.Name == "AnomalyWorker" || d.ImplementationType.Name == "WebhookDispatcherService" || d.ImplementationType.Name == "QuartzHostedService")) ||
+                 (d.ImplementationFactory != null && (d.ImplementationFactory.ToString()!.Contains("RollupWorker") || d.ImplementationFactory.ToString()!.Contains("AnomalyWorker") || d.ImplementationFactory.ToString()!.Contains("WebhookDispatcherService") || d.ImplementationFactory.ToString()!.Contains("Quartz"))))
             ).ToList();
             foreach (var w in workersToRemove)
                 services.Remove(w);
+
+            var schedulerFactoryDesc = services.FirstOrDefault(d => d.ServiceType == typeof(ISchedulerFactory));
+            if (schedulerFactoryDesc != null)
+            {
+                services.Remove(schedulerFactoryDesc);
+            }
+            
+            var mockScheduler = new Mock<IScheduler>();
+            var mockSchedulerFactory = new Mock<ISchedulerFactory>();
+            mockSchedulerFactory.Setup(x => x.GetScheduler(It.IsAny<CancellationToken>())).ReturnsAsync(mockScheduler.Object);
+            services.AddSingleton<ISchedulerFactory>(mockSchedulerFactory.Object);
 
             services.AddSingleton<SoftDeletableInterceptor>();
             services.AddSingleton<UpdateAuditableInterceptor>();

@@ -95,11 +95,24 @@ public class GetFlagsEndpoint : ToggleEndpoint<GetFlagsRequest, PagedResponse<Pr
                     s.IsMabEnabled,
                     s.MabGoalEvent,
                     s.IsExperimentActive,
-                    x.PendingChanges.Any(c => c.EnvironmentId == s.EnvironmentId),
-                    x.PendingChanges.Any(c => c.EnvironmentId == s.EnvironmentId && c.Status == PendingFlagChangeStatus.Scheduled),
+                    x.PendingChanges.Any(c => {
+                        var effectiveStatus = c.Status;
+                        if (effectiveStatus == PendingFlagChangeStatus.PendingReview && c.ExecuteAt.HasValue && c.ExecuteAt.Value <= DateTimeOffset.UtcNow)
+                            effectiveStatus = PendingFlagChangeStatus.Expired;
+                        return c.EnvironmentId == s.EnvironmentId && effectiveStatus != PendingFlagChangeStatus.Expired;
+                    }),
+                    x.PendingChanges.Any(c => {
+                        var effectiveStatus = c.Status;
+                        if (effectiveStatus == PendingFlagChangeStatus.PendingReview && c.ExecuteAt.HasValue && c.ExecuteAt.Value <= DateTimeOffset.UtcNow)
+                            effectiveStatus = PendingFlagChangeStatus.Expired;
+                        return c.EnvironmentId == s.EnvironmentId && effectiveStatus == PendingFlagChangeStatus.Scheduled;
+                    }),
                     x.PendingChanges.Any(c => {
                         if (c.EnvironmentId != s.EnvironmentId) return false;
-                        if (c.Status != PendingFlagChangeStatus.PendingReview) return false;
+                        var effectiveStatus = c.Status;
+                        if (effectiveStatus == PendingFlagChangeStatus.PendingReview && c.ExecuteAt.HasValue && c.ExecuteAt.Value <= DateTimeOffset.UtcNow)
+                            effectiveStatus = PendingFlagChangeStatus.Expired;
+                        if (effectiveStatus != PendingFlagChangeStatus.PendingReview) return false;
                         var effectiveRole = role.Value;
                         if (envRoles.TryGetValue(c.EnvironmentId, out var overrideRole))
                             effectiveRole = overrideRole;
@@ -112,7 +125,10 @@ public class GetFlagsEndpoint : ToggleEndpoint<GetFlagsRequest, PagedResponse<Pr
                 (int)x.Type,
                 x.Variations.OrderBy(v => v.Sequence).Select(v => new VariationDto(v.Id, v.Value)),
                 x.PendingChanges.Any(c => {
-                    if (c.Status != PendingFlagChangeStatus.PendingReview) return false;
+                    var effectiveStatus = c.Status;
+                    if (effectiveStatus == PendingFlagChangeStatus.PendingReview && c.ExecuteAt.HasValue && c.ExecuteAt.Value <= DateTimeOffset.UtcNow)
+                        effectiveStatus = PendingFlagChangeStatus.Expired;
+                    if (effectiveStatus != PendingFlagChangeStatus.PendingReview) return false;
                     var effectiveRole = role.Value;
                     if (envRoles.TryGetValue(c.EnvironmentId, out var overrideRole))
                         effectiveRole = overrideRole;
@@ -120,8 +136,18 @@ public class GetFlagsEndpoint : ToggleEndpoint<GetFlagsRequest, PagedResponse<Pr
                            && c.RequestedByUserId != UserId 
                            && !c.ApprovedByUserIds.Contains(UserId);
                 }),
-                x.PendingChanges.Any(c => c.Status == PendingFlagChangeStatus.PendingReview),
-                x.PendingChanges.Any(c => c.Status == PendingFlagChangeStatus.Scheduled),
+                x.PendingChanges.Any(c => {
+                    var effectiveStatus = c.Status;
+                    if (effectiveStatus == PendingFlagChangeStatus.PendingReview && c.ExecuteAt.HasValue && c.ExecuteAt.Value <= DateTimeOffset.UtcNow)
+                        effectiveStatus = PendingFlagChangeStatus.Expired;
+                    return effectiveStatus == PendingFlagChangeStatus.PendingReview;
+                }),
+                x.PendingChanges.Any(c => {
+                    var effectiveStatus = c.Status;
+                    if (effectiveStatus == PendingFlagChangeStatus.PendingReview && c.ExecuteAt.HasValue && c.ExecuteAt.Value <= DateTimeOffset.UtcNow)
+                        effectiveStatus = PendingFlagChangeStatus.Expired;
+                    return effectiveStatus == PendingFlagChangeStatus.Scheduled;
+                }),
                 x.IsProtected
             ))
             .ToList();

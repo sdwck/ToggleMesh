@@ -110,7 +110,13 @@ public class GetPendingChangesEndpoint : ToggleEndpoint<GetPendingChangesRequest
             nextCursor = Convert.ToBase64String(Encoding.UTF8.GetBytes(raw));
         }
 
-        var items = list.Select(x => new PendingChangeDto(
+        var items = list.Select(x =>
+        {
+            var effectiveStatus = x.Status;
+            if (effectiveStatus == PendingFlagChangeStatus.PendingReview && x.ExecuteAt.HasValue && x.ExecuteAt.Value <= DateTimeOffset.UtcNow)
+                effectiveStatus = PendingFlagChangeStatus.Expired;
+
+            return new PendingChangeDto(
             x.Id,
             x.FlagId,
             x.EnvironmentId,
@@ -121,14 +127,15 @@ public class GetPendingChangesEndpoint : ToggleEndpoint<GetPendingChangesRequest
             x.ReviewedByUser != null ? (x.ReviewedByUser.UserName ?? x.ReviewedByUser.Email) : null,
             x.ReviewedByUser?.Email,
             x.ApprovedByUserIds,
-            x.Status.ToString(),
+            effectiveStatus.ToString(),
             x.PatchInstructionsJson,
             x.DiffSummaryJson,
             x.ExecuteAt,
             x.IsPurelyScheduled,
             x.Comment,
             x.CreatedAt
-        )).ToList();
+        );
+        }).ToList();
 
         await Send.OkAsync(new CursorPagedResponse<PendingChangeDto>(
             items, totalCount, nextCursor, hasNextPage), ct);

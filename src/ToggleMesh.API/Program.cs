@@ -43,6 +43,9 @@ using ToggleMesh.API.Infrastructure.Streaming;
 using ToggleMesh.Common.Rules;
 using ToggleMesh.Common.Rules.Operators;
 using ToggleMesh.API.Features.Flags.Experiments.Stop;
+using ToggleMesh.API.Features.Flags.Experiments.Stop;
+using ToggleMesh.API.Features.Flags.ScheduledChanges.Jobs;
+using Quartz;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -332,18 +335,72 @@ builder.Services.AddSingleton(Channel.CreateBounded<WebhookEvent>(
         FullMode = BoundedChannelFullMode.DropOldest
     }));
 
+builder.Services.AddQuartz(q =>
+{
+    q.UsePersistentStore(s =>
+    {
+        s.UsePostgres(connectionString);
+        s.UseSystemTextJsonSerializer();
+        s.UseClustering(c =>
+        {
+            c.CheckinMisfireThreshold = TimeSpan.FromSeconds(20);
+            c.CheckinInterval = TimeSpan.FromSeconds(10);
+        });
+    });
+
+    var executeScheduledChangeKey = new JobKey(nameof(ExecuteScheduledChangeJob));
+    q.AddJob<ExecuteScheduledChangeJob>(opts => opts.WithIdentity(executeScheduledChangeKey).StoreDurably());
+
+    var cleanupKey = new JobKey(nameof(PendingChangesCleanupWorker));
+    q.AddJob<PendingChangesCleanupWorker>(opts => opts.WithIdentity(cleanupKey));
+    q.AddTrigger(opts => opts
+        .ForJob(cleanupKey)
+        .WithIdentity($"{nameof(PendingChangesCleanupWorker)}-trigger")
+        .WithSimpleSchedule(x => x.WithIntervalInMinutes(5).RepeatForever()));
+
+    var anomalyKey = new JobKey(nameof(AnomalyWorker));
+    q.AddJob<AnomalyWorker>(opts => opts.WithIdentity(anomalyKey));
+    q.AddTrigger(opts => opts
+        .ForJob(anomalyKey)
+        .WithIdentity($"{nameof(AnomalyWorker)}-trigger")
+        .WithSimpleSchedule(x => x.WithIntervalInMinutes(15).RepeatForever()));
+
+    var srmKey = new JobKey(nameof(SrmWorker));
+    q.AddJob<SrmWorker>(opts => opts.WithIdentity(srmKey));
+    q.AddTrigger(opts => opts
+        .ForJob(srmKey)
+        .WithIdentity($"{nameof(SrmWorker)}-trigger")
+        .WithSimpleSchedule(x => x.WithIntervalInMinutes(15).RepeatForever()));
+
+    var webhookCleanupKey = new JobKey(nameof(WebhookCleanupWorker));
+    q.AddJob<WebhookCleanupWorker>(opts => opts.WithIdentity(webhookCleanupKey));
+    q.AddTrigger(opts => opts
+        .ForJob(webhookCleanupKey)
+        .WithIdentity($"{nameof(WebhookCleanupWorker)}-trigger")
+        .WithCronSchedule("0 0 0 * * ?"));
+
+    var partitioningKey = new JobKey(nameof(PartitioningWorker));
+    q.AddJob<PartitioningWorker>(opts => opts.WithIdentity(partitioningKey));
+    q.AddTrigger(opts => opts
+        .ForJob(partitioningKey)
+        .WithIdentity($"{nameof(PartitioningWorker)}-trigger")
+        .WithCronSchedule("0 0 1 * * ?"));
+
+    var refreshTokenCleanupKey = new JobKey(nameof(RefreshTokenCleanupService));
+    q.AddJob<RefreshTokenCleanupService>(opts => opts.WithIdentity(refreshTokenCleanupKey));
+    q.AddTrigger(opts => opts
+        .ForJob(refreshTokenCleanupKey)
+        .WithIdentity($"{nameof(RefreshTokenCleanupService)}-trigger")
+        .WithCronSchedule("0 0 2 * * ?"));
+});
+builder.Services.AddQuartzHostedService(q => q.WaitForJobsToComplete = true);
+
 builder.Services.AddHostedService<CacheInvalidationWorker>();
-builder.Services.AddHostedService<WebhookCleanupWorker>();
-builder.Services.AddHostedService<PartitioningWorker>();
 builder.Services.AddHostedService<SseRedisSubscriber>();
-builder.Services.AddHostedService<RefreshTokenCleanupService>();
 builder.Services.AddHostedService<EmailOutboxWorker>();
 builder.Services.AddHostedService<MetricsWorker>();
-builder.Services.AddHostedService<AnomalyWorker>();
-builder.Services.AddHostedService<SrmWorker>();
 builder.Services.AddHostedService<WebhookDispatcherService>();
 builder.Services.AddHostedService<WebhookDeliveryWorker>();
-builder.Services.AddHostedService<ScheduledChangesWorker>();
 
 var analyticsEnabled = builder.Configuration.GetValue("Analytics:Enabled", true);
 var kafkaServers = builder.Configuration["Analytics:Kafka:BootstrapServers"];

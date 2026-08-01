@@ -3,10 +3,12 @@ using MathNet.Numerics.Distributions;
 using ToggleMesh.API.Features.Webhooks.Domain;
 using ToggleMesh.API.Infrastructure.Data;
 using System.Threading.Channels;
+using Quartz;
 
 namespace ToggleMesh.API.Features.Metrics.Workers;
 
-public class SrmWorker : BackgroundService
+[DisallowConcurrentExecution]
+public class SrmWorker : IJob
 {
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<SrmWorker> _logger;
@@ -25,29 +27,18 @@ public class SrmWorker : BackgroundService
         _webhookChannel = webhookChannel;
     }
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    public async Task Execute(IJobExecutionContext context)
     {
-        _logger.LogInformation("SrmWorker started. Running every 1 minute.");
-
-        using var timer = new PeriodicTimer(TimeSpan.FromMinutes(1), _timeProvider);
+        _logger.LogInformation("SrmWorker executing job {JobKey}", context.JobDetail.Key);
 
         try
         {
-            await Task.Delay(TimeSpan.FromSeconds(45), _timeProvider, stoppingToken);
-
-            while (!stoppingToken.IsCancellationRequested)
-            {
-                await DetectSrmAsync(stoppingToken);
-                await timer.WaitForNextTickAsync(stoppingToken);
-            }
+            await DetectSrmAsync(context.CancellationToken);
         }
-        catch (OperationCanceledException)
+        catch (Exception ex)
         {
-            // ignore
-        }
-        catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
-        {
-            _logger.LogCritical(ex, "Fatal error in SrmWorker");
+            _logger.LogError(ex, "Error occurred while detecting SRM anomalies.");
+            throw new JobExecutionException(ex, refireImmediately: false);
         }
     }
 

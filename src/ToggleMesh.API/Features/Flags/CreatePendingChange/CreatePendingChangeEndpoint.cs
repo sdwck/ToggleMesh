@@ -7,17 +7,22 @@ using ToggleMesh.API.Features.Projects.Domain;
 using ToggleMesh.API.Features.Organizations.Domain;
 using AuthModels = ToggleMesh.API.Infrastructure.Security.Authorization.Models;
 using System.Text.Json;
+using System.Text.Json;
 using ToggleMesh.API.Features.Flags.Update;
+using Quartz;
+using ToggleMesh.API.Features.Flags.ScheduledChanges.Jobs;
 
 namespace ToggleMesh.API.Features.Flags.CreatePendingChange;
 
 public class CreatePendingChangeEndpoint : ToggleEndpoint<CreatePendingChangeRequest>
 {
     private readonly AppDbContext _db;
+    private readonly ISchedulerFactory _schedulerFactory;
 
-    public CreatePendingChangeEndpoint(AppDbContext db)
+    public CreatePendingChangeEndpoint(AppDbContext db, ISchedulerFactory schedulerFactory)
     {
         _db = db;
+        _schedulerFactory = schedulerFactory;
     }
 
     public override void Configure()
@@ -135,6 +140,23 @@ public class CreatePendingChangeEndpoint : ToggleEndpoint<CreatePendingChangeReq
 
         _db.PendingFlagChanges.Add(change);
         await _db.SaveChangesAsync(ct);
+
+        if (change.Status == PendingFlagChangeStatus.Scheduled && change.ExecuteAt.HasValue)
+        {
+            var scheduler = await _schedulerFactory.GetScheduler(ct);
+
+            var trigger = TriggerBuilder.Create()
+                .WithIdentity($"scheduled-change-{change.Id}")
+                .StartAt(change.ExecuteAt.Value)
+                .Build();
+
+            var job = JobBuilder.Create<ExecuteScheduledChangeJob>()
+                .WithIdentity($"job-scheduled-change-{change.Id}")
+                .UsingJobData("ChangeId", change.Id.ToString())
+                .Build();
+
+            await scheduler.ScheduleJob(job, trigger, ct);
+        }
 
         await Send.OkAsync(new
         {

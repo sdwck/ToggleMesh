@@ -1,9 +1,11 @@
 using Microsoft.EntityFrameworkCore;
 using ToggleMesh.API.Infrastructure.Data;
+using Quartz;
 
 namespace ToggleMesh.API.Infrastructure.Security.Authorization.Workers;
 
-public class RefreshTokenCleanupService : BackgroundService
+[DisallowConcurrentExecution]
+public class RefreshTokenCleanupService : IJob
 {
     private readonly IServiceProvider _serviceProvider;
     private readonly IConfiguration _configuration;
@@ -22,23 +24,18 @@ public class RefreshTokenCleanupService : BackgroundService
         _timeProvider = timeProvider;
     }
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    public async Task Execute(IJobExecutionContext context)
     {
-        var intervalHours = _configuration.GetValue("Auth:RefreshTokenCleanupIntervalHours", 24);
-        _logger.LogInformation("RefreshTokenCleanupService started. Cleanup interval: {IntervalHours} hours.", intervalHours);
-
-        using var timer = new PeriodicTimer(TimeSpan.FromHours(intervalHours), _timeProvider);
+        _logger.LogInformation("RefreshTokenCleanupService executing job {JobKey}", context.JobDetail.Key);
 
         try
         {
-            await DoCleanupAsync(stoppingToken);
-
-            while (await timer.WaitForNextTickAsync(stoppingToken))
-                await DoCleanupAsync(stoppingToken);
+            await DoCleanupAsync(context.CancellationToken);
         }
-        catch (OperationCanceledException)
+        catch (Exception ex)
         {
-            _logger.LogInformation("RefreshTokenCleanupService is shutting down.");
+            _logger.LogError(ex, "An error occurred during refresh token cleanup.");
+            throw new JobExecutionException(ex, refireImmediately: false);
         }
     }
 

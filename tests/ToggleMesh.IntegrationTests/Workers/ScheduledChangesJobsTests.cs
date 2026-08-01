@@ -7,18 +7,20 @@ using ToggleMesh.API.Infrastructure.Security.Authorization.Models;
 using ToggleMesh.API.Features.Flags.Domain;
 using ToggleMesh.API.Features.Projects.Domain;
 using ToggleMesh.API.Infrastructure.BackgroundServices;
+using ToggleMesh.API.Features.Flags.ScheduledChanges.Jobs;
 using ToggleMesh.API.Infrastructure.Data;
 using ToggleMesh.IntegrationTests.Infrastructure;
+using Quartz;
+using Moq;
 
 namespace ToggleMesh.IntegrationTests.Workers;
 
 [Collection("SharedEnv3")]
-public class ScheduledChangesWorkerTests : IAsyncLifetime
+public class ScheduledChangesJobsTests : IAsyncLifetime
 {
     private readonly TestWebApplicationFactory _factory;
-    private ScheduledChangesWorker _worker = null!;
 
-    public ScheduledChangesWorkerTests(TestWebApplicationFactory factory)
+    public ScheduledChangesJobsTests(TestWebApplicationFactory factory)
     {
         _factory = factory;
     }
@@ -26,9 +28,6 @@ public class ScheduledChangesWorkerTests : IAsyncLifetime
     public async Task InitializeAsync()
     {
         await _factory.ResetDatabaseAsync();
-        var scope = _factory.Services.CreateScope();
-        var logger = scope.ServiceProvider.GetRequiredService<ILogger<ScheduledChangesWorker>>();
-        _worker = new ScheduledChangesWorker(_factory.Services, logger);
     }
 
     public Task DisposeAsync() => Task.CompletedTask;
@@ -50,14 +49,8 @@ public class ScheduledChangesWorkerTests : IAsyncLifetime
         return user;
     }
 
-    private async Task ExecuteWorkerMethodAsync()
-    {
-        var method = typeof(ScheduledChangesWorker).GetMethod("ProcessPendingAndScheduledChangesAsync", BindingFlags.NonPublic | BindingFlags.Instance);
-        await (Task)method!.Invoke(_worker, [CancellationToken.None])!;
-    }
-
     [Fact]
-    public async Task Worker_ShouldExpireUnapprovedChanges_WhenExecuteAtHasPassed()
+    public async Task CleanupWorker_ShouldExpireUnapprovedChanges_WhenExecuteAtHasPassed()
     {
         // Arrange
         using var scope = _factory.Services.CreateScope();
@@ -89,8 +82,15 @@ public class ScheduledChangesWorkerTests : IAsyncLifetime
         db.PendingFlagChanges.Add(change);
         await db.SaveChangesAsync();
 
+        var logger = scope.ServiceProvider.GetRequiredService<ILogger<PendingChangesCleanupWorker>>();
+        var worker = new PendingChangesCleanupWorker(_factory.Services, logger);
+
+        var contextMock = new Mock<IJobExecutionContext>();
+        contextMock.Setup(c => c.CancellationToken).Returns(CancellationToken.None);
+        contextMock.Setup(c => c.JobDetail).Returns(JobBuilder.Create<PendingChangesCleanupWorker>().Build());
+
         // Act
-        await ExecuteWorkerMethodAsync();
+        await worker.Execute(contextMock.Object);
 
         // Assert
         using var verifyScope = _factory.Services.CreateScope();
@@ -102,7 +102,7 @@ public class ScheduledChangesWorkerTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Worker_ShouldExecuteScheduledChange_AndApplyPatch()
+    public async Task ExecuteJob_ShouldExecuteScheduledChange_AndApplyPatch()
     {
         // Arrange
         using var scope = _factory.Services.CreateScope();
@@ -157,8 +157,19 @@ public class ScheduledChangesWorkerTests : IAsyncLifetime
         db.PendingFlagChanges.Add(change);
         await db.SaveChangesAsync();
 
+        var logger = scope.ServiceProvider.GetRequiredService<ILogger<ExecuteScheduledChangeJob>>();
+        var job = new ExecuteScheduledChangeJob(_factory.Services, logger);
+
+        var contextMock = new Mock<IJobExecutionContext>();
+        contextMock.Setup(c => c.CancellationToken).Returns(CancellationToken.None);
+        
+        var jobDetail = JobBuilder.Create<ExecuteScheduledChangeJob>()
+            .UsingJobData("ChangeId", change.Id.ToString())
+            .Build();
+        contextMock.Setup(c => c.JobDetail).Returns(jobDetail);
+
         // Act
-        await ExecuteWorkerMethodAsync();
+        await job.Execute(contextMock.Object);
 
         // Assert
         using var verifyScope = _factory.Services.CreateScope();
@@ -172,7 +183,7 @@ public class ScheduledChangesWorkerTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Worker_ShouldHandleInvalidJson_AndMarkStatusAsConflictFailed()
+    public async Task ExecuteJob_ShouldHandleInvalidJson_AndMarkStatusAsConflictFailed()
     {
         // Arrange
         using var scope = _factory.Services.CreateScope();
@@ -206,8 +217,19 @@ public class ScheduledChangesWorkerTests : IAsyncLifetime
         db.PendingFlagChanges.Add(change);
         await db.SaveChangesAsync();
 
+        var logger = scope.ServiceProvider.GetRequiredService<ILogger<ExecuteScheduledChangeJob>>();
+        var job = new ExecuteScheduledChangeJob(_factory.Services, logger);
+
+        var contextMock = new Mock<IJobExecutionContext>();
+        contextMock.Setup(c => c.CancellationToken).Returns(CancellationToken.None);
+        
+        var jobDetail = JobBuilder.Create<ExecuteScheduledChangeJob>()
+            .UsingJobData("ChangeId", change.Id.ToString())
+            .Build();
+        contextMock.Setup(c => c.JobDetail).Returns(jobDetail);
+
         // Act
-        await ExecuteWorkerMethodAsync();
+        await job.Execute(contextMock.Object);
 
         // Assert
         using var verifyScope = _factory.Services.CreateScope();

@@ -8,6 +8,8 @@ using ToggleMesh.API.Features.Organizations.Domain;
 using ToggleMesh.API.Extensions;
 using ToggleMesh.API.Features.Flags.ScheduledChanges;
 using ToggleMesh.API.Features.Flags.Commands;
+using Quartz;
+using ToggleMesh.API.Features.Flags.ScheduledChanges.Jobs;
 using AuthModels = ToggleMesh.API.Infrastructure.Security.Authorization.Models;
 
 namespace ToggleMesh.API.Features.Flags.ReviewPendingChange;
@@ -15,10 +17,12 @@ namespace ToggleMesh.API.Features.Flags.ReviewPendingChange;
 public class ReviewPendingChangeEndpoint : ToggleEndpoint<ReviewPendingChangeRequest>
 {
     private readonly AppDbContext _db;
+    private readonly ISchedulerFactory _schedulerFactory;
 
-    public ReviewPendingChangeEndpoint(AppDbContext db)
+    public ReviewPendingChangeEndpoint(AppDbContext db, ISchedulerFactory schedulerFactory)
     {
         _db = db;
+        _schedulerFactory = schedulerFactory;
     }
 
     public override void Configure()
@@ -72,6 +76,9 @@ public class ReviewPendingChangeEndpoint : ToggleEndpoint<ReviewPendingChangeReq
         if (req.Action != ReviewAction.Approve)
             ThrowError("Invalid action.", 400);
 
+        if (change.ExecuteAt.HasValue && change.ExecuteAt.Value <= DateTimeOffset.UtcNow)
+            ThrowError("The scheduled execution time has already passed. This request is expired and cannot be approved.", 400);
+
         if (!change.ApprovedByUserIds.Contains(UserId))
             change.ApprovedByUserIds.Add(UserId);
 
@@ -80,7 +87,7 @@ public class ReviewPendingChangeEndpoint : ToggleEndpoint<ReviewPendingChangeReq
 
         if (change.ApprovedByUserIds.Count >= requiredCount)
         {
-            if (!change.ExecuteAt.HasValue || change.ExecuteAt.Value <= DateTimeOffset.UtcNow)
+            if (!change.ExecuteAt.HasValue)
             {
                 FlagEnvironmentState state;
                 try
@@ -111,6 +118,20 @@ public class ReviewPendingChangeEndpoint : ToggleEndpoint<ReviewPendingChangeReq
             {
                 change.Status = PendingFlagChangeStatus.Scheduled;
                 await _db.SaveChangesAsync(ct);
+
+                var scheduler = await _schedulerFactory.GetScheduler(ct);
+
+                var trigger = TriggerBuilder.Create()
+                    .WithIdentity($"scheduled-change-{change.Id}")
+                    .StartAt(change.ExecuteAt!.Value)
+                    .Build();
+
+                var job = JobBuilder.Create<ExecuteScheduledChangeJob>()
+                    .WithIdentity($"job-scheduled-change-{change.Id}")
+                    .UsingJobData("ChangeId", change.Id.ToString())
+                    .Build();
+
+                await scheduler.ScheduleJob(job, trigger, ct);
             }
         }
         else

@@ -3,10 +3,12 @@ using Microsoft.EntityFrameworkCore;
 using ToggleMesh.API.Features.Analytics.Services;
 using ToggleMesh.API.Features.Webhooks.Domain;
 using ToggleMesh.API.Infrastructure.Data;
+using Quartz;
 
 namespace ToggleMesh.API.Features.Metrics.Workers;
 
-public class AnomalyWorker : BackgroundService
+[DisallowConcurrentExecution]
+public class AnomalyWorker : IJob
 {
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<AnomalyWorker> _logger;
@@ -28,33 +30,18 @@ public class AnomalyWorker : BackgroundService
         _math = math;
     }
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    public async Task Execute(IJobExecutionContext context)
     {
-        _logger.LogInformation("AnomalyWorker started. Running every 15 minutes.");
-
-        using var timer = new PeriodicTimer(TimeSpan.FromMinutes(15), _timeProvider);
+        _logger.LogInformation("AnomalyWorker executing job {JobKey}", context.JobDetail.Key);
 
         try
         {
-            await Task.Delay(TimeSpan.FromSeconds(30), _timeProvider, stoppingToken);
-            
-            while (!stoppingToken.IsCancellationRequested)
-            {
-                await DetectAnomaliesAsync(stoppingToken);
-                await timer.WaitForNextTickAsync(stoppingToken);
-            }
+            await DetectAnomaliesAsync(context.CancellationToken);
         }
-        catch (OperationCanceledException)
+        catch (Exception ex)
         {
-            // ignore
-        }
-        catch (ObjectDisposedException)
-        {
-            // ignore
-        }
-        catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
-        {
-            _logger.LogCritical(ex, "Fatal error in AnomalyWorker");
+            _logger.LogError(ex, "Error occurred while processing anomalies.");
+            throw new JobExecutionException(ex, refireImmediately: false);
         }
     }
 

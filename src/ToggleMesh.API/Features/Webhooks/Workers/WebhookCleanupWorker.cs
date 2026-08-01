@@ -1,10 +1,12 @@
 using Microsoft.EntityFrameworkCore;
 using ToggleMesh.API.Features.Webhooks.Domain;
 using ToggleMesh.API.Infrastructure.Data;
+using Quartz;
 
 namespace ToggleMesh.API.Features.Webhooks.Workers;
 
-public class WebhookCleanupWorker : BackgroundService
+[DisallowConcurrentExecution]
+public class WebhookCleanupWorker : IJob
 {
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<WebhookCleanupWorker> _logger;
@@ -17,28 +19,18 @@ public class WebhookCleanupWorker : BackgroundService
         _timeProvider = timeProvider;
     }
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    public async Task Execute(IJobExecutionContext context)
     {
-        while (!stoppingToken.IsCancellationRequested)
-        {
-            try
-            {
-                await CleanupDeliveriesAsync(stoppingToken);
-            }
-            catch (OperationCanceledException)
-            {
-                break;
-            }
-            catch (ObjectDisposedException)
-            {
-                break;
-            }
-            catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
-            {
-                _logger.LogError(ex, "Error occurred during webhook cleanup.");
-            }
+        _logger.LogInformation("WebhookCleanupWorker executing job {JobKey}", context.JobDetail.Key);
 
-            await Task.Delay(TimeSpan.FromHours(1), stoppingToken);
+        try
+        {
+            await CleanupDeliveriesAsync(context.CancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error occurred during webhook cleanup.");
+            throw new JobExecutionException(ex, refireImmediately: false);
         }
     }
 
