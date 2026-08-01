@@ -1,5 +1,6 @@
 import { Outlet, NavLink, useLocation, useParams, Link, useNavigate, Navigate } from 'react-router-dom';
 import { del } from 'idb-keyval';
+import { setAuthSessionCookie, setSkipLandingCookie } from '@/utils/cookieUtils';
 import { LogOut, Flag, Network, Users, FileText, Settings, ToggleRight, Building2, Beaker, LayoutDashboard, Terminal, LifeBuoy, Menu } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { ToggleMeshIcon } from '@/components/icons/ToggleMeshIcon';
@@ -94,6 +95,14 @@ export function AppLayout() {
         localStorage.removeItem('refreshToken');
         localStorage.removeItem('REACT_QUERY_OFFLINE_CACHE');
         localStorage.removeItem('togglemesh-org-storage');
+        
+        try {
+            setAuthSessionCookie(false);
+            setSkipLandingCookie(false);
+        } catch (e) {
+            console.error('Failed to clear cookies', e);
+        }
+
         try {
             await del('REACT_QUERY_OFFLINE_CACHE');
         } catch (e) {

@@ -1,5 +1,5 @@
 import axios, { AxiosError, type InternalAxiosRequestConfig } from 'axios';
-
+import { setAuthSessionCookie, setSkipLandingCookie } from '@/utils/cookieUtils';
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || '/api/v1',
   headers: {
@@ -78,6 +78,14 @@ api.interceptors.response.use(
         localStorage.removeItem('refreshToken');
         localStorage.removeItem('REACT_QUERY_OFFLINE_CACHE');
         localStorage.removeItem('togglemesh-org-storage');
+        
+        try {
+          setAuthSessionCookie(false);
+          setSkipLandingCookie(false);
+        } catch (e) {
+          console.error('Failed to clear cookies', e);
+        }
+
         try {
           const { del } = await import('idb-keyval');
           await del('REACT_QUERY_OFFLINE_CACHE');
