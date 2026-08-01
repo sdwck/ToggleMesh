@@ -97,6 +97,12 @@ services:
       Email__Smtp__Password: ${TM_SMTP_PASSWORD:-}
       Email__Smtp__FromEmail: ${TM_SMTP_FROM:-noreply@togglemesh.dev}
       Email__Smtp__EnableSsl: ${TM_SMTP_ENABLE_SSL:-true}
+      
+      # Telemetry & Observability
+      Telemetry__Enabled: ${TM_TELEMETRY_ENABLED:-true}
+      Telemetry__ServiceName: ${TM_TELEMETRY_SERVICE_NAME:-ToggleMesh}
+      Telemetry__OtlpEndpoint: ${TM_TELEMETRY_OTLP_ENDPOINT:-}
+      Telemetry__OtlpProtocol: ${TM_TELEMETRY_OTLP_PROTOCOL:-}
     depends_on:
       db:
         condition: service_healthy

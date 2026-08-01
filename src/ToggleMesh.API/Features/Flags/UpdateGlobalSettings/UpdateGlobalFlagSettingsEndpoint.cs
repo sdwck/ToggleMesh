@@ -62,6 +62,7 @@ public class UpdateGlobalFlagSettingsEndpoint : ToggleEndpoint<UpdateGlobalFlagS
                     .Include(x => x.Environment)
                     .Include(x => x.Rules)
                     .Include(x => x.ContextualRollouts)
+                    .AsSplitQuery()
                     .Where(x => x.FeatureFlagId == flag.Id)
                     .ToListAsync(ct);
 

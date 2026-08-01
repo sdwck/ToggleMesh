@@ -3,6 +3,7 @@ using ToggleMesh.API.Features.Client.SdkEvaluateFlags;
 using ToggleMesh.API.Features.Projects.Domain;
 using ToggleMesh.API.Infrastructure;
 using ToggleMesh.API.Infrastructure.Endpoints;
+using ToggleMesh.API.Infrastructure.Telemetry;
 
 namespace ToggleMesh.API.Features.Client.SdkEvaluateFlag;
 
@@ -45,6 +46,9 @@ public class SdkEvaluateFlagEndpoint : ToggleEndpoint<SdkEvaluateFlagsRequest, S
         }
 
         var result = _evaluatorService.Evaluate(state, req.Identity, req.Context);
+        
+        ToggleMeshMetrics.FlagEvaluations.Add(1);
+        
         await Send.OkAsync(new SdkEvaluateFlagResponse(flagKey, result?.VariationId, result?.VariationValue, state.IsExperimentActive), ct);
     }
 }

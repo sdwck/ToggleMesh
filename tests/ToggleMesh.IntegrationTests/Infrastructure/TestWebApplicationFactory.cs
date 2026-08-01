@@ -18,10 +18,8 @@ using ToggleMesh.API.Infrastructure.Data;
 using ToggleMesh.API.Infrastructure.Data.Interceptors;
 using ToggleMesh.API.Infrastructure.Email;
 using ToggleMesh.API.Infrastructure.Security.Authorization.Models;
-using Xunit;
 using Quartz;
 using Moq;
-
 using Npgsql;
 
 namespace ToggleMesh.IntegrationTests.Infrastructure;
@@ -53,7 +51,8 @@ public class TestWebApplicationFactory : WebApplicationFactory<Program>, IAsyncL
                 ["RateLimits:Auth"] = "10000",
                 ["RateLimits:Sdk"] = "10000",
                 ["Caching:DefaultTtlMinutes"] = "10",
-                ["EnableMabAuditLogging"] = "true"
+                ["EnableMabAuditLogging"] = "true",
+                ["Telemetry:Enabled"] = "false"
             });
         });
 
@@ -107,7 +106,7 @@ public class TestWebApplicationFactory : WebApplicationFactory<Program>, IAsyncL
             var mockScheduler = new Mock<IScheduler>();
             var mockSchedulerFactory = new Mock<ISchedulerFactory>();
             mockSchedulerFactory.Setup(x => x.GetScheduler(It.IsAny<CancellationToken>())).ReturnsAsync(mockScheduler.Object);
-            services.AddSingleton<ISchedulerFactory>(mockSchedulerFactory.Object);
+            services.AddSingleton(mockSchedulerFactory.Object);
 
             services.AddSingleton<SoftDeletableInterceptor>();
             services.AddSingleton<UpdateAuditableInterceptor>();
@@ -158,6 +157,7 @@ public class TestWebApplicationFactory : WebApplicationFactory<Program>, IAsyncL
         Environment.SetEnvironmentVariable("ConnectionStrings__Redis", _redis.GetConnectionString());
         Environment.SetEnvironmentVariable("Analytics__ClickHouse__ConnectionString", " ");
         Environment.SetEnvironmentVariable("Analytics__Kafka__BootstrapServers", " ");
+        Environment.SetEnvironmentVariable("Telemetry__Enabled", "false");
 
         using var scope = Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();

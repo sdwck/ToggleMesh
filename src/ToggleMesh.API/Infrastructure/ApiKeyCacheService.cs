@@ -6,6 +6,7 @@ using ToggleMesh.API.Features.Projects.Domain;
 using ToggleMesh.API.Infrastructure.Caching;
 using ToggleMesh.API.Infrastructure.Data;
 using ToggleMesh.API.Infrastructure.Security;
+using ToggleMesh.API.Infrastructure.Telemetry;
 
 namespace ToggleMesh.API.Infrastructure;
 
@@ -46,8 +47,12 @@ public class ApiKeyCacheService : IApiKeyCacheService
             var db = _redis.GetDatabase();
             var redisValue = await db.StringGetAsync(cacheKey);
             if (redisValue.HasValue)
+            {
+                ToggleMeshMetrics.CacheRequests.Add(1, new KeyValuePair<string, object?>("type", "hit"));
                 return JsonSerializer.Deserialize<CachedKeyInfo>((string)redisValue!);
-            
+            }
+
+            ToggleMeshMetrics.CacheRequests.Add(1, new KeyValuePair<string, object?>("type", "miss"));
 
             var now = _timeProvider.GetUtcNow().UtcDateTime;
 

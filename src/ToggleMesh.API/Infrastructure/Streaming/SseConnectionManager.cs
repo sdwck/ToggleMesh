@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using ToggleMesh.API.Infrastructure.Telemetry;
 
 namespace ToggleMesh.API.Infrastructure.Streaming;
 
@@ -16,8 +17,11 @@ public class SseConnectionManager : ISseConnectionManager
     {
         var envClients = _clients.GetOrAdd(
             environmentId, _ => new ConcurrentDictionary<string, HttpResponse>());
-        envClients.TryAdd(connectionId, response);
-        _logger.LogInformation("Added SSE client {ConnectionId} for environment {EnvironmentId}", connectionId, environmentId);
+        if (envClients.TryAdd(connectionId, response))
+        {
+            ToggleMeshMetrics.ActiveSseConnections.Add(1, new KeyValuePair<string, object?>("environment_id", environmentId));
+            _logger.LogInformation("Added SSE client {ConnectionId} for environment {EnvironmentId}", connectionId, environmentId);
+        }
     }
 
     public void RemoveClient(string environmentId, string connectionId)
@@ -25,7 +29,10 @@ public class SseConnectionManager : ISseConnectionManager
         if (_clients.TryGetValue(environmentId, out var envClients))
         {
             if (envClients.TryRemove(connectionId, out _))
+            {
+                ToggleMeshMetrics.ActiveSseConnections.Add(-1, new KeyValuePair<string, object?>("environment_id", environmentId));
                 _logger.LogInformation("Removed SSE client {ConnectionId} from environment {EnvironmentId}", connectionId, environmentId);
+            }
 
             if (envClients.IsEmpty)
                 _clients.TryRemove(environmentId, out _);

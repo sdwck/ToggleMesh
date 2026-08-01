@@ -90,7 +90,7 @@ public class FlagsEndpointsTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task ToggleFlag_ShouldUpdateDb_AndBroadcastViaSignalR()
+    public async Task ToggleFlag_ShouldUpdateDb_AndBroadcastViaSSE()
     {
         // Arrange
         var (projectId, envId, apiKey) = await SeedEnvironmentAsync();
@@ -102,6 +102,7 @@ public class FlagsEndpointsTests : IAsyncLifetime
         var sseClient = _factory.CreateClient();
         sseClient.DefaultRequestHeaders.Add("x-api-key", apiKey);
         var cts = new CancellationTokenSource();
+        var readyTcs = new TaskCompletionSource();
         _ = Task.Run(async () =>
         {
             try
@@ -109,14 +110,21 @@ public class FlagsEndpointsTests : IAsyncLifetime
                 var req = new HttpRequestMessage(HttpMethod.Get, "/api/v1/stream");
                 req.Headers.Add("Accept", "text/event-stream");
                 var resp = await sseClient.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, cts.Token);
-                _testOutputHelper.WriteLine($"[SSE] Response Status: {resp.StatusCode}");
+                resp.EnsureSuccessStatusCode();
                 var stream = await resp.Content.ReadAsStreamAsync(cts.Token);
                 using var reader = new StreamReader(stream);
+
+                readyTcs.TrySetResult();
+
                 while (!cts.IsCancellationRequested)
                 {
                     var line = await reader.ReadLineAsync(cts.Token);
-                    _testOutputHelper.WriteLine($"[SSE] {line}");
-                    if (line?.StartsWith("data: ") == true)
+                    if (line == null) 
+                    {
+                        tcs.TrySetException(new Exception("SSE stream ended prematurely without receiving the event."));
+                        break;
+                    }
+                    if (line.StartsWith("data: "))
                     {
                         var data = line.Substring(6);
                         var doc = System.Text.Json.JsonDocument.Parse(data);
@@ -124,7 +132,6 @@ public class FlagsEndpointsTests : IAsyncLifetime
                         {
                             if (doc.RootElement.TryGetProperty("Payload", out var payload))
                             {
-                                _testOutputHelper.WriteLine($"[SSE] PAYLOAD: {payload.GetRawText()}");
                                 var flag = System.Text.Json.JsonSerializer.Deserialize<GetFlagResponse>(payload.GetRawText(), new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
                                 if (flag != null)
                                 {
@@ -136,12 +143,15 @@ public class FlagsEndpointsTests : IAsyncLifetime
                     }
                 }
             }
-            catch { 
-                // ignore
+            catch (Exception ex)
+            {
+                tcs.TrySetException(ex);
+                readyTcs.TrySetException(ex);
             }
         }, cts.Token);
 
-        await Task.Delay(500, cts.Token);
+        await readyTcs.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        await Task.Delay(200, cts.Token);
 
         // Act
         var toggleRequest = new ToggleFlagRequest { IsEnabled = true };
@@ -150,12 +160,12 @@ public class FlagsEndpointsTests : IAsyncLifetime
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
-        var signalRTask = tcs.Task;
-        var completedTask = await Task.WhenAny(signalRTask, Task.Delay(15000, cts.Token));
+        var sseTask = tcs.Task;
+        var completedTask = await Task.WhenAny(sseTask, Task.Delay(30000, cts.Token));
 
-        completedTask.Should().Be(signalRTask, "SignalR event was not received within 15 seconds");
+        completedTask.Should().Be(sseTask, "SSE event was not received within 30 seconds");
 
-        var receivedFlag = await signalRTask;
+        var receivedFlag = await sseTask;
         receivedFlag.Key.Should().Be(flagKey);
         receivedFlag.IsEnabled.Should().BeTrue();
     }

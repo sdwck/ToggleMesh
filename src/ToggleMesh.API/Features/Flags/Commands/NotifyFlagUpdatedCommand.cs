@@ -7,6 +7,7 @@ using ToggleMesh.API.Infrastructure.Streaming;
 using ToggleMesh.Common;
 using Polly;
 using Polly.Retry;
+using ToggleMesh.API.Infrastructure.Telemetry;
 
 namespace ToggleMesh.API.Features.Flags.Commands;
 
@@ -73,6 +74,8 @@ public class NotifyFlagUpdatedCommandHandler : ICommandHandler<NotifyFlagUpdated
                 cmd.EnvironmentId.ToString(),
                 "SdkFlagUpdated",
                 cmd.SdkDto);
+                
+            ToggleMeshMetrics.FlagUpdates.Add(1);
         }, ct);
     }
 }

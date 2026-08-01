@@ -34,12 +34,22 @@ public class EmailOutboxWorker : BackgroundService
         {
             try
             {
-                await _channel.WaitToReadAsync(stoppingToken);
-                while (_channel.TryRead(out _)) { }
-                
+                using var cts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
+                cts.CancelAfter(TimeSpan.FromMinutes(1));
+
+                try
+                {
+                    await _channel.WaitToReadAsync(cts.Token);
+                    while (_channel.TryRead(out _)) { }
+                }
+                catch (OperationCanceledException) when (!stoppingToken.IsCancellationRequested)
+                {
+                    // ignore
+                }
+
                 await ProcessOutboxAsync(stoppingToken);
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
                 break;
             }
@@ -82,6 +92,13 @@ public class EmailOutboxWorker : BackgroundService
 
         foreach (var message in messages)
         {
+            var claimedRows = await db.EmailOutboxMessages
+                .Where(m => m.Id == message.Id && m.Status == EmailOutboxStatus.Pending && m.NextAttemptAt <= now)
+                .ExecuteUpdateAsync(s => s.SetProperty(p => p.NextAttemptAt, p => now.AddMinutes(5)), ct);
+
+            if (claimedRows == 0)
+                continue;
+
             try
             {
                 await smtpSender.SendEmailAsync(message.ToEmail, message.Subject, message.HtmlBody, ct);
@@ -89,6 +106,8 @@ public class EmailOutboxWorker : BackgroundService
                 message.Status = EmailOutboxStatus.Sent;
                 message.CompletedAt = now;
                 message.AttemptCount++;
+
+                await db.SaveChangesAsync(ct);
             }
             catch (Exception ex)
             {
@@ -112,9 +131,9 @@ public class EmailOutboxWorker : BackgroundService
                     
                     message.NextAttemptAt = now.AddMinutes(minutes);
                 }
+
+                await db.SaveChangesAsync(ct);
             }
         }
-
-        await db.SaveChangesAsync(ct);
     }
 }

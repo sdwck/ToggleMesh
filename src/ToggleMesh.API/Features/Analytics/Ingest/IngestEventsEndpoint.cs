@@ -7,6 +7,7 @@ using ToggleMesh.API.Features.Analytics.Services;
 using Microsoft.Extensions.DependencyInjection;
 using System.Text.Json;
 using ToggleMesh.API.Infrastructure.Data;
+using ToggleMesh.API.Infrastructure.Telemetry;
 
 namespace ToggleMesh.API.Features.Analytics.Ingest;
 
@@ -96,6 +97,12 @@ public partial class IngestEventsEndpoint : ToggleEndpoint<IngestEventsRequest>
             evt.Properties = _propertySanitizer.Sanitize(evt.Properties);
 
         await _publisher.PublishBatchAsync(req.EnvId, req.Events, ct);
+        
+        ToggleMeshMetrics.AnalyticsEventsIngested.Add(req.Events.Count);
+        
+        var exposureCount = req.Events.Count(e => e.Type == AnalyticsEventType.Exposure);
+        if (exposureCount > 0)
+            ToggleMeshMetrics.FlagEvaluations.Add(exposureCount);
 
         var livetailTopic = $"livetail:{req.EnvId}";
         foreach (var evt in req.Events)

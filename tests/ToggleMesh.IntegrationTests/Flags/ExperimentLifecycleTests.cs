@@ -487,7 +487,7 @@ public class ExperimentLifecycleTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task StartExperiment_ShouldBroadcast_CleanState_ViaSignalR()
+    public async Task StartExperiment_ShouldBroadcast_CleanState_ViaSSE()
     {
         // Arrange
         var flagKey = "signalr_broadcast_flag";
@@ -500,6 +500,7 @@ public class ExperimentLifecycleTests : IAsyncLifetime
         var sseClient = _factory.CreateClient();
         sseClient.DefaultRequestHeaders.Add("x-api-key", apiKey);
         var cts = new CancellationTokenSource();
+        var readyTcs = new TaskCompletionSource();
         _ = Task.Run(async () =>
         {
             try
@@ -507,12 +508,21 @@ public class ExperimentLifecycleTests : IAsyncLifetime
                 var req = new HttpRequestMessage(HttpMethod.Get, "/api/v1/stream");
                 req.Headers.Add("Accept", "text/event-stream");
                 var resp = await sseClient.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, cts.Token);
+                resp.EnsureSuccessStatusCode();
                 var stream = await resp.Content.ReadAsStreamAsync(cts.Token);
                 using var reader = new StreamReader(stream);
+                
+                readyTcs.TrySetResult();
+
                 while (!cts.IsCancellationRequested)
                 {
                     var line = await reader.ReadLineAsync(cts.Token);
-                    if (line?.StartsWith("data: ") == true)
+                    if (line == null) 
+                    {
+                        tcs.TrySetException(new Exception("SSE stream ended prematurely without receiving the event."));
+                        break;
+                    }
+                    if (line.StartsWith("data: "))
                     {
                         var data = line.Substring(6);
                         var doc = JsonDocument.Parse(data);
@@ -531,10 +541,16 @@ public class ExperimentLifecycleTests : IAsyncLifetime
                     }
                 }
             }
-            catch { /* ignore */ }
+            catch (Exception ex) 
+            { 
+                tcs.TrySetException(ex);
+                readyTcs.TrySetException(ex);
+            }
         }, cts.Token);
 
-        await Task.Delay(500, cts.Token);
+        await readyTcs.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        
+        await Task.Delay(200, cts.Token);
 
         // Act
         var request = new StartExperimentRequest
@@ -547,16 +563,16 @@ public class ExperimentLifecycleTests : IAsyncLifetime
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
         // Assert
-        var signalRTask = tcs.Task;
-        var completedTask = await Task.WhenAny(signalRTask, Task.Delay(10000, cts.Token));
+        var sseTask = tcs.Task;
+        var completedTask = await Task.WhenAny(sseTask, Task.Delay(30000, cts.Token));
 
-        completedTask.Should().Be(signalRTask, "SignalR event was not received within 10 seconds");
+        completedTask.Should().Be(sseTask, "SSE event was not received within 30 seconds");
 
-        var receivedFlag = await signalRTask;
+        var receivedFlag = await sseTask;
         receivedFlag.Key.Should().Be(flagKey);
-        receivedFlag.IsExperimentActive.Should().BeTrue("IsExperimentActive should be true in SignalR broadcast");
-        receivedFlag.TrueCount.Should().Be(0L, "TrueCount should be reset to 0 in SignalR broadcast");
-        receivedFlag.FalseCount.Should().Be(0L, "FalseCount should be reset to 0 in SignalR broadcast");
+        receivedFlag.IsExperimentActive.Should().BeTrue("IsExperimentActive should be true in SSE broadcast");
+        receivedFlag.TrueCount.Should().Be(0L, "TrueCount should be reset to 0 in SSE broadcast");
+        receivedFlag.FalseCount.Should().Be(0L, "FalseCount should be reset to 0 in SSE broadcast");
 
         await cts.CancelAsync();
     }

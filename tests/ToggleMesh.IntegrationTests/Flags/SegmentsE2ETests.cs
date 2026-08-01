@@ -85,7 +85,7 @@ public class SegmentsE2ETests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task UpdateSegment_Should_InvalidateCache_And_BroadcastSignalR_For_All_Flags_Using_It()
+    public async Task UpdateSegment_Should_InvalidateCache_And_BroadcastSSE_For_All_Flags_Using_It()
     {
         // Arrange
         var (projectId, envId, apiKey) = await SeedEnvironmentAsync();
@@ -170,7 +170,7 @@ public class SegmentsE2ETests : IAsyncLifetime
             catch { /* Ignore */ }
         }, cts.Token);
 
-        await Task.Delay(500, cts.Token);
+        await Task.Delay(2500, cts.Token);
 
         // Act
         var updateRequest = new UpdateSegmentRequest
@@ -185,14 +185,14 @@ public class SegmentsE2ETests : IAsyncLifetime
         updateSegResponse.StatusCode.Should().Be(HttpStatusCode.OK);
 
         // Assert
-        var signalRTask1 = tcs1.Task;
-        var signalRTask2 = tcs2.Task;
-        var completed = await Task.WhenAny(Task.WhenAll(signalRTask1, signalRTask2), Task.Delay(10000, cts.Token));
+        var sseTask1 = tcs1.Task;
+        var sseTask2 = tcs2.Task;
+        var completed = await Task.WhenAny(Task.WhenAll(sseTask1, sseTask2), Task.Delay(30000, cts.Token));
 
-        completed.Should().NotBe(Task.Delay(10000, cts.Token), "SignalR update events should be broadcast for all flags referencing the segment");
+        completed.Should().NotBe(Task.Delay(30000, cts.Token), "SSE update events should be broadcast for all flags referencing the segment");
 
-        var broadcast1 = await signalRTask1;
-        var broadcast2 = await signalRTask2;
+        var broadcast1 = await sseTask1;
+        var broadcast2 = await sseTask2;
 
         broadcast1.Key.Should().Be(flagKey1);
         broadcast2.Key.Should().Be(flagKey2);

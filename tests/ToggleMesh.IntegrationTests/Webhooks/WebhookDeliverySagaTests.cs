@@ -139,7 +139,7 @@ public class WebhookDeliverySagaTests : IAsyncLifetime
             deliveryId = delivery.Id;
         }
         
-        var worker = factory.Services.GetServices<IHostedService>().OfType<WebhookDeliveryWorker>().Single();
+        var worker = ActivatorUtilities.CreateInstance<WebhookDeliveryWorker>(factory.Services);
         var processMethod = typeof(WebhookDeliveryWorker).GetMethod("ProcessDeliveriesAsync", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
         processMethod.Should().NotBeNull();
         

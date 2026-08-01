@@ -151,7 +151,7 @@ Local load testing via [k6](https://k6.io/) on a single developer workstation de
 | `POST /api/v1/sdk/events` | **Buffered + Livetail** (SSE) | 2,000 | **68,301/s** | 34.58 ms | 0.00% |
 | `GET /api/v1/sdk/flags` | **Synchronous** (I/O Cache) | 2,000 | **68,463/s** | 36.06 ms | 0.00% |
 
-> **Test Environment:** Intel Core i7-14700K, `k6` running locally against Kestrel (Release mode, HTTP). All tests maintained a flawless 0.00% failure rate under sustained load. Data payload bandwidth maxed out at ~179 MB/s during sync.
+> **Test Environment:** Intel Core i7-14700K, `k6` running locally against Kestrel (Release mode, HTTP). All tests maintained a 0.00% failure rate under sustained load. Data payload bandwidth maxed out at ~179 MB/s during sync.
 
 ---
 
@@ -163,10 +163,10 @@ ToggleMesh provides native SDKs and tooling for your entire microservice fleet.
 | :--- | :--- | :---: | :---: | :---: |
 | **.NET (C#)** | Server | ✅ (SSE) | Local (Zero-Alloc) | Stable |
 | **Node.js** | Server | ✅ (SSE) | Local | Beta |
-| **Browser JS / React** | Client | ✅ (SSE) | Remote (Secure) | Beta |
+| **Browser JS / React** | Client | 🔄 (Polling) | Remote | Beta |
 | **Python** | Server | ✅ (SSE) | Local | Beta |
 | **Go** | Server | ✅ (SSE) | Local | MVP |
-| **Unreal Engine (C++)** | Game Client | 🔄 (Polling) | Remote | MVP |
+| **Unreal Engine (C++)** | Client | 🔄 (Polling) | Remote | MVP |
 
 ---
 
@@ -178,7 +178,7 @@ ToggleMesh provides native SDKs and tooling for your entire microservice fleet.
 - 🎛️ **Multivariate Flags & Remote Config:** Move beyond simple booleans. Serve strongly-typed JSON, strings, or numeric payloads dynamically to your clients, enabling complex UI theming, game balancing, and multi-variant A/B/C testing without deploying new code.
 - 🧠 **Contextual Multi-Armed Bandits (MAB):** Built-in Bayesian inference engine (Monte Carlo simulations via Beta distributions). Autonomously shifts traffic toward winning variants based on conversion or revenue metrics.
 - 🔬 **Sample Ratio Mismatch (SRM) Detection:** Automated background statistical checks (Chi-Square) to detect tracking bugs or critical assignment skews in your A/B tests before they ruin your data.
-- 📈 **High-Throughput Analytics Ingestion:** SDKs buffer metrics client-side. The API ingests telemetry into bounded `System.Threading.Channels` with `DropOldest` backpressure, flushing to PostgreSQL or horizontally scalable **Kafka + ClickHouse** clusters.
+- 📈 **High-Throughput Analytics & Observability:** SDKs buffer metrics client-side. The API ingests analytics into bounded `System.Threading.Channels`, flushing to PostgreSQL or horizontally scalable **Kafka + ClickHouse** clusters, while native **OpenTelemetry** pushes health and metrics to your collectors.
 - 🔌 **Integrations & Webhooks:** Native Slack and MS Teams notifications, plus SSRF-Protected outbound webhook dispatcher with Polly-powered exponential backoff and Dead-Letter Queues (DLQ).
 - 🔐 **Multi-Tenancy & Security:** Organization and Project-level isolation with strict Role-Based Access Control and Two-Factor Authentication.
 - 🔒 **GDPR-Ready by Design:** Identity pseudonymization, automatic data retention, PII property redaction, and one-click user data erasure.

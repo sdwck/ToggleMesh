@@ -43,12 +43,14 @@ using ToggleMesh.API.Infrastructure.Streaming;
 using ToggleMesh.Common.Rules;
 using ToggleMesh.Common.Rules.Operators;
 using ToggleMesh.API.Features.Flags.Experiments.Stop;
-using ToggleMesh.API.Features.Flags.Experiments.Stop;
 using ToggleMesh.API.Features.Flags.ScheduledChanges.Jobs;
 using Quartz;
-
+using ToggleMesh.API.Infrastructure.Telemetry;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddToggleMeshTelemetry(builder.Configuration, builder.Logging);
+builder.Services.AddToggleMeshHealthChecks(builder.Configuration);
 
 var dataProtectionKeysFolder = Path.Combine(builder.Environment.ContentRootPath, "keys", "dataprotection");
 Directory.CreateDirectory(dataProtectionKeysFolder);
@@ -410,14 +412,6 @@ builder.Services.AddQuartz(q =>
         .ForJob(webhookDeliveryKey)
         .WithIdentity($"{nameof(WebhookDeliveryWorker)}-trigger")
         .WithSimpleSchedule(x => x.WithInterval(webhookDeliveryInterval).RepeatForever()));
-
-    var emailOutboxInterval = builder.Configuration.GetValue("Email:OutboxInterval", TimeSpan.FromMinutes(5));
-    var emailOutboxKey = new JobKey(nameof(EmailOutboxJob));
-    q.AddJob<EmailOutboxJob>(opts => opts.WithIdentity(emailOutboxKey));
-    q.AddTrigger(opts => opts
-        .ForJob(emailOutboxKey)
-        .WithIdentity($"{nameof(EmailOutboxJob)}-trigger")
-        .WithSimpleSchedule(x => x.WithInterval(emailOutboxInterval).RepeatForever()));
 });
 builder.Services.AddQuartzHostedService(q => q.WaitForJobsToComplete = true);
 
@@ -517,7 +511,7 @@ app.UseFastEndpoints(c =>
     c.Versioning.PrependToRoute = true;
 });
 
-app.MapGet("/healthz", () => Results.Ok(new { status = "healthy", timestamp = DateTime.UtcNow })).AllowAnonymous();
+app.MapToggleMeshHealthChecks();
 
 app.MapFallbackToFile("index.html");
 

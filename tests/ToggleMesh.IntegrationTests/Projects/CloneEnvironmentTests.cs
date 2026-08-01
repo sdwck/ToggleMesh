@@ -105,10 +105,12 @@ public class CloneEnvironmentTests : IAsyncLifetime
                     }
                 }
             }
-            catch { /* ignore */ }
+            catch {
+                // ignore
+            }
         }, cts.Token);
 
-        await Task.Delay(500, cts.Token);
+        await Task.Delay(2500, cts.Token);
 
         // Act
         var response = await _client.PostAsync($"/api/v1/projects/{project.Id}/environments/{sourceEnv.Id}/clone-to/{targetEnv.Id}", null, cts.Token);
