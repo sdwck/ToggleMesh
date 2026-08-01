@@ -15,7 +15,7 @@ const getRootDomain = (): string => {
 
 const getDefaultSessionMaxAge = (): number => {
   const envDays = Number(import.meta.env.VITE_AUTH_REFRESH_TOKEN_LIFETIME_DAYS);
-  return !isNaN(envDays) && envDays > 0 ? envDays * 86400 : 604800;
+  return !Number.isNaN(envDays) && envDays > 0 ? envDays * 86400 : 604800;
 };
 
 export const setAuthSessionCookie = (active: boolean, maxAgeSeconds: number = getDefaultSessionMaxAge()) => {

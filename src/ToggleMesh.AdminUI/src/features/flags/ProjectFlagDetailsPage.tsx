@@ -224,7 +224,7 @@ export function ProjectFlagDetailsPage() {
                                         </div>
                                     </TableCell>
                                     <TableCell className="text-right">
-                                        <div className="flex items-center justify-end gap-2.5" onClick={(e) => e.stopPropagation()}>
+                                        <div className="flex items-center justify-end gap-2.5">
                                             {(requiresApproval || state.hasChangesHistory || state.hasPendingApprovalsForCurrentUser || state.hasScheduledChanges) && (
                                                 <button
                                                     type="button"
@@ -258,6 +258,7 @@ export function ProjectFlagDetailsPage() {
                                                 onCheckedChange={(checked) => handleToggle(env.id, checked)}
                                                 disabled={toggleFlag.isPending || !canEditEnv || requiresApproval}
                                                 title={requiresApproval ? "Change request required. Click the row to edit." : undefined}
+                                                onClick={(e) => e.stopPropagation()}
                                             />
                                         </div>
                                     </TableCell>

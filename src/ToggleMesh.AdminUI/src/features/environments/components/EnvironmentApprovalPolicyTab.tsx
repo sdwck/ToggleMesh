@@ -96,7 +96,7 @@ export function EnvironmentApprovalPolicyTab({ projectId, environmentId }: { pro
                     }`}>
                     <div className="flex items-center justify-between gap-4">
                         <div className="space-y-0.5">
-                            <label className="text-sm font-semibold text-white flex items-center gap-2 cursor-pointer">
+                            <label htmlFor="enable-approvals-switch" className="text-sm font-semibold text-white flex items-center gap-2 cursor-pointer">
                                 Enable Required Approvals
                             </label>
                             <p className="text-xs text-zinc-400">
@@ -104,6 +104,7 @@ export function EnvironmentApprovalPolicyTab({ projectId, environmentId }: { pro
                             </p>
                         </div>
                         <Switch
+                            id="enable-approvals-switch"
                             disabled={!isOwner || updatePolicy.isPending}
                             checked={requireApprovals}
                             onCheckedChange={setRequireApprovals}
@@ -119,7 +120,7 @@ export function EnvironmentApprovalPolicyTab({ projectId, environmentId }: { pro
                                 <div className="space-y-0.5">
                                     <div className="flex items-center gap-2">
                                         <Lock className="h-4 w-4 text-zinc-400" />
-                                        <label className="text-sm font-semibold text-white cursor-pointer">
+                                        <label htmlFor="protected-flags-only-switch" className="text-sm font-semibold text-white cursor-pointer">
                                             Require for Protected Flags Only
                                         </label>
                                     </div>
@@ -132,6 +133,7 @@ export function EnvironmentApprovalPolicyTab({ projectId, environmentId }: { pro
                                     </p>
                                 </div>
                                 <Switch
+                                    id="protected-flags-only-switch"
                                     disabled={!isOwner || updatePolicy.isPending}
                                     checked={requireForProtectedFlagsOnly}
                                     onCheckedChange={setRequireForProtectedFlagsOnly}
@@ -143,7 +145,7 @@ export function EnvironmentApprovalPolicyTab({ projectId, environmentId }: { pro
                         <div className="p-4 rounded-lg border border-zinc-800 bg-zinc-900/50">
                             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                                 <div className="space-y-0.5">
-                                    <label className="text-sm font-semibold text-white flex items-center gap-2">
+                                    <label htmlFor="required-approvers-input" className="text-sm font-semibold text-white flex items-center gap-2">
                                         <Users className="h-4 w-4 text-zinc-400" /> Required Approvers Count
                                     </label>
                                     <p className="text-xs text-zinc-400">
@@ -164,14 +166,15 @@ export function EnvironmentApprovalPolicyTab({ projectId, environmentId }: { pro
                                     </Button>
 
                                     <Input
+                                        id="required-approvers-input"
                                         type="number"
                                         min={1}
                                         max={10}
                                         disabled={!isOwner || updatePolicy.isPending}
                                         value={requiredApprovalsCount}
                                         onChange={(e) => {
-                                            const val = parseInt(e.target.value);
-                                            if (!isNaN(val) && val >= 1 && val <= 10) {
+                                            const val = Number.parseInt(e.target.value);
+                                            if (!Number.isNaN(val) && val >= 1 && val <= 10) {
                                                 setRequiredApprovalsCount(val);
                                             } else if (e.target.value === '') {
                                                 setRequiredApprovalsCount(1);

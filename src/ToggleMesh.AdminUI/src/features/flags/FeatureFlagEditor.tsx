@@ -684,7 +684,7 @@ export function FeatureFlagEditor({ flag, projectId, envId, open, onOpenChange, 
                     <div className="grid gap-4 py-4">
                         <div className="flex flex-col space-y-3 bg-zinc-900/30 p-4 rounded-xl border border-zinc-800/60 shadow-inner">
                             <Label htmlFor="comment" className="text-sm font-semibold flex items-center gap-2 text-zinc-200">
-                                Comment
+                                <span>Comment</span>
                                 <span className="text-[10px] uppercase font-bold tracking-wider text-zinc-500 bg-zinc-800/50 px-1.5 py-0.5 rounded">Optional</span>
                             </Label>
                             <Input

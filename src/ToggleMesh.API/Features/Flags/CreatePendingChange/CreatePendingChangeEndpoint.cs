@@ -40,6 +40,7 @@ public class CreatePendingChangeEndpoint : ToggleEndpoint<CreatePendingChangeReq
             ThrowError("Flag not found.", 404);
 
         var envState = await _db.FlagEnvironmentStates
+            .AsSplitQuery()
             .Include(x => x.Rules)
             .Include(x => x.IndividualTargets)
             .FirstOrDefaultAsync(x => x.FeatureFlagId == flag.Id && x.EnvironmentId == environmentId, ct);
