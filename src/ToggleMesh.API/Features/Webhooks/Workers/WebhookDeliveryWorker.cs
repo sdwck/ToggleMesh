@@ -1,15 +1,16 @@
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
+using Quartz;
 using ToggleMesh.API.Features.Webhooks.Domain;
 using ToggleMesh.API.Infrastructure.Data;
 using ToggleMesh.API.Infrastructure.Security;
 
 namespace ToggleMesh.API.Features.Webhooks.Workers;
 
-public class WebhookDeliveryWorker : BackgroundService
+[DisallowConcurrentExecution]
+public class WebhookDeliveryWorker : IJob
 {
-    private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(15);
     private const int BatchSize = 50;
     private const int MaxConsecutiveFailures = 10;
     private const int MaxAttempts = 5;
@@ -39,35 +40,21 @@ public class WebhookDeliveryWorker : BackgroundService
         _encryptionService = encryptionService;
     }
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    public async Task Execute(IJobExecutionContext context)
     {
-        while (!stoppingToken.IsCancellationRequested)
+        var stoppingToken = context.CancellationToken;
+        try
         {
-            try
-            {
-                await ProcessDeliveriesAsync(stoppingToken);
-            }
-            catch (OperationCanceledException)
-            {
-                break;
-            }
-            catch (ObjectDisposedException)
-            {
-                break;
-            }
-            catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
-            {
-                _logger.LogError(ex, "Error processing webhook deliveries.");
-            }
-
-            try
-            {
-                await Task.Delay(PollInterval, stoppingToken);
-            }
-            catch (OperationCanceledException)
-            {
-                break;
-            }
+            await ProcessDeliveriesAsync(stoppingToken);
+        }
+        catch (OperationCanceledException)
+        {
+            // ignore
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error processing webhook deliveries.");
+            throw new JobExecutionException(ex, refireImmediately: false);
         }
     }
 

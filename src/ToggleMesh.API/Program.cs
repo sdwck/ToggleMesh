@@ -392,6 +392,32 @@ builder.Services.AddQuartz(q =>
         .ForJob(refreshTokenCleanupKey)
         .WithIdentity($"{nameof(RefreshTokenCleanupService)}-trigger")
         .WithCronSchedule("0 0 2 * * ?"));
+    if (builder.Configuration.GetValue("Analytics:Enabled", true))
+    {
+        var rollupInterval = builder.Configuration.GetValue("Analytics:RollupInterval", TimeSpan.FromMinutes(15));
+        var rollupKey = new JobKey(nameof(RollupWorker));
+        q.AddJob<RollupWorker>(opts => opts.WithIdentity(rollupKey));
+        q.AddTrigger(opts => opts
+            .ForJob(rollupKey)
+            .WithIdentity($"{nameof(RollupWorker)}-trigger")
+            .WithSimpleSchedule(x => x.WithInterval(rollupInterval).RepeatForever()));
+    }
+
+    var webhookDeliveryInterval = builder.Configuration.GetValue("Webhooks:DeliveryInterval", TimeSpan.FromSeconds(15));
+    var webhookDeliveryKey = new JobKey(nameof(WebhookDeliveryWorker));
+    q.AddJob<WebhookDeliveryWorker>(opts => opts.WithIdentity(webhookDeliveryKey));
+    q.AddTrigger(opts => opts
+        .ForJob(webhookDeliveryKey)
+        .WithIdentity($"{nameof(WebhookDeliveryWorker)}-trigger")
+        .WithSimpleSchedule(x => x.WithInterval(webhookDeliveryInterval).RepeatForever()));
+
+    var emailOutboxInterval = builder.Configuration.GetValue("Email:OutboxInterval", TimeSpan.FromMinutes(5));
+    var emailOutboxKey = new JobKey(nameof(EmailOutboxJob));
+    q.AddJob<EmailOutboxJob>(opts => opts.WithIdentity(emailOutboxKey));
+    q.AddTrigger(opts => opts
+        .ForJob(emailOutboxKey)
+        .WithIdentity($"{nameof(EmailOutboxJob)}-trigger")
+        .WithSimpleSchedule(x => x.WithInterval(emailOutboxInterval).RepeatForever()));
 });
 builder.Services.AddQuartzHostedService(q => q.WaitForJobsToComplete = true);
 
@@ -400,7 +426,6 @@ builder.Services.AddHostedService<SseRedisSubscriber>();
 builder.Services.AddHostedService<EmailOutboxWorker>();
 builder.Services.AddHostedService<MetricsWorker>();
 builder.Services.AddHostedService<WebhookDispatcherService>();
-builder.Services.AddHostedService<WebhookDeliveryWorker>();
 
 var analyticsEnabled = builder.Configuration.GetValue("Analytics:Enabled", true);
 var kafkaServers = builder.Configuration["Analytics:Kafka:BootstrapServers"];
@@ -412,14 +437,12 @@ else if (!string.IsNullOrWhiteSpace(kafkaServers))
 {
     builder.Services.AddSingleton<IAnalyticsEventPublisher, KafkaAnalyticsPublisher>();
     builder.Services.AddHostedService<KafkaAnalyticsConsumerWorker>();
-    builder.Services.AddHostedService<RollupWorker>();
 }
 else
 {
     builder.Services.AddSingleton<InMemoryAnalyticsQueue>();
     builder.Services.AddSingleton<IAnalyticsEventPublisher>(sp => sp.GetRequiredService<InMemoryAnalyticsQueue>());
     builder.Services.AddHostedService<AnalyticsWorker>();
-    builder.Services.AddHostedService<RollupWorker>();
 }
 
 if (!string.IsNullOrWhiteSpace(clickHouseConn))

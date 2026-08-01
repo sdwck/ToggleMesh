@@ -1,11 +1,13 @@
 using Microsoft.EntityFrameworkCore;
+using Quartz;
 using ToggleMesh.API.Infrastructure.Data;
 using ToggleMesh.API.Infrastructure.Email;
 using ToggleMesh.API.Infrastructure.Email.Models;
 
 namespace ToggleMesh.API.Infrastructure.BackgroundServices.Email;
 
-public class EmailOutboxWorker : BackgroundService
+[DisallowConcurrentExecution]
+public class EmailOutboxJob : IJob
 {
     private const int BatchSize = 20;
     private const int MaxAttempts = 5;
@@ -16,42 +18,32 @@ public class EmailOutboxWorker : BackgroundService
     private const int BackoffMinutesDefault = 120;
 
     private readonly IServiceProvider _serviceProvider;
-    private readonly ILogger<EmailOutboxWorker> _logger;
+    private readonly ILogger<EmailOutboxJob> _logger;
     private readonly TimeProvider _timeProvider;
-    private readonly EmailOutboxChannel _channel;
 
-    public EmailOutboxWorker(IServiceProvider serviceProvider, ILogger<EmailOutboxWorker> logger, TimeProvider timeProvider, EmailOutboxChannel channel)
+    public EmailOutboxJob(IServiceProvider serviceProvider, ILogger<EmailOutboxJob> logger, TimeProvider timeProvider)
     {
         _serviceProvider = serviceProvider;
         _logger = logger;
         _timeProvider = timeProvider;
-        _channel = channel;
     }
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    public async Task Execute(IJobExecutionContext context)
     {
-        while (!stoppingToken.IsCancellationRequested)
+        var stoppingToken = context.CancellationToken;
+
+        try
         {
-            try
-            {
-                await _channel.WaitToReadAsync(stoppingToken);
-                while (_channel.TryRead(out _)) { }
-                
-                await ProcessOutboxAsync(stoppingToken);
-            }
-            catch (OperationCanceledException)
-            {
-                break;
-            }
-            catch (ObjectDisposedException)
-            {
-                break;
-            }
-            catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
-            {
-                _logger.LogError(ex, "Error processing email outbox messages.");
-                await Task.Delay(TimeSpan.FromSeconds(15), _timeProvider, stoppingToken);
-            }
+            await ProcessOutboxAsync(stoppingToken);
+        }
+        catch (OperationCanceledException)
+        {
+            // ignore
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error processing email outbox messages in Quartz job.");
+            throw new JobExecutionException(ex, refireImmediately: false);
         }
     }
 
@@ -65,7 +57,7 @@ public class EmailOutboxWorker : BackgroundService
 
         if (smtpSender == null)
         {
-            _logger.LogWarning("No direct IEmailSender configured (excluding DatabaseOutboxEmailSender). Outbox will not be processed.");
+            _logger.LogWarning("No direct IEmailSender configured. Outbox will not be processed by Job.");
             return;
         }
 
