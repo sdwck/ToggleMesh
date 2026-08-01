@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Box, Tag, Edit } from 'lucide-react';
+import { ArrowLeft, Box, Tag, Edit, Shield, ShieldCheck, Clock } from 'lucide-react';
 import { useProjectFlags, useToggleFeatureFlag, useProjectDetails, useFlagStats } from '@/api/queries';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -10,6 +10,9 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { ProjectRole } from '@/api/types';
 import { FlagSettingsModal } from './FlagSettingsModal';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
+import { PendingChangesTab } from './components/PendingChangesTab';
+import { ScheduledChangesModal } from './components/ScheduledChangesModal';
 
 const formatNumber = (num: number) => {
     if (num === 0) return '0';
@@ -38,7 +41,9 @@ export function ProjectFlagDetailsPage() {
     const [searchParams] = window.location.search ? [new URLSearchParams(window.location.search)] : [new URLSearchParams()];
     const initialEnvId = searchParams.get('envId');
     const [editingEnvId, setEditingEnvId] = useState<string | null>(initialEnvId);
-
+    const [approvalsEnvId, setApprovalsEnvId] = useState<string | null>(null);
+    const [scheduledModalEnvId, setScheduledModalEnvId] = useState<string | null>(null);
+    const [selectedApprovalsEnvId, setSelectedApprovalsEnvId] = useState<string | null>(null);
     const handleToggle = async (envId: string, targetValue: boolean) => {
         try {
             await toggleFlag.mutateAsync({ envId, flagKey: flagKey!, isEnabled: targetValue });
@@ -72,6 +77,11 @@ export function ProjectFlagDetailsPage() {
                             {flag.isClientSideExposed && (
                                 <Badge variant="secondary" className="bg-primary/10 text-primary text-[10px] shrink-0">Client Side</Badge>
                             )}
+                            {(flag as any).isProtected && (
+                                <Badge variant="outline" className="border-emerald-500/40 text-emerald-400 bg-emerald-500/10 text-[10px] shrink-0 flex items-center gap-1">
+                                    <Shield className="h-3 w-3" /> Protected
+                                </Badge>
+                            )}
                         </div>
                         {flag.name && <h4 className="font-semibold text-sm">{flag.name}</h4>}
                         {flag.description && <p className="text-sm text-muted-foreground max-w-2xl">{flag.description}</p>}
@@ -89,11 +99,13 @@ export function ProjectFlagDetailsPage() {
                             )}
                         </div>
                     </div>
-                    {canEditMeta && (
-                        <Button variant="outline" size="sm" onClick={() => setIsSettingsOpen(true)} className="cursor-pointer shrink-0">
-                            <Edit className="mr-1.5 h-3.5 w-3.5" /> Edit
-                        </Button>
-                    )}
+                    <div className="flex items-center gap-2 shrink-0">
+                        {canEditMeta && (
+                            <Button variant="outline" size="sm" onClick={() => setIsSettingsOpen(true)} className="cursor-pointer">
+                                <Edit className="mr-1.5 h-3.5 w-3.5" /> Edit
+                            </Button>
+                        )}
+                    </div>
                 </CardContent>
             </Card>
 
@@ -104,7 +116,7 @@ export function ProjectFlagDetailsPage() {
                             <TableHead className="w-[200px]">Environment</TableHead>
                             <TableHead>Evaluations</TableHead>
                             <TableHead>Rules</TableHead>
-                            <TableHead className="text-right">Status</TableHead>
+                            <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -124,11 +136,12 @@ export function ProjectFlagDetailsPage() {
                             const multiColors = ['bg-blue-500', 'bg-purple-500', 'bg-amber-500', 'bg-emerald-500', 'bg-rose-500'];
 
                             const canEditEnv = env.userRole === ProjectRole.Owner || env.userRole === ProjectRole.Admin || env.userRole === ProjectRole.Editor;
+                            const requiresApproval = env.requireApprovals && (!env.requireForProtectedFlagsOnly || (flag as any).isProtected);
 
                             return (
                                 <TableRow
                                     key={env.id}
-                                    className="border-border/40 hover:bg-muted/30 cursor-pointer h-[53px] group"
+                                    className="cursor-pointer hover:bg-muted/40 transition-colors h-14"
                                     onClick={() => setEditingEnvId(env.id)}
                                 >
                                     <TableCell className="font-medium text-sm">
@@ -211,14 +224,40 @@ export function ProjectFlagDetailsPage() {
                                         </div>
                                     </TableCell>
                                     <TableCell className="text-right">
-                                        <div className="flex items-center justify-end gap-3" onClick={(e) => e.stopPropagation()}>
-                                            <span className={`text-sm font-medium ${state.isEnabled ? 'text-primary' : 'text-muted-foreground'}`}>
-                                                {state.isEnabled ? 'ON' : 'OFF'}
-                                            </span>
+                                        <div className="flex items-center justify-end gap-2.5" onClick={(e) => e.stopPropagation()}>
+                                            {(requiresApproval || state.hasChangesHistory || state.hasPendingApprovalsForCurrentUser || state.hasScheduledChanges) && (
+                                                <button
+                                                    type="button"
+                                                    className={`p-1.5 rounded transition-colors cursor-pointer ${state.hasPendingApprovalsForCurrentUser
+                                                            ? 'text-amber-400 hover:text-amber-300 hover:bg-amber-500/20 animate-pulse border border-amber-500/40 bg-amber-500/10'
+                                                            : 'text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10'
+                                                        }`}
+                                                    title={state.hasPendingApprovalsForCurrentUser ? "Awaiting your approval! Click to view" : "View Change Requests & Approvals History"}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setSelectedApprovalsEnvId(env.id);
+                                                        setApprovalsEnvId(env.id);
+                                                    }}
+                                                >
+                                                    <ShieldCheck className="h-4 w-4" />
+                                                </button>
+                                            )}
+                                            <button
+                                                type="button"
+                                                className={`p-1.5 rounded transition-colors cursor-pointer ${state.hasScheduledChanges ? 'text-white hover:text-zinc-200' : 'text-zinc-600 hover:text-zinc-400'}`}
+                                                title={state.hasScheduledChanges ? "View Scheduled Changes" : "No Scheduled Changes"}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setScheduledModalEnvId(env.id);
+                                                }}
+                                            >
+                                                <Clock className="h-4 w-4" />
+                                            </button>
                                             <Switch
                                                 checked={state.isEnabled}
                                                 onCheckedChange={(checked) => handleToggle(env.id, checked)}
-                                                disabled={toggleFlag.isPending || !canEditEnv}
+                                                disabled={toggleFlag.isPending || !canEditEnv || requiresApproval}
+                                                title={requiresApproval ? "Change request required. Click the row to edit." : undefined}
                                             />
                                         </div>
                                     </TableCell>
@@ -228,6 +267,37 @@ export function ProjectFlagDetailsPage() {
                     </TableBody>
                 </Table>
             </Card>
+
+            <Sheet open={!!approvalsEnvId} onOpenChange={(open) => !open && setApprovalsEnvId(null)}>
+                <SheetContent side="right" className="sm:max-w-xl w-[550px] overflow-y-auto bg-zinc-950 border-zinc-800 p-0 flex flex-col">
+                    {selectedApprovalsEnvId && (
+                        <>
+                            <div className="p-6 pb-4 border-b border-zinc-800/80 bg-zinc-900/20">
+                                <SheetHeader className="mb-4 flex flex-row items-center justify-between space-y-0">
+                                    <div className="space-y-1">
+                                        <SheetTitle className="text-lg font-bold flex items-center gap-2">
+                                            <ShieldCheck className="h-5 w-5 text-emerald-400" />
+                                            Change Requests & History
+                                        </SheetTitle>
+                                        <SheetDescription className="text-xs text-zinc-400 mt-1">
+                                            History of proposed rule changes, scheduled rollouts, and review requests.
+                                        </SheetDescription>
+                                    </div>
+                                    <div id="pending-changes-header-actions" className="flex items-center justify-end flex-1 pr-6" />
+                                </SheetHeader>
+                            </div>
+                            <div className="flex-1 p-6 pt-0 overflow-y-auto bg-zinc-950/50">
+                                <PendingChangesTab
+                                    key={selectedApprovalsEnvId}
+                                    projectId={projectId!}
+                                    flagKey={flag.key}
+                                    environmentId={selectedApprovalsEnvId}
+                                />
+                            </div>
+                        </>
+                    )}
+                </SheetContent>
+            </Sheet>
 
             <FlagSettingsModal
                 open={isSettingsOpen}
@@ -243,6 +313,16 @@ export function ProjectFlagDetailsPage() {
                     flagKey={flag.key}
                     open={true}
                     onOpenChange={(open: boolean) => !open && setEditingEnvId(null)}
+                />
+            )}
+            {scheduledModalEnvId && (
+                <ScheduledChangesModal
+                    open={!!scheduledModalEnvId}
+                    onOpenChange={(open) => !open && setScheduledModalEnvId(null)}
+                    projectId={projectId!}
+                    flagKey={flagKey!}
+                    environmentId={scheduledModalEnvId}
+                    environmentName={project?.environments?.find(e => e.id === scheduledModalEnvId)?.name}
                 />
             )}
         </div>

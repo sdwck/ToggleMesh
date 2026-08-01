@@ -23,6 +23,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { EnvironmentSegmentsTab } from './components/EnvironmentSegmentsTab';
 import { EnvironmentApiKeysTab } from './components/EnvironmentApiKeysTab';
+import { EnvironmentApprovalPolicyTab } from './components/EnvironmentApprovalPolicyTab';
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
@@ -54,6 +55,7 @@ export function EnvironmentDetailsPage() {
     const [isRenameOpen, setIsRenameOpen] = useState(false);
     const [isDeleteOpen, setIsDeleteOpen] = useState(false);
 
+    const isOwner = project?.userRole === ProjectRole.Owner;
     const canManageKeys = project?.userRole === ProjectRole.Owner || project?.userRole === ProjectRole.Admin;
     const canEditEnv = project?.userRole === ProjectRole.Owner || project?.userRole === ProjectRole.Admin || project?.userRole === ProjectRole.Editor;
 
@@ -163,11 +165,22 @@ export function EnvironmentDetailsPage() {
                     {canManageKeys && (
                         <TabsTrigger value="keys" className="text-xs">API Keys</TabsTrigger>
                     )}
+                    {isOwner && (
+                        <TabsTrigger value="approval-policy" className="text-xs flex items-center gap-1">
+                            Approvals
+                        </TabsTrigger>
+                    )}
                 </TabsList>
 
                 {canManageKeys && (
                     <TabsContent value="keys" className="space-y-4">
                         <EnvironmentApiKeysTab projectId={projectId!} environmentId={environmentId!} />
+                    </TabsContent>
+                )}
+
+                {isOwner && (
+                    <TabsContent value="approval-policy" className="space-y-4">
+                        <EnvironmentApprovalPolicyTab projectId={projectId!} environmentId={environmentId!} />
                     </TabsContent>
                 )}
 

@@ -16,6 +16,7 @@ export interface OrganizationDto {
 export interface OrganizationMemberDto {
     userId: string;
     email: string;
+    userName?: string;
     role: OrganizationRole;
     createdAt: string;
 }
@@ -87,6 +88,9 @@ export interface Environment {
     keys: EnvironmentKey[];
     userRole: ProjectRole;
     lastPiiBlockedContext?: string | null;
+    requireApprovals?: boolean;
+    requiredApprovalsCount?: number;
+    requireForProtectedFlagsOnly?: boolean;
 }
 
 export interface ProjectDetails {
@@ -144,6 +148,7 @@ export interface FeatureFlag {
     isMabEnabled?: boolean;
     mabGoalEvent?: string;
     isExperimentActive?: boolean;
+    isProtected?: boolean;
     mabOptimizationType?: number;
     mabExplorationFloor?: number;
     contextPartitionKeys?: string[];
@@ -165,6 +170,9 @@ export interface FlagEnvironmentStateDto {
     isMabEnabled: boolean;
     mabGoalEvent: string | null;
     isExperimentActive: boolean;
+    hasChangesHistory?: boolean;
+    hasScheduledChanges?: boolean;
+    hasPendingApprovalsForCurrentUser?: boolean;
 }
 
 export interface ProjectFlagDto {
@@ -179,6 +187,10 @@ export interface ProjectFlagDto {
     tags: string[];
     type: number;
     variations: { id: string; value: string }[];
+    hasPendingApprovalsForCurrentUser?: boolean;
+    hasActiveRequests?: boolean;
+    hasScheduledChanges?: boolean;
+    isProtected?: boolean;
 }
 
 export interface PaginatedResponse<T> {
@@ -253,6 +265,7 @@ export interface ProjectMember {
     id: string;
     userId: string;
     email: string;
+    userName?: string;
     role: ProjectRole;
     isOrganizationAdmin: boolean;
     environmentRoles: EnvironmentRoleDto[];
@@ -264,6 +277,7 @@ export interface UpdateFlagRequest {
     offVariationId?: string | null;
     fallthroughRollout: VariationWeight[];
     individualTargets?: Record<string, string>;
+    isEnabled?: boolean;
 }
 
 export interface UpdateGlobalFlagSettingsRequest {
@@ -517,4 +531,24 @@ export interface ContextualExperimentResultDto {
     lastCalculatedAt: string;
     isAutoManaged: boolean;
     variations: ContextualExperimentVariationResultDto[];
+}
+
+export interface PendingChange {
+    id: string;
+    flagId: string;
+    environmentId: string;
+    requestedByUserId: string;
+    requestedByUserName: string;
+    requestedByUserEmail?: string;
+    reviewedByUserId?: string;
+    reviewedByUserName?: string;
+    reviewedByUserEmail?: string;
+    approvedByUserIds: string[];
+    status: 'PendingReview' | 'Approved' | 'Scheduled' | 'Executed' | 'Rejected' | 'ConflictFailed' | 'Cancelled' | 'Expired';
+    patchInstructionsJson: string;
+    diffSummaryJson?: string;
+    executeAt?: string;
+    isPurelyScheduled: boolean;
+    comment?: string;
+    createdAt: string;
 }

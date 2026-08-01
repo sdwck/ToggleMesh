@@ -25,5 +25,6 @@ public record GetFlagResponse(
     FlagType Type = FlagType.Boolean,
     bool IsSrmAlertSent = false,
     double? SrmPValue = null,
-    string[]? SecondaryMetrics = null);
+    string[]? SecondaryMetrics = null,
+    bool IsProtected = false);
 

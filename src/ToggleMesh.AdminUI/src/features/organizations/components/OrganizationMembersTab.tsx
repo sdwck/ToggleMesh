@@ -166,6 +166,9 @@ export function OrganizationMembersTab({ activeOrganizationId, activeOrgName, us
                         <div className="space-y-2">
                             {sortedMembers.map((member) => {
                                 const isSelf = member.email === userEmail;
+                                const displayName = (member.userName && member.userName.toLowerCase() !== member.email.toLowerCase())
+                                    ? member.userName
+                                    : member.email.split('@')[0];
                                 return (
                                     <div
                                         key={member.userId}
@@ -177,14 +180,17 @@ export function OrganizationMembersTab({ activeOrganizationId, activeOrgName, us
                                                     {member.email.charAt(0).toUpperCase()}
                                                 </AvatarFallback>
                                             </Avatar>
-                                            <span className="text-sm truncate">
-                                                {member.email}
-                                                {isSelf && (
-                                                    <span className="ml-2 text-xs text-muted-foreground font-normal">
-                                                        (You)
-                                                    </span>
-                                                )}
-                                            </span>
+                                            <div className="flex flex-col min-w-0">
+                                                <span className="text-sm font-bold text-foreground truncate">
+                                                    {displayName}
+                                                    {isSelf && (
+                                                        <span className="ml-2 text-xs text-muted-foreground font-normal">
+                                                            (You)
+                                                        </span>
+                                                    )}
+                                                </span>
+                                                <span className="text-[11px] text-muted-foreground font-mono mt-0.5 truncate">{member.email}</span>
+                                            </div>
                                         </div>
                                         <div className="flex items-center gap-2 w-full sm:w-auto justify-end sm:justify-start">
                                             {!isSelf ? (

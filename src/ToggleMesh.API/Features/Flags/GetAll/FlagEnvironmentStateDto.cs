@@ -9,5 +9,8 @@ public record FlagEnvironmentStateDto(
     int RulesCount,
     bool IsMabEnabled,
     string? MabGoalEvent,
-    bool IsExperimentActive
+    bool IsExperimentActive,
+    bool HasChangesHistory = false,
+    bool HasScheduledChanges = false,
+    bool HasPendingApprovalsForCurrentUser = false
 );

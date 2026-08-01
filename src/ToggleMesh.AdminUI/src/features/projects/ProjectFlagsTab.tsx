@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ToggleRight, Trash2, MoreHorizontal, Settings2, Copy, ArrowDown, ArrowUp, ArrowUpDown, Sparkles } from 'lucide-react';
+import { ToggleRight, Trash2, MoreHorizontal, Settings2, Copy, ArrowDown, ArrowUp, ArrowUpDown, Sparkles, Shield, Clock } from 'lucide-react';
 import { useProjectFlagsInfinite, useToggleFeatureFlag, useUpdateFlagPrivacy, useDeleteFeatureFlag } from '@/api/queries';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -286,7 +286,21 @@ export function ProjectFlagsTab({ project, search, tags, sortBy, isLoadingProjec
                                                     <div className="flex items-center gap-2">
                                                         <ToggleRight className="h-4 w-4 text-muted-foreground shrink-0" />
                                                         <div className="flex flex-col">
-                                                            <span className="truncate max-w-[200px]">{flag.key}</span>
+                                                            <div className="flex items-center">
+                                                                <span className="truncate max-w-[180px]">{flag.key}</span>
+                                                                {flag.isProtected && (
+                                                                    <div title="Protected Flag" className="flex items-center ml-2">
+                                                                        {(flag.hasPendingApprovalsForCurrentUser) ?
+                                                                            <Shield className="h-3.5 w-3.5 text-emerald-400 shrink-0 animate-pulse" />
+                                                                            : <Shield className="h-3.5 w-3.5 text-emerald-400 shrink-0" />}
+                                                                    </div>
+                                                                )}
+                                                                {flag.hasScheduledChanges && (
+                                                                    <Badge variant="outline" className="ml-2 bg-zinc-900 text-zinc-400 border-zinc-800 text-[9px] px-1.5 py-0 h-4 flex items-center gap-1 cursor-help" title="Scheduled changes">
+                                                                        <Clock className="h-3 w-3" />
+                                                                    </Badge>
+                                                                )}
+                                                            </div>
                                                             {flag.name && <span className="text-[10px] text-muted-foreground font-sans mt-0.5">{flag.name}</span>}
                                                             {flag.tags && flag.tags.length > 0 && (
                                                                 <div className="flex gap-1.5 mt-1.5 flex-wrap max-w-[200px]" onClick={(e) => e.stopPropagation()}>

@@ -75,23 +75,41 @@ export const toastApiError = (error: any, defaultMessage: string = 'An error occ
         toast.error(defaultMessage);
         return;
     }
+
     if (data.errors) {
-        if (Array.isArray(data.errors)) {
-            toast.error(data.errors[0]?.reason || data.errors[0]?.message || defaultMessage);
-            return;
-        } else {
-            const firstKey = Object.keys(data.errors)[0];
-            const msg = Array.isArray(data.errors[firstKey]) ? data.errors[firstKey][0] : data.errors[firstKey];
+        if (Array.isArray(data.errors) && data.errors.length > 0) {
+            const firstErr = data.errors[0];
+            const msg = typeof firstErr === 'string' ? firstErr : (firstErr?.reason || firstErr?.message);
             if (msg) {
                 toast.error(msg);
                 return;
             }
+        } else if (typeof data.errors === 'object') {
+            const keys = Object.keys(data.errors);
+            if (keys.length > 0) {
+                const firstKey = keys[0];
+                const val = data.errors[firstKey];
+                const msg = Array.isArray(val) ? val[0] : (typeof val === 'string' ? val : val?.message || val?.reason);
+                if (msg) {
+                    toast.error(msg);
+                    return;
+                }
+            }
         }
     }
-    if (data.message) {
-        toast.error(data.message);
-    } else if (data.title) {
-        toast.error(data.title);
+
+    let msg = data.message || data.title || data.detail;
+
+    if (typeof msg === 'string' && (msg.includes('One or more') || msg.toLowerCase().includes('validation error'))) {
+        if (data.detail) {
+            msg = data.detail;
+        } else {
+            msg = defaultMessage;
+        }
+    }
+
+    if (msg && typeof msg === 'string') {
+        toast.error(msg);
     } else {
         toast.error(defaultMessage);
     }

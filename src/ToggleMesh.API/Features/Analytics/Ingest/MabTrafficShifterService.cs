@@ -9,10 +9,12 @@ namespace ToggleMesh.API.Features.Analytics.Ingest;
 public class MabTrafficShifterService : IMabTrafficShifterService
 {
     private readonly ILogger<MabTrafficShifterService> _logger;
+    private readonly IConfiguration _config;
 
-    public MabTrafficShifterService(ILogger<MabTrafficShifterService> logger)
+    public MabTrafficShifterService(ILogger<MabTrafficShifterService> logger, IConfiguration config)
     {
         _logger = logger;
+        _config = config;
     }
 
     public async Task ProcessMabTrafficShiftingAsync(
@@ -22,6 +24,7 @@ public class MabTrafficShifterService : IMabTrafficShifterService
         CancellationToken ct)
     {
         db.SystemActorEmail = "mab-automation@togglemesh.dev";
+        db.DisableAuditing = !_config.GetValue<bool>("EnableMabAuditLogging", false);
         var stateIds = await db.FlagEnvironmentStates
             .AsNoTracking()
             .Where(x => 
@@ -39,6 +42,8 @@ public class MabTrafficShifterService : IMabTrafficShifterService
                     .ThenInclude(x => x.Variations)
                 .Include(x => x.Rules)
                 .Include(x => x.ContextualRollouts)
+                    .ThenInclude(x => x.Rollout)
+                .Include(x => x.FallthroughRollout)
                 .Where(x => chunk.Contains(x.Id))
                 .AsSplitQuery()
                 .ToListAsync(ct);
@@ -227,6 +232,8 @@ public class MabTrafficShifterService : IMabTrafficShifterService
                     .ThenInclude(x => x.Variations)
                 .Include(x => x.Rules)
                 .Include(x => x.ContextualRollouts)
+                    .ThenInclude(x => x.Rollout)
+                .Include(x => x.FallthroughRollout)
                 .Where(x => chunk.Contains(x.Id))
                 .AsSplitQuery()
                 .ToListAsync(ct);
@@ -345,17 +352,20 @@ public class MabTrafficShifterService : IMabTrafficShifterService
                     
                     if (existingRollout != null)
                     {
-                        state.ContextualRollouts.Remove(existingRollout);
-                        db.ContextualRollouts.Remove(existingRollout);
+                        existingRollout.Rollout.Clear();
+                        foreach (var item in newRollout)
+                            existingRollout.Rollout.Add(item);
                     }
-
-                    state.ContextualRollouts.Add(new ContextualRollout
+                    else
                     {
-                        FlagEnvironmentStateId = state.Id,
-                        ContextSlice = slice,
-                        Rollout = newRollout,
-                        IsAutoManaged = true
-                    });
+                        state.ContextualRollouts.Add(new ContextualRollout
+                        {
+                            FlagEnvironmentStateId = state.Id,
+                            ContextSlice = slice,
+                            Rollout = newRollout,
+                            IsAutoManaged = true
+                        });
+                    }
 
                     _logger.LogDebug("[Contextual MAB] Flag {Flag} Context {Slice} rollout adjusted", state.FeatureFlag.Key, slice);
                     hasChanges = true;

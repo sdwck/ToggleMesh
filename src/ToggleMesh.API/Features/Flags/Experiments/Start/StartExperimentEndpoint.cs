@@ -55,6 +55,14 @@ public class StartExperimentEndpoint : ToggleEndpoint<StartExperimentRequest, Ge
 
         if (state.IsExperimentActive)
             ThrowError("Experiment is already active.");
+            
+        var hasPendingChanges = await _db.PendingFlagChanges
+            .AnyAsync(x => x.FlagId == state.FeatureFlagId && 
+                           x.EnvironmentId == environmentId && 
+                           (x.Status == PendingFlagChangeStatus.PendingReview || x.Status == PendingFlagChangeStatus.Scheduled), ct);
+
+        if (hasPendingChanges)
+            ThrowError("Cannot start an experiment while there are pending or scheduled changes for this flag.");
 
         if (req.MabExplorationFloor is < 0 or > 10)
             ThrowError("Exploration floor must be between 0 and 10.");

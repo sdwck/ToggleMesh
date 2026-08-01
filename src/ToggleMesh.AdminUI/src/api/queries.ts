@@ -32,7 +32,8 @@ import type {
     UpdateFlagRequest,
     UpdateGlobalFlagSettingsRequest,
     ChangePasswordRequest,
-    Integration
+    Integration,
+    PendingChange
 } from './types';
 
 export const useSystemConfig = () => {
@@ -1166,5 +1167,143 @@ export const usePurgeIdentity = () => {
             });
             return data;
         }
+    });
+};
+
+export const useUpdateEnvironmentApprovalPolicy = (projectId: string, environmentId: string) => {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async (req: { requireApprovals: boolean; requiredApprovalsCount: number; requireForProtectedFlagsOnly: boolean }) => {
+            const { data } = await api.put(`/projects/${projectId}/environments/${environmentId}/approval-policy`, req);
+            return data;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['projects', projectId] });
+        },
+    });
+};
+
+export const useUpdateFlagProtection = (projectId: string, flagKey: string) => {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async (isProtected: boolean) => {
+            const { data } = await api.put(`/projects/${projectId}/flags/${flagKey}/protection`, { isProtected });
+            return data;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['flags', projectId] });
+            queryClient.invalidateQueries({ queryKey: ['flag', projectId, flagKey] });
+        },
+    });
+};
+
+export interface PendingChangesFilterParams {
+    status?: 'active' | 'history' | 'all';
+    dateFrom?: string;
+    dateTo?: string;
+    pageSize?: number;
+    excludePurelyScheduled?: boolean;
+}
+
+export const usePendingChanges = (projectId: string, flagKey: string, environmentId: string) => {
+    return useQuery<PendingChange[]>({
+        queryKey: ['pending-changes', projectId, flagKey, environmentId],
+        queryFn: async () => {
+            const { data } = await api.get<any>(`/projects/${projectId}/flags/${flagKey}/environments/${environmentId}/changes?pageSize=100`);
+            return Array.isArray(data) ? data : (data?.items || []);
+        },
+        enabled: !!projectId && !!flagKey && !!environmentId,
+    });
+};
+
+export const useInfinitePendingChanges = (
+    projectId: string,
+    flagKey: string,
+    environmentId: string,
+    filters?: PendingChangesFilterParams
+) => {
+    return useInfiniteQuery<CursorPagedResponse<PendingChange>>({
+        queryKey: ['infinite-pending-changes', projectId, flagKey, environmentId, filters],
+        queryFn: async ({ pageParam }) => {
+            const params = new URLSearchParams();
+            if (pageParam) params.append('cursor', pageParam as string);
+            if (filters?.status) params.append('status', filters.status);
+            if (filters?.dateFrom) params.append('dateFrom', filters.dateFrom);
+            if (filters?.dateTo) params.append('dateTo', filters.dateTo);
+            if (filters?.pageSize) params.append('pageSize', filters.pageSize.toString());
+            if (filters?.excludePurelyScheduled) params.append('excludePurelyScheduled', 'true');
+
+            const url = `/projects/${projectId}/flags/${flagKey}/environments/${environmentId}/changes?${params.toString()}`;
+            const { data } = await api.get<CursorPagedResponse<PendingChange>>(url);
+            return data;
+        },
+        initialPageParam: undefined,
+        getNextPageParam: (lastPage) => (lastPage.hasNextPage ? lastPage.nextCursor : undefined),
+        enabled: !!projectId && !!flagKey && !!environmentId,
+    });
+};
+
+export const useCreatePendingChange = (projectId: string, flagKey: string, environmentId: string) => {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async (req: { patchInstructionsJson: string; executeAt?: string; comment?: string }) => {
+            const { data } = await api.post(`/projects/${projectId}/flags/${flagKey}/environments/${environmentId}/changes`, req);
+            return data;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['pending-changes', projectId, flagKey, environmentId] });
+            queryClient.invalidateQueries({ queryKey: ['infinite-pending-changes'] });
+        },
+    });
+};
+
+export const useReviewPendingChange = (projectId: string, flagKey: string, environmentId: string) => {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async (req: { changeId: string; action: 'Approve' | 'Reject'; comment?: string }) => {
+            const { data } = await api.post(`/projects/${projectId}/flags/${flagKey}/environments/${environmentId}/changes/${req.changeId}/review`, {
+                action: req.action,
+                comment: req.comment,
+            });
+            return data;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['pending-changes', projectId, flagKey, environmentId] });
+            queryClient.invalidateQueries({ queryKey: ['infinite-pending-changes'] });
+            queryClient.invalidateQueries({ queryKey: ['flag', projectId, flagKey] });
+            queryClient.invalidateQueries({ queryKey: ['projects', projectId, 'flags'] });
+        },
+    });
+};
+
+export const useCancelScheduledChange = (projectId: string, flagKey: string, environmentId: string) => {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async (changeId: string) => {
+            const { data } = await api.post(`/projects/${projectId}/flags/${flagKey}/environments/${environmentId}/changes/${changeId}/cancel`);
+            return data;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['pending-changes', projectId, flagKey, environmentId] });
+            queryClient.invalidateQueries({ queryKey: ['infinite-pending-changes'] });
+            queryClient.invalidateQueries({ queryKey: ['flag', projectId, flagKey] });
+            queryClient.invalidateQueries({ queryKey: ['projects', projectId, 'flags'] });
+        },
+    });
+};
+
+export const useExecuteScheduledChange = (projectId: string, flagKey: string, environmentId: string) => {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async (changeId: string) => {
+            const { data } = await api.post(`/projects/${projectId}/flags/${flagKey}/environments/${environmentId}/changes/${changeId}/execute-now`);
+            return data;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['pending-changes', projectId, flagKey, environmentId] });
+            queryClient.invalidateQueries({ queryKey: ['infinite-pending-changes'] });
+            queryClient.invalidateQueries({ queryKey: ['flag', projectId, flagKey] });
+            queryClient.invalidateQueries({ queryKey: ['projects', projectId, 'flags'] });
+        },
     });
 };

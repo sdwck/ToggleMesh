@@ -7,6 +7,7 @@ import { useFieldArray } from 'react-hook-form';
 import type { Control, UseFormReturn } from 'react-hook-form';
 import { RolloutConfig } from './RolloutConfig';
 import { getDefaultRollout } from '../utils';
+import type { SegmentDto } from '@/api/types';
 
 interface RulesConfigListProps {
     form: UseFormReturn<any>;
@@ -20,6 +21,7 @@ interface RulesConfigListProps {
     emptyMessage?: string;
     showInSegmentSpecialHandling?: boolean;
     type?: number;
+    segments?: SegmentDto[];
 }
 
 export function RulesConfigList({
@@ -33,7 +35,8 @@ export function RulesConfigList({
     disabled = false,
     emptyMessage = "No rules defined.",
     showInSegmentSpecialHandling = false,
-    type
+    type,
+    segments
 }: RulesConfigListProps) {
     const { fields, append, remove } = useFieldArray({
         control,
@@ -87,112 +90,166 @@ export function RulesConfigList({
                                 </div>
                             )}
                             <div className="px-6 pt-6 pb-6 border border-border/40 rounded-lg space-y-4 bg-muted/10 relative">
-                                {groupFields.map((field, i) => (
-                                    <div key={field.id} className="relative">
-                                        {i > 0 && (
-                                            <div className="absolute -top-4 left-6 bg-background px-1 text-[10px] font-medium text-muted-foreground z-10">
-                                                AND
-                                            </div>
-                                        )}
-                                        <div className="flex flex-col sm:flex-row sm:items-start gap-3 relative pr-8 sm:pr-0">
-                                            {showInSegmentSpecialHandling && form.watch(`${name}.${field.index}.operator`) === 'InSegment' ? (
-                                                <div className="flex-1 w-full flex items-center h-9 px-3 border border-border/40 rounded-md bg-muted/30 text-sm text-muted-foreground shadow-sm">
-                                                    User Context
+                                {groupFields.map((field, i) => {
+                                    const currentOperator = form.watch(`${name}.${field.index}.operator`);
+                                    const isInSegment = showInSegmentSpecialHandling && currentOperator === 'InSegment';
+
+                                    return (
+                                        <div key={field.id} className="relative">
+                                            {i > 0 && (
+                                                <div className="absolute -top-4 left-6 bg-background px-1 text-[10px] font-medium text-muted-foreground z-10">
+                                                    AND
                                                 </div>
-                                            ) : (
+                                            )}
+                                            <div className="flex flex-col sm:flex-row sm:items-start gap-3 relative pr-8 sm:pr-0">
                                                 <div className="flex-1 w-full space-y-2">
                                                     <FormField
                                                         control={control}
                                                         name={`${name}.${field.index}.attribute`}
-                                                        render={({ field: inputField }) => (
-                                                            <FormItem>
-                                                                <FormControl>
-                                                                    <Input
-                                                                        placeholder="Attribute (e.g. Email)"
-                                                                        disabled={isFullyDisabled}
-                                                                        onKeyDown={(e) => {
-                                                                            if (e.key === 'Enter') e.preventDefault();
-                                                                        }}
-                                                                        {...inputField}
-                                                                    />
-                                                                </FormControl>
-                                                            </FormItem>
-                                                        )}
+                                                        render={({ field: inputField }) => {
+                                                            if (isInSegment && inputField.value !== 'User Context') {
+                                                                setTimeout(() => inputField.onChange('User Context'), 0);
+                                                            }
+                                                            return isInSegment ? (
+                                                                <div className="flex-1 w-full flex items-center h-9 px-3 border border-border/40 rounded-md bg-muted/30 text-sm text-muted-foreground shadow-sm font-medium">
+                                                                    User Context
+                                                                </div>
+                                                            ) : (
+                                                                <FormItem>
+                                                                    <FormControl>
+                                                                        <Input
+                                                                            placeholder="Attribute (e.g. Email)"
+                                                                            disabled={isFullyDisabled}
+                                                                            onKeyDown={(e) => {
+                                                                                if (e.key === 'Enter') e.preventDefault();
+                                                                            }}
+                                                                            {...inputField}
+                                                                        />
+                                                                    </FormControl>
+                                                                </FormItem>
+                                                            );
+                                                        }}
                                                     />
                                                 </div>
-                                            )}
 
-                                            <div className="w-full sm:w-[180px]">
-                                                <FormField
-                                                    control={control}
-                                                    name={`${name}.${field.index}.operator`}
-                                                    render={({ field: selectField }) => (
-                                                        <FormItem>
-                                                            <Select
-                                                                disabled={isFullyDisabled || isLoadingOperators}
-                                                                onValueChange={selectField.onChange}
-                                                                value={selectField.value}
-                                                            >
-                                                                <FormControl>
-                                                                    <SelectTrigger>
-                                                                        <SelectValue placeholder="Operator" />
-                                                                    </SelectTrigger>
-                                                                </FormControl>
-                                                                <SelectContent>
-                                                                    {operators.map((op) => (
-                                                                        <SelectItem key={op} value={op}>
-                                                                            {op}
-                                                                        </SelectItem>
-                                                                    ))}
-                                                                </SelectContent>
-                                                            </Select>
-                                                        </FormItem>
-                                                    )}
-                                                />
-                                            </div>
-
-                                            <div className="flex gap-2 w-full flex-col sm:flex-row sm:w-auto flex-1 items-start">
-                                                <div className="flex-1 w-full space-y-2">
+                                                <div className="w-full sm:w-[180px]">
                                                     <FormField
                                                         control={control}
-                                                        name={`${name}.${field.index}.value`}
-                                                        render={({ field: inputField }) => (
+                                                        name={`${name}.${field.index}.operator`}
+                                                        render={({ field: selectField }) => (
                                                             <FormItem>
-                                                                <FormControl>
-                                                                    <Input
-                                                                        placeholder="Value"
-                                                                        disabled={isFullyDisabled}
-                                                                        onKeyDown={(e) => {
-                                                                            if (e.key === 'Enter') e.preventDefault();
-                                                                        }}
-                                                                        {...inputField}
-                                                                    />
-                                                                </FormControl>
+                                                                <Select
+                                                                    disabled={isFullyDisabled || isLoadingOperators}
+                                                                    onValueChange={(val) => {
+                                                                        selectField.onChange(val);
+                                                                        if (showInSegmentSpecialHandling && val === 'InSegment') {
+                                                                            form.setValue(`${name}.${field.index}.attribute`, 'User Context');
+                                                                        }
+                                                                    }}
+                                                                    value={selectField.value}
+                                                                >
+                                                                    <FormControl>
+                                                                        <SelectTrigger>
+                                                                            <SelectValue placeholder="Operator" />
+                                                                        </SelectTrigger>
+                                                                    </FormControl>
+                                                                     <SelectContent>
+                                                                        {operators.map((op) => {
+                                                                            const isNoSegments = op === 'InSegment' && showInSegmentSpecialHandling && (!segments || segments.length === 0);
+                                                                            return (
+                                                                                <SelectItem
+                                                                                    key={op}
+                                                                                    value={op}
+                                                                                    disabled={isNoSegments}
+                                                                                >
+                                                                                    {isNoSegments ? 'InSegment (No segments in env)' : op}
+                                                                                </SelectItem>
+                                                                            );
+                                                                        })}
+                                                                    </SelectContent>
+                                                                </Select>
                                                             </FormItem>
                                                         )}
                                                     />
                                                 </div>
 
-                                                {!isFullyDisabled && (
-                                                    <Button
-                                                        type="button"
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        className="text-muted-foreground hover:text-destructive shrink-0 self-end sm:self-start mt-2 sm:mt-0"
-                                                        onClick={() => remove(field.index)}
-                                                        disabled={isFullyDisabled}
-                                                    >
-                                                        <Trash2 className="h-4 w-4" />
-                                                    </Button>
-                                                )}
-                                            </div>
-                                        </div>
+                                                <div className="flex gap-2 w-full flex-col sm:flex-row sm:w-auto flex-1 items-start">
+                                                    <div className="flex-1 w-full space-y-2">
+                                                        <FormField
+                                                            control={control}
+                                                            name={`${name}.${field.index}.value`}
+                                                            render={({ field: inputField }) => (
+                                                                <FormItem>
+                                                                    {isInSegment ? (
+                                                                        segments && segments.length > 0 ? (
+                                                                            <Select
+                                                                                disabled={isFullyDisabled}
+                                                                                onValueChange={inputField.onChange}
+                                                                                value={inputField.value}
+                                                                            >
+                                                                                <FormControl>
+                                                                                    <SelectTrigger>
+                                                                                        <SelectValue placeholder="Select segment..." />
+                                                                                    </SelectTrigger>
+                                                                                </FormControl>
+                                                                                <SelectContent>
+                                                                                    {segments.map((seg) => (
+                                                                                        <SelectItem key={seg.id} value={seg.id}>
+                                                                                            {seg.name}
+                                                                                        </SelectItem>
+                                                                                    ))}
+                                                                                </SelectContent>
+                                                                            </Select>
+                                                                        ) : (
+                                                                            <Select disabled value="">
+                                                                                <FormControl>
+                                                                                    <SelectTrigger className="border-amber-500/40 bg-amber-500/10 text-amber-400">
+                                                                                        <SelectValue placeholder="No segments in this environment" />
+                                                                                    </SelectTrigger>
+                                                                                </FormControl>
+                                                                                <SelectContent>
+                                                                                    <SelectItem value="" disabled>No segments created in this environment</SelectItem>
+                                                                                </SelectContent>
+                                                                            </Select>
+                                                                        )
+                                                                    ) : (
+                                                                        <FormControl>
+                                                                            <Input
+                                                                                placeholder="Value"
+                                                                                disabled={isFullyDisabled}
+                                                                                onKeyDown={(e) => {
+                                                                                    if (e.key === 'Enter') e.preventDefault();
+                                                                                }}
+                                                                                {...inputField}
+                                                                            />
+                                                                        </FormControl>
+                                                                    )}
+                                                                </FormItem>
+                                                            )}
+                                                        />
+                                                    </div>
 
-                                        {(form.formState.errors as any)?.[name]?.[field.index] && (
-                                            <p className="text-xs text-destructive mt-1">Please fill all fields.</p>
-                                        )}
-                                    </div>
-                                ))}
+                                                    {!isFullyDisabled && (
+                                                        <Button
+                                                            type="button"
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="text-muted-foreground hover:text-destructive shrink-0 self-end sm:self-start mt-2 sm:mt-0"
+                                                            onClick={() => remove(field.index)}
+                                                            disabled={isFullyDisabled}
+                                                        >
+                                                            <Trash2 className="h-4 w-4" />
+                                                        </Button>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {(form.formState.errors as any)?.[name]?.[field.index] && (
+                                                <p className="text-xs text-destructive mt-1">Please fill all fields.</p>
+                                            )}
+                                        </div>
+                                    );
+                                })}
 
                                 <div className="pt-2 border-t border-border/40 space-y-4">
                                     <FormField

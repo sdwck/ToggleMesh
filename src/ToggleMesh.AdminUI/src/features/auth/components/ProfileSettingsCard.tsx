@@ -118,7 +118,12 @@ export function ProfileSettingsCard() {
                         <div className="flex justify-end mt-auto pt-4">
                             <Button
                                 type="submit"
-                                disabled={updateProfile.isPending}
+                                disabled={
+                                    updateProfile.isPending || 
+                                    !profile ||
+                                    (updateProfileForm.watch('username') === profile.username && updateProfileForm.watch('skipLandingPage') === (profile.skipLandingPage ?? false)) ||
+                                    !updateProfileForm.watch('username')?.trim()
+                                }
                             >
                                 {updateProfile.isPending ? 'Saving...' : 'Save Changes'}
                             </Button>

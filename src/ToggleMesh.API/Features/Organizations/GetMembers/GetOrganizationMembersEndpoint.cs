@@ -30,6 +30,7 @@ public class GetOrganizationMembersEndpoint : ToggleEndpoint<GetOrganizationMemb
             {
                 UserId = m.UserId,
                 Email = m.User.Email!,
+                UserName = m.User.UserName,
                 Role = m.Role,
                 CreatedAt = m.CreatedAt
             })

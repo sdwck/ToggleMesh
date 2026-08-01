@@ -87,6 +87,7 @@ services:
       Analytics__HashIdentities: ${TM_ANALYTICS_HASH_IDENTITIES:-true}
       Analytics__RetentionDays: ${TM_ANALYTICS_RETENTION_DAYS:-90}
       AuditLogs__RetentionDays: ${TM_AUDIT_LOG_RETENTION_DAYS:-0}
+      EnableMabAuditLogging: ${TM_ENABLE_MAB_AUDIT_LOGGING:-false}
       
       # SMTP Email
       Email__EnableEmails: ${TM_ENABLE_EMAILS:-false}

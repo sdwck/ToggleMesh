@@ -45,84 +45,100 @@ public class UpdateFlagEndpoint : ToggleEndpoint<UpdateFlagRequest, GetFlagRespo
             await Send.NotFoundAsync(ct);
             return;
         }
+
+        var env = await _db.Environments
+            .FirstOrDefaultAsync(x => x.Id == environmentId, ct);
+
+        if (env is { RequireApprovals: true } && (!env.RequireForProtectedFlagsOnly || state.FeatureFlag.IsProtected))
+            ThrowError("This environment requires approvals for flag changes. Direct updates are prohibited.", 400);
         
         state.OffVariationId = req.OffVariationId;
+        if (req.IsEnabled.HasValue)
+            state.IsEnabled = req.IsEnabled.Value;
 
         if (!state.IsExperimentActive)
         {
-            var currentRolloutJson = JsonSerializer.Serialize(state.FallthroughRollout);
-            var newRolloutJson = JsonSerializer.Serialize(req.FallthroughRollout);
-            if (currentRolloutJson != newRolloutJson)
-                state.FallthroughRollout = req.FallthroughRollout;
-
-            var currentRulesJson = JsonSerializer.Serialize(
-                state.Rules.Select(r => 
-                    new { 
-                        r.GroupId, 
-                        r.Attribute, 
-                        r.Operator, 
-                        r.Value, 
-                        r.Rollout 
-                    }));
-            var newRulesJson = JsonSerializer.Serialize(
-                req.Rules.Select(r => 
-                    new
-                    {
-                        r.GroupId, 
-                        r.Attribute, 
-                        r.Operator, 
-                        r.Value, 
-                        Rollout = r.Rollout?.Select(rw => 
-                            new { rw.VariationId, rw.Weight })
-                    }));
-            
-            if (currentRulesJson != newRulesJson)
+            if (req.FallthroughRollout != null)
             {
-                _db.FlagRules.RemoveRange(state.Rules);
-                state.Rules.Clear();
+                var currentRolloutJson = JsonSerializer.Serialize(state.FallthroughRollout);
+                var newRolloutJson = JsonSerializer.Serialize(req.FallthroughRollout);
+                if (currentRolloutJson != newRolloutJson)
+                    state.FallthroughRollout = req.FallthroughRollout;
+            }
+
+            if (req.Rules != null)
+            {
+                var currentRulesJson = JsonSerializer.Serialize(
+                    state.Rules.Select(r => 
+                        new { 
+                            r.GroupId, 
+                            r.Attribute, 
+                            r.Operator, 
+                            r.Value, 
+                            r.Rollout 
+                        }));
+                var newRulesJson = JsonSerializer.Serialize(
+                    req.Rules.Select(r => 
+                        new
+                        {
+                            r.GroupId, 
+                            r.Attribute, 
+                            r.Operator, 
+                            r.Value, 
+                            Rollout = r.Rollout?.Select(rw => 
+                                new { rw.VariationId, rw.Weight })
+                        }));
                 
-                foreach (var newRule in req.Rules)
-                    state.Rules.Add(new FlagRule 
-                    { 
-                        GroupId = newRule.GroupId, 
-                        Attribute = newRule.Attribute, 
-                        Operator = newRule.Operator, 
-                        Value = newRule.Value,
-                        Rollout = newRule.Rollout?
-                            .Select(r => 
-                                new VariationWeight
-                                {
-                                    VariationId = r.VariationId, 
-                                    Weight = r.Weight
-                                })
-                            .ToList() ?? []
-                    });
+                if (currentRulesJson != newRulesJson)
+                {
+                    _db.FlagRules.RemoveRange(state.Rules);
+                    state.Rules.Clear();
+                    
+                    foreach (var newRule in req.Rules)
+                        state.Rules.Add(new FlagRule 
+                        { 
+                            GroupId = newRule.GroupId, 
+                            Attribute = newRule.Attribute, 
+                            Operator = newRule.Operator, 
+                            Value = newRule.Value,
+                            Rollout = newRule.Rollout?
+                                .Select(r => 
+                                    new VariationWeight
+                                    {
+                                        VariationId = r.VariationId, 
+                                        Weight = r.Weight
+                                    })
+                                .ToList() ?? []
+                        });
+                }
             }
         }
 
-        var currentTargetsJson = JsonSerializer.Serialize(
-            state.IndividualTargets
-                .OrderBy(t => t.IdentityKey)
-                .Select(t => new { t.IdentityKey, t.VariationId }));
-        var newTargets = req.IndividualTargets?
-            .OrderBy(t => t.Key)
-            .Select(t => 
-                new { IdentityKey = t.Key, VariationId = t.Value })
-            .ToList() ?? [];
-        var newTargetsJson = JsonSerializer.Serialize(newTargets);
-
-        if (currentTargetsJson != newTargetsJson)
+        if (req.IndividualTargets != null)
         {
-            _db.RemoveRange(state.IndividualTargets);
-            state.IndividualTargets.Clear();
+            var currentTargetsJson = JsonSerializer.Serialize(
+                state.IndividualTargets
+                    .OrderBy(t => t.IdentityKey)
+                    .Select(t => new { t.IdentityKey, t.VariationId }));
+            var newTargets = req.IndividualTargets
+                .OrderBy(t => t.Key)
+                .Select(t => 
+                    new { IdentityKey = t.Key, VariationId = t.Value })
+                .ToList();
+            var newTargetsJson = JsonSerializer.Serialize(newTargets);
 
-            if (req.IndividualTargets != null)
+            if (currentTargetsJson != newTargetsJson)
+            {
+                _db.RemoveRange(state.IndividualTargets);
+                state.IndividualTargets.Clear();
+
                 foreach (var kvp in req.IndividualTargets)
                     state.IndividualTargets.Add(new FlagIndividualTarget
                     {
                         IdentityKey = kvp.Key,
                         VariationId = kvp.Value
                     });
+            }
         }
 
         try

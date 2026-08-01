@@ -67,6 +67,7 @@ public class GetMembersEndpoint : ToggleEndpointWithoutRequest<List<MemberDto>>
                 Id = explicitMember?.Id ?? admin.UserId,
                 UserId = admin.UserId.ToString(),
                 Email = admin.User.Email!,
+                UserName = admin.User.UserName,
                 Role = ProjectRole.Owner,
                 IsOrganizationAdmin = true,
                 EnvironmentRoles = explicitMember?.EnvironmentRoles.Select(er => new EnvironmentRoleDto
@@ -85,6 +86,7 @@ public class GetMembersEndpoint : ToggleEndpointWithoutRequest<List<MemberDto>>
                     Id = m.Id,
                     UserId = m.UserId.ToString(),
                     Email = m.User.Email!,
+                    UserName = m.User.UserName,
                     Role = m.Role,
                     IsOrganizationAdmin = false,
                     EnvironmentRoles = m.EnvironmentRoles.Select(er => new EnvironmentRoleDto

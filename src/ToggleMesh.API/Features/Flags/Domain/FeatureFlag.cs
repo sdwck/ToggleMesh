@@ -20,4 +20,6 @@ public class FeatureFlag : AuditableEntity, ISoftDeletable
     public ICollection<FlagEnvironmentState> States { get; set; } = new List<FlagEnvironmentState>();
     public bool IsClientSideExposed { get; set; }
     public string[] Tags { get; set; } = [];
+    public bool IsProtected { get; set; }
+    public ICollection<PendingFlagChange> PendingChanges { get; set; } = new List<PendingFlagChange>();
 }

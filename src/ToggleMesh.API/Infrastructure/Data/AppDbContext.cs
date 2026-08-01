@@ -26,6 +26,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
     public DbSet<ProjectEnvironment> Environments { get; set; }
     public DbSet<EnvironmentKey> EnvironmentKeys { get; set; }
     public DbSet<FeatureFlag> FeatureFlags { get; set; }
+    public DbSet<PendingFlagChange> PendingFlagChanges { get; set; }
     public DbSet<FlagVariation> FlagVariations { get; set; }
     public DbSet<FlagEnvironmentState> FlagEnvironmentStates { get; set; }
     public DbSet<ContextualRollout> ContextualRollouts { get; set; }

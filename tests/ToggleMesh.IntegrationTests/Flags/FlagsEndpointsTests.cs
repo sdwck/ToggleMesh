@@ -120,7 +120,7 @@ public class FlagsEndpointsTests : IAsyncLifetime
                     {
                         var data = line.Substring(6);
                         var doc = System.Text.Json.JsonDocument.Parse(data);
-                        if (doc.RootElement.TryGetProperty("EventName", out var evtName) && (evtName.GetString() == "FlagUpdated" || evtName.GetString() == "SdkFlagUpdated"))
+                        if (doc.RootElement.TryGetProperty("EventName", out var evtName) && evtName.GetString() == "FlagUpdated")
                         {
                             if (doc.RootElement.TryGetProperty("Payload", out var payload))
                             {
@@ -136,7 +136,9 @@ public class FlagsEndpointsTests : IAsyncLifetime
                     }
                 }
             }
-            catch { /* Ignore */ }
+            catch { 
+                // ignore
+            }
         }, cts.Token);
 
         await Task.Delay(500, cts.Token);

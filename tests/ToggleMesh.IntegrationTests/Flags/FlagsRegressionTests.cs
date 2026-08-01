@@ -2,6 +2,7 @@ using System.Net.Http.Json;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using ToggleMesh.API.Features.Analytics.Ingest;
 using ToggleMesh.API.Features.Analytics.Services;
 using ToggleMesh.API.Features.Flags.Create;
@@ -153,7 +154,9 @@ public class FlagsRegressionTests : IAsyncLifetime
         
         await db.SaveChangesAsync();
 
-        var shifter = new MabTrafficShifterService(scope.ServiceProvider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<MabTrafficShifterService>>());
+        var shifter = new MabTrafficShifterService(
+            scope.ServiceProvider.GetRequiredService<ILogger<MabTrafficShifterService>>(),
+            scope.ServiceProvider.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>());
         var math = new BayesianMathService();
         var realNotify = new ToggleMesh.API.Features.Flags.Commands.NotifyFlagUpdatedCommandHandler(
             scope.ServiceProvider.GetRequiredService<StackExchange.Redis.IConnectionMultiplexer>(),
@@ -204,7 +207,9 @@ public class FlagsRegressionTests : IAsyncLifetime
         
         await db.SaveChangesAsync();
 
-        var shifter = new MabTrafficShifterService(scope.ServiceProvider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<MabTrafficShifterService>>());
+        var shifter = new MabTrafficShifterService(
+            scope.ServiceProvider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<MabTrafficShifterService>>(),
+            scope.ServiceProvider.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>());
         var math = new BayesianMathService();
         var realNotify = new ToggleMesh.API.Features.Flags.Commands.NotifyFlagUpdatedCommandHandler(
             scope.ServiceProvider.GetRequiredService<StackExchange.Redis.IConnectionMultiplexer>(),

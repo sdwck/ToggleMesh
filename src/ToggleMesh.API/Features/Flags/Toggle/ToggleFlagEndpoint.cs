@@ -43,6 +43,12 @@ public class ToggleFlagEndpoint : ToggleEndpoint<ToggleFlagRequest>
             return;
         }
 
+        var env = await _db.Environments
+            .FirstOrDefaultAsync(x => x.Id == environmentId, ct);
+
+        if (env is { RequireApprovals: true } && (!env.RequireForProtectedFlagsOnly || state.FeatureFlag.IsProtected))
+            ThrowError("This environment requires approvals for flag changes. Direct toggling is prohibited.", 400);
+
         state.IsEnabled = req.IsEnabled;
         await _db.SaveChangesAsync(ct);
 

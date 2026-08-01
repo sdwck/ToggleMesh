@@ -10,5 +10,8 @@ public class ProjectEnvironment : AuditableEntity, ISoftDeletable
     public int SortOrder { get; set; }
     public bool IsDeleted { get; set; }
     public string? LastPiiBlockedContext { get; set; }
+    public bool RequireApprovals { get; set; }
+    public int RequiredApprovalsCount { get; set; } = 1;
+    public bool RequireForProtectedFlagsOnly { get; set; }
     public ICollection<EnvironmentKey> Keys { get; set; } = [];
 }

@@ -6,6 +6,7 @@ public class OrganizationMemberDto
 {
     public Guid UserId { get; set; }
     public string Email { get; set; } = string.Empty;
+    public string? UserName { get; set; }
     public OrganizationRole Role { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
 }

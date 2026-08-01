@@ -292,6 +292,9 @@ export function ProjectMembersTab({ project, isLoading }: { project?: ProjectDet
                                 <TableBody>
                                     {sortedMembers.map((member) => {
                                         const isSelf = member.email === userEmail;
+                                        const displayName = (member.userName && member.userName.toLowerCase() !== member.email.toLowerCase())
+                                            ? member.userName
+                                            : member.email.split('@')[0];
                                         return (
                                             <TableRow key={member.id} className="border-border/40 hover:bg-muted/30 h-[53px]">
                                                 <TableCell className="py-2">
@@ -300,11 +303,11 @@ export function ProjectMembersTab({ project, isLoading }: { project?: ProjectDet
                                                             <Users className="h-4 w-4 text-primary" />
                                                         </div>
                                                         <div className="flex flex-col">
-                                                            <span className="font-medium text-sm">
-                                                                {member.email}
+                                                            <span className="font-bold text-sm text-foreground">
+                                                                {displayName}
                                                                 {isSelf && <span className="ml-2 text-xs text-muted-foreground font-normal">(You)</span>}
                                                             </span>
-                                                            <span className="text-[10px] text-muted-foreground/50 font-mono mt-0.5">{member.userId}</span>
+                                                            <span className="text-[11px] text-muted-foreground font-mono mt-0.5">{member.email}</span>
                                                         </div>
                                                     </div>
                                                 </TableCell>

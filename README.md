@@ -173,6 +173,7 @@ ToggleMesh provides native SDKs and tooling for your entire microservice fleet.
 ## 🏢 Enterprise-Grade Features
 
 - 📡 **Push, Not Pull (SSE + Redis):** Real-time cache invalidation using Server-Sent Events. No wasteful HTTP polling.
+- 🔐 **Change Approvals & Scheduled Rollouts:** Enforce the "four-eyes" principle with mandatory approvals for production changes. Schedule complex rollouts and auto-rollbacks to execute automatically at specific dates and times.
 - 🎯 **Advanced Targeting Engine:** Individual user overrides, Contextual Percentage Rollouts, and Semantic Versioning (SemVer) operators synchronized across all supported SDKs.
 - 🎛️ **Multivariate Flags & Remote Config:** Move beyond simple booleans. Serve strongly-typed JSON, strings, or numeric payloads dynamically to your clients, enabling complex UI theming, game balancing, and multi-variant A/B/C testing without deploying new code.
 - 🧠 **Contextual Multi-Armed Bandits (MAB):** Built-in Bayesian inference engine (Monte Carlo simulations via Beta distributions). Autonomously shifts traffic toward winning variants based on conversion or revenue metrics.

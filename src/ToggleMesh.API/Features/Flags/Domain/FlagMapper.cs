@@ -31,7 +31,8 @@ public static class FlagMapper
             state.FeatureFlag.Type,
             state.IsSrmAlertSent,
             state.SrmPValue,
-            state.SecondaryMetrics
+            state.SecondaryMetrics,
+            state.FeatureFlag.IsProtected
         );
 
     }

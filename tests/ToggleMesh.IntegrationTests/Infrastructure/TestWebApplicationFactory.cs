@@ -48,7 +48,9 @@ public class TestWebApplicationFactory : WebApplicationFactory<Program>, IAsyncL
             config.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["RateLimits:Auth"] = "10000",
-                ["RateLimits:Sdk"] = "10000"
+                ["RateLimits:Sdk"] = "10000",
+                ["Caching:DefaultTtlMinutes"] = "10",
+                ["EnableMabAuditLogging"] = "true"
             });
         });
 

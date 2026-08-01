@@ -13,5 +13,9 @@ public record ProjectFlagDto(
     IEnumerable<FlagEnvironmentStateDto> Environments,
     string[] Tags,
     int Type,
-    IEnumerable<VariationDto> Variations
+    IEnumerable<VariationDto> Variations,
+    bool HasPendingApprovalsForCurrentUser,
+    bool HasActiveRequests,
+    bool HasScheduledChanges,
+    bool IsProtected
 );

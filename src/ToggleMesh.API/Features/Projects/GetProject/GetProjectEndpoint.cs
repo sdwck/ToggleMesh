@@ -81,6 +81,9 @@ public class GetProjectEndpoint : ToggleEndpointWithoutRequest<GetProjectRespons
                     Name = e.Name,
                     UserRole = effectiveRole,
                     LastPiiBlockedContext = e.LastPiiBlockedContext,
+                    RequireApprovals = e.RequireApprovals,
+                    RequiredApprovalsCount = e.RequiredApprovalsCount,
+                    RequireForProtectedFlagsOnly = e.RequireForProtectedFlagsOnly,
                     Keys = effectiveRole < ProjectRole.Editor ? e.Keys.Where(k => k.ExpireOn == null || k.ExpireOn > DateTime.UtcNow).Select(k => new EnvironmentKeyDto
                     {
                         Id = k.Id,

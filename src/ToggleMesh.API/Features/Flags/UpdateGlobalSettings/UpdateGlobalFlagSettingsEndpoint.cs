@@ -4,9 +4,7 @@ using ToggleMesh.API.Infrastructure.Data;
 using ToggleMesh.API.Features.Flags.Domain;
 using ToggleMesh.API.Infrastructure.Endpoints;
 using ToggleMesh.API.Extensions;
-using ToggleMesh.API.Infrastructure.Caching;
 using AuthModels = ToggleMesh.API.Infrastructure.Security.Authorization.Models;
-using StackExchange.Redis;
 using ToggleMesh.API.Features.Flags.Commands;
 
 namespace ToggleMesh.API.Features.Flags.UpdateGlobalSettings;
@@ -49,7 +47,7 @@ public class UpdateGlobalFlagSettingsEndpoint : ToggleEndpoint<UpdateGlobalFlagS
 
         if (flag.Type != FlagType.Boolean)
         {
-            if (req.Variations == null || req.Variations.Count == 0)
+            if (req.Variations.Count == 0)
                 ThrowError("At least one variation is required.", 400);
 
             var existingVariations = flag.Variations.ToList();
@@ -85,42 +83,39 @@ public class UpdateGlobalFlagSettingsEndpoint : ToggleEndpoint<UpdateGlobalFlagS
                     }
 
                     foreach (var r in state.Rules)
-                    {
                         foreach (var w in r.Rollout)
                         {
-                            if (w.Weight > 0 && deletedVariationIds.Contains(w.VariationId))
-                            {
-                                var deletedVarValue = existingVariations.First(v => v.Id == w.VariationId).Value;
-                                ThrowError($"Cannot delete variation '{deletedVarValue}' because it is used in targeting rules in environment '{state.Environment.Name}'.", 400);
-                            }
+                            if (w.Weight <= 0 || !deletedVariationIds.Contains(w.VariationId)) 
+                                continue;
+                            
+                            var deletedVarValue = existingVariations.First(v => v.Id == w.VariationId).Value;
+                            ThrowError($"Cannot delete variation '{deletedVarValue}' because it is used in targeting rules in environment '{state.Environment.Name}'.", 400);
                         }
-                    }
 
                     foreach (var cr in state.ContextualRollouts)
-                    {
                         foreach (var w in cr.Rollout)
                         {
-                            if (w.Weight > 0 && deletedVariationIds.Contains(w.VariationId))
-                            {
-                                var deletedVarValue = existingVariations.First(v => v.Id == w.VariationId).Value;
-                                ThrowError($"Cannot delete variation '{deletedVarValue}' because it is used in contextual rollouts in environment '{state.Environment.Name}'.", 400);
-                            }
+                            if (w.Weight <= 0 || !deletedVariationIds.Contains(w.VariationId)) 
+                                continue;
+                            
+                            var deletedVarValue = existingVariations.First(v => v.Id == w.VariationId).Value;
+                            ThrowError($"Cannot delete variation '{deletedVarValue}' because it is used in contextual rollouts in environment '{state.Environment.Name}'.", 400);
                         }
-                    }
                 }
             }
                 
             foreach (var oldVar in existingVariations)
-                if (!req.Variations.Any(v => v.Id == oldVar.Id))
+                if (req.Variations != null && !req.Variations.Any(v => v.Id == oldVar.Id))
                     _db.Remove(oldVar);
                     
-            for (var i = 0; i < req.Variations.Count; i++)
+            for (var i = 0; i < req.Variations?.Count; i++)
             {
                 var newVar = req.Variations[i];
                 var existing = existingVariations.FirstOrDefault(v => v.Id == newVar.Id);
                 if (existing != null)
                 {
-                    existing.Value = newVar.Value;
+                    if (existing.Value != newVar.Value)
+                        ThrowError($"Cannot modify the value of an existing variation ('{existing.Value}'). Please create a new variation instead.", 400);
                     existing.Sequence = i;
                 }
                 else

@@ -45,6 +45,7 @@ public class GetFlagsEndpoint : ToggleEndpoint<GetFlagsRequest, PagedResponse<Pr
         var query = _db.FeatureFlags
             .AsNoTracking()
             .Include(x => x.Variations)
+            .Include(x => x.PendingChanges)
             .Include(x => x.States.Where(s => !s.Environment.IsDeleted))
                 .ThenInclude(s => s.Rules)
             .AsSplitQuery()
@@ -93,11 +94,35 @@ public class GetFlagsEndpoint : ToggleEndpoint<GetFlagsRequest, PagedResponse<Pr
                     s.Rules.Count,
                     s.IsMabEnabled,
                     s.MabGoalEvent,
-                    s.IsExperimentActive
+                    s.IsExperimentActive,
+                    x.PendingChanges.Any(c => c.EnvironmentId == s.EnvironmentId),
+                    x.PendingChanges.Any(c => c.EnvironmentId == s.EnvironmentId && c.Status == PendingFlagChangeStatus.Scheduled),
+                    x.PendingChanges.Any(c => {
+                        if (c.EnvironmentId != s.EnvironmentId) return false;
+                        if (c.Status != PendingFlagChangeStatus.PendingReview) return false;
+                        var effectiveRole = role.Value;
+                        if (envRoles.TryGetValue(c.EnvironmentId, out var overrideRole))
+                            effectiveRole = overrideRole;
+                        return effectiveRole is ProjectRole.Admin or ProjectRole.Owner
+                               && c.RequestedByUserId != UserId 
+                               && !c.ApprovedByUserIds.Contains(UserId);
+                    })
                 )),
                 x.Tags,
                 (int)x.Type,
-                x.Variations.OrderBy(v => v.Sequence).Select(v => new VariationDto(v.Id, v.Value))
+                x.Variations.OrderBy(v => v.Sequence).Select(v => new VariationDto(v.Id, v.Value)),
+                x.PendingChanges.Any(c => {
+                    if (c.Status != PendingFlagChangeStatus.PendingReview) return false;
+                    var effectiveRole = role.Value;
+                    if (envRoles.TryGetValue(c.EnvironmentId, out var overrideRole))
+                        effectiveRole = overrideRole;
+                    return effectiveRole is ProjectRole.Admin or ProjectRole.Owner
+                           && c.RequestedByUserId != UserId 
+                           && !c.ApprovedByUserIds.Contains(UserId);
+                }),
+                x.PendingChanges.Any(c => c.Status == PendingFlagChangeStatus.PendingReview),
+                x.PendingChanges.Any(c => c.Status == PendingFlagChangeStatus.Scheduled),
+                x.IsProtected
             ))
             .ToList();
 

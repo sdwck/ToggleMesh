@@ -7,6 +7,7 @@ public class MemberDto
     public Guid Id { get; set; }
     public string UserId { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
+    public string? UserName { get; set; }
     public ProjectRole Role { get; set; }
     public bool IsOrganizationAdmin { get; set; }
     public List<EnvironmentRoleDto> EnvironmentRoles { get; set; } = new();

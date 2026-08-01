@@ -15,9 +15,10 @@ interface VariationsManagerProps {
     variations: Variation[];
     onChange: (variations: Variation[]) => void;
     type: string;
+    originalVariationIds?: string[];
 }
 
-export function VariationsManager({ variations, onChange, type }: VariationsManagerProps) {
+export function VariationsManager({ variations, onChange, type, originalVariationIds }: VariationsManagerProps) {
     const containerRef = useRef<HTMLDivElement>(null);
     const prevLen = useRef(variations.length);
 
@@ -90,70 +91,82 @@ export function VariationsManager({ variations, onChange, type }: VariationsMana
             </div>
 
             <div className="space-y-2" ref={containerRef}>
-                {variations.map((v, index) => (
-                    <div
-                        key={v.id}
-                        className={`flex items-center gap-1 group ${draggedIndex === index ? 'opacity-50' : ''}`}
-                        draggable
-                        onDragStart={(e) => handleDragStart(e, index)}
-                        onDragOver={handleDragOver}
-                        onDrop={(e) => handleDrop(e, index)}
-                        onDragEnd={handleDragEnd}
-                    >
-                        <div className="cursor-grab active:cursor-grabbing text-muted-foreground/50 hover:text-muted-foreground transition-colors shrink-0 flex items-center justify-center w-5">
-                            <GripVertical className="h-4 w-4" />
-                        </div>
-                        <span className="text-xs text-muted-foreground w-4 shrink-0 text-right mr-1">{index + 1}.</span>
-
-                        <div className="flex-1 ml-1 min-w-0">
-                            {type === 'JSON' ? (
-                                <div className="relative">
-                                    {draggedIndex !== null && (
-                                        <div className="h-[120px] w-full bg-muted/20 border border-dashed rounded-md flex items-center justify-center">
-                                            <span className="text-muted-foreground text-sm font-mono opacity-50">Dragging...</span>
-                                        </div>
-                                    )}
-                                    <div style={{ display: draggedIndex !== null ? 'none' : 'block' }}>
-                                        <JsonEditor
-                                            key={`${v.id}-${index}`}
-                                            value={v.value}
-                                            onChange={(val) => handleChange(v.id, val)}
-                                            height="120px"
-                                        />
-                                    </div>
-                                </div>
-                            ) : (
-                                <Input
-                                    value={v.value}
-                                    onChange={(e) => handleChange(v.id, e.target.value)}
-                                    placeholder={`Variation ${index + 1} value...`}
-                                    className="font-mono text-sm"
-                                />
-                            )}
-                        </div>
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleRemove(v.id)}
-                            disabled={variations.length <= 1}
-                            className="text-muted-foreground hover:text-destructive shrink-0 ml-1"
-                            type="button"
+                {variations.map((v, index) => {
+                    const isOriginal = originalVariationIds?.includes(v.id);
+                    return (
+                        <div
+                            key={v.id}
+                            className={`flex items-start gap-2 p-2 rounded-md transition-colors ${draggedIndex === index ? 'opacity-50' : 'bg-card'}`}
+                            draggable
+                            onDragStart={(e) => handleDragStart(e, index)}
+                            onDragOver={handleDragOver}
+                            onDrop={(e) => handleDrop(e, index)}
+                            onDragEnd={handleDragEnd}
                         >
-                            <Trash2 className="h-4 w-4" />
-                        </Button>
-                    </div>
-                ))}
+                            <div className="pt-2 cursor-grab active:cursor-grabbing text-muted-foreground shrink-0 mt-0.5">
+                                <GripVertical className="h-4 w-4" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                {type === 'JSON' ? (
+                                    <div className="relative group">
+                                        {draggedIndex !== null && (
+                                            <div className="h-[120px] w-full bg-muted/20 border border-dashed rounded-md flex items-center justify-center">
+                                                <span className="text-muted-foreground text-sm font-mono opacity-50">Dragging...</span>
+                                            </div>
+                                        )}
+                                        <div style={{ display: draggedIndex !== null ? 'none' : 'block' }}>
+                                            <JsonEditor
+                                                key={`${v.id}-${index}`}
+                                                value={v.value}
+                                                onChange={(val) => {
+                                                    if (!isOriginal) handleChange(v.id, val);
+                                                }}
+                                                height="120px"
+                                            />
+                                            {isOriginal && (
+                                                <div className="absolute inset-0 bg-background/50 cursor-not-allowed flex items-center justify-center rounded-md border border-border/50">
+                                                    <span className="bg-background px-2 py-1 rounded text-xs text-muted-foreground shadow-sm">Immutable</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <Input
+                                        value={v.value}
+                                        onChange={(e) => handleChange(v.id, e.target.value)}
+                                        placeholder={`Variation ${index + 1} value...`}
+                                        className="font-mono text-sm"
+                                        disabled={isOriginal}
+                                        title={isOriginal ? "Existing variation values cannot be modified." : ""}
+                                    />
+                                )}
+                            </div>
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleRemove(v.id)}
+                                disabled={variations.length <= 1}
+                                className="text-muted-foreground hover:text-destructive shrink-0 ml-1"
+                                type="button"
+                            >
+                                <Trash2 className="h-4 w-4" />
+                            </Button>
+                        </div>
+                    )
+                })}
             </div>
 
-            <Button
-                variant="outline"
-                size="sm"
-                onClick={handleAdd}
-                className="w-full mt-2 border-dashed"
-                type="button"
-            >
-                <Plus className="h-4 w-4 mr-2" /> Add Variation
-            </Button>
+            <div className="flex gap-2">
+                <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleAdd}
+                    className="w-full mt-2 border-dashed"
+                    type="button"
+                >
+                    <Plus className="h-4 w-4 mr-2" /> Add Variation
+                </Button>
+            </div>
         </div>
     );
 }

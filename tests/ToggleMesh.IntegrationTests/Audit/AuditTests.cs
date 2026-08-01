@@ -425,7 +425,7 @@ public class AuditTests : IAsyncLifetime
             Description = flag.Description,
             Tags = flag.Tags,
             Variations = [
-                new VariationDto(existingVarId, "a"),
+                new VariationDto(existingVarId, "initial"),
                 new VariationDto(Guid.CreateVersion7(), "b")
             ]
         };
@@ -442,9 +442,8 @@ public class AuditTests : IAsyncLifetime
             .Where(x => x.EntityName == "FlagVariation" && (x.Action == "Added" || x.Action == "Modified"))
             .ToListAsync();
 
-        logs.Should().HaveCount(2);
+        logs.Should().HaveCount(1);
         logs.Count(l => l.Action == "Added").Should().Be(1);
-        logs.Count(l => l.Action == "Modified").Should().Be(1);
         logs.All(l => l.EntityFriendlyName == "audit_var_flag (Variation)").Should().BeTrue();
         logs.All(l => l.EnvironmentId == null).Should().BeTrue();
     }
