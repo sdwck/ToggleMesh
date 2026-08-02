@@ -74,10 +74,15 @@ export function Register() {
   });
 
   useEffect(() => {
+    if (localStorage.getItem('accessToken')) {
+      navigate('/projects', { replace: true });
+      return;
+    }
+
     api.get<{ enabled: boolean }>('/auth/sso/status')
       .then((res) => setSsoEnabled(res.data.enabled))
       .catch(() => setSsoEnabled(false));
-  }, []);
+  }, [navigate]);
 
   const handleSsoClick = () => {
     if (inviteToken) {

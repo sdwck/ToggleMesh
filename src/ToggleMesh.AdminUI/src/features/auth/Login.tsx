@@ -65,6 +65,11 @@ export function Login() {
   const ssoExchangedRef = useRef(false);
 
   useEffect(() => {
+    if (localStorage.getItem('accessToken')) {
+      navigate('/projects', { replace: true });
+      return;
+    }
+
     api.get<{ enabled: boolean }>('/auth/sso/status')
       .then((res) => setSsoEnabled(res.data.enabled))
       .catch(() => setSsoEnabled(false));
