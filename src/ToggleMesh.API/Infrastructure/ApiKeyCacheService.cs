@@ -48,11 +48,12 @@ public class ApiKeyCacheService : IApiKeyCacheService
             var redisValue = await db.StringGetAsync(cacheKey);
             if (redisValue.HasValue)
             {
-                ToggleMeshMetrics.CacheRequests.Add(1, new KeyValuePair<string, object?>("type", "hit"));
-                return JsonSerializer.Deserialize<CachedKeyInfo>((string)redisValue!);
+                var cachedInfo = JsonSerializer.Deserialize<CachedKeyInfo>((string)redisValue!);
+                ToggleMeshMetrics.CacheRequests.Add(1, 
+                    new KeyValuePair<string, object?>("type", "hit"),
+                    new KeyValuePair<string, object?>("environment_id", cachedInfo?.EnvironmentId));
+                return cachedInfo;
             }
-
-            ToggleMeshMetrics.CacheRequests.Add(1, new KeyValuePair<string, object?>("type", "miss"));
 
             var now = _timeProvider.GetUtcNow().UtcDateTime;
 
@@ -60,6 +61,10 @@ public class ApiKeyCacheService : IApiKeyCacheService
                 .AsNoTracking()
                 .FirstOrDefaultAsync(
                     x => x.KeyHash == keyHash && (x.ExpireOn == null || x.ExpireOn > now), ct);
+
+            ToggleMeshMetrics.CacheRequests.Add(1, 
+                new KeyValuePair<string, object?>("type", "miss"),
+                new KeyValuePair<string, object?>("environment_id", envKey?.EnvironmentId));
 
             if (envKey == null)
                 return null;

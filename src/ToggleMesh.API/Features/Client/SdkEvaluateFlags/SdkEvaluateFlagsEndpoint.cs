@@ -43,7 +43,7 @@ public class SdkEvaluateFlagsEndpoint : ToggleEndpoint<SdkEvaluateFlagsRequest, 
         }
 
         if (response.Count > 0)
-            ToggleMeshMetrics.FlagEvaluations.Add(response.Count);
+            ToggleMeshMetrics.FlagEvaluations.Add(response.Count, new KeyValuePair<string, object?>("environment_id", req.EnvId));
 
         await Send.OkAsync(response, ct);
     }

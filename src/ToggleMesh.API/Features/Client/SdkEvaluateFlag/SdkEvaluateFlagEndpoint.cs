@@ -47,7 +47,7 @@ public class SdkEvaluateFlagEndpoint : ToggleEndpoint<SdkEvaluateFlagsRequest, S
 
         var result = _evaluatorService.Evaluate(state, req.Identity, req.Context);
         
-        ToggleMeshMetrics.FlagEvaluations.Add(1);
+        ToggleMeshMetrics.FlagEvaluations.Add(1, new KeyValuePair<string, object?>("environment_id", req.EnvId));
         
         await Send.OkAsync(new SdkEvaluateFlagResponse(flagKey, result?.VariationId, result?.VariationValue, state.IsExperimentActive), ct);
     }

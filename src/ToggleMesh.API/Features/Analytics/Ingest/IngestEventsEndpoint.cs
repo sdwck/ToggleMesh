@@ -98,11 +98,11 @@ public partial class IngestEventsEndpoint : ToggleEndpoint<IngestEventsRequest>
 
         await _publisher.PublishBatchAsync(req.EnvId, req.Events, ct);
         
-        ToggleMeshMetrics.AnalyticsEventsIngested.Add(req.Events.Count);
+        ToggleMeshMetrics.AnalyticsEventsIngested.Add(req.Events.Count, new KeyValuePair<string, object?>("environment_id", req.EnvId));
         
         var exposureCount = req.Events.Count(e => e.Type == AnalyticsEventType.Exposure);
         if (exposureCount > 0)
-            ToggleMeshMetrics.FlagEvaluations.Add(exposureCount);
+            ToggleMeshMetrics.FlagEvaluations.Add(exposureCount, new KeyValuePair<string, object?>("environment_id", req.EnvId));
 
         var livetailTopic = $"livetail:{req.EnvId}";
         foreach (var evt in req.Events)

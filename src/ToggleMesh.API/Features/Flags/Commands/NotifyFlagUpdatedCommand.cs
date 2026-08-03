@@ -75,7 +75,7 @@ public class NotifyFlagUpdatedCommandHandler : ICommandHandler<NotifyFlagUpdated
                 "SdkFlagUpdated",
                 cmd.SdkDto);
                 
-            ToggleMeshMetrics.FlagUpdates.Add(1);
+            ToggleMeshMetrics.FlagUpdates.Add(1, new KeyValuePair<string, object?>("environment_id", cmd.EnvironmentId));
         }, ct);
     }
 }
