@@ -36,6 +36,9 @@ public class SyncCommand : AsyncCommand<SyncSettings>
         var projectId = settings.ProjectId ?? configProjectId;
         var lang = settings.Lang ?? configLang ?? LangDetector.DiscoverLanguage();
 
+        if (!string.IsNullOrWhiteSpace(address) && !address.StartsWith("http://") && !address.StartsWith("https://"))
+            address = "https://" + address;
+
         if (string.IsNullOrWhiteSpace(apiKey))
         {
             AnsiConsole.MarkupLine(

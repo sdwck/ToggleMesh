@@ -1,8 +1,11 @@
 # 🚀 ToggleMesh CLI Tool
 
 [![GitHub Repo](https://img.shields.io/badge/GitHub-ToggleMesh-blue?logo=github)](https://github.com/sdwck/ToggleMesh)
+[![Documentation](https://img.shields.io/badge/Docs-togglemesh.dev-success?logo=readme)](https://docs.togglemesh.dev/docs/cli)
 
 `ToggleMesh.CLI` is a powerful, lightweight .NET Global Tool designed to synchronize feature flags and configuration schemas directly from your **ToggleMesh** Control Plane into your local codebase as strongly-typed constants.
+
+📖 **Read the full CLI documentation here:** [docs.togglemesh.dev/docs/cli](https://docs.togglemesh.dev/docs/cli)
 
 Eliminate manual typos and out-of-sync configuration strings by automating code generation.
 
@@ -48,4 +51,5 @@ ToggleMesh CLI can generate native strongly-typed constants for:
 ---
 
 ## 🔗 Resources
+*   **CLI Documentation:** [docs.togglemesh.dev/docs/cli](https://docs.togglemesh.dev/docs/cli)
 *   **Main Repository:** [GitHub - sdwck/ToggleMesh](https://github.com/sdwck/ToggleMesh)

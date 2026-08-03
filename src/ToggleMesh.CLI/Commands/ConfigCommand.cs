@@ -65,7 +65,7 @@ public class ConfigCommand : AsyncCommand<ConfigSettings>
 
             address = AnsiConsole.Prompt(
                 new TextPrompt<string>("Enter your [bold]ToggleMesh Address[/]:")
-                    .DefaultValue("http://localhost:5264")
+                    .DefaultValue("app.togglemesh.dev")
                     .PromptStyle("green"));
 
             lang = AnsiConsole.Prompt(
@@ -80,6 +80,11 @@ public class ConfigCommand : AsyncCommand<ConfigSettings>
                     .PromptStyle("green"));
             
             outPath = string.IsNullOrWhiteSpace(rawOutPath) ? null : rawOutPath.Trim();
+        }
+
+        if (!string.IsNullOrWhiteSpace(address) && !address.StartsWith("http://") && !address.StartsWith("https://"))
+        {
+            address = "https://" + address;
         }
 
         var result = ConfigResolver.SaveConfig(apiKey, address, projectId, lang, outPath);
