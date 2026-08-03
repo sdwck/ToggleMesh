@@ -1,8 +1,11 @@
 # 🐹 togglemesh-go
 
 [![GitHub Repo](https://img.shields.io/badge/GitHub-ToggleMesh-blue?logo=github)](https://github.com/sdwck/ToggleMesh)
+[![Documentation](https://img.shields.io/badge/Docs-togglemesh.dev-success?logo=readme)](https://docs.togglemesh.dev/docs/quickstart)
 
 Official, high-performance Go Server SDK for **ToggleMesh** — the real-time feature flag and configuration management engine.
+
+📖 **Read the full documentation here:** [docs.togglemesh.dev](https://docs.togglemesh.dev)
 
 This SDK is designed for **Server-Side environments**, leveraging secure **Local Evaluation** through Server-Sent Events (SSE) to evaluate targeting rules directly in memory with zero network latency.
 

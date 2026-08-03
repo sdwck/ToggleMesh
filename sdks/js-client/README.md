@@ -1,8 +1,11 @@
 # 🔌 togglemesh-js
 
 [![GitHub Repo](https://img.shields.io/badge/GitHub-ToggleMesh-blue?logo=github)](https://github.com/sdwck/ToggleMesh)
+[![Documentation](https://img.shields.io/badge/Docs-togglemesh.dev-success?logo=readme)](https://docs.togglemesh.dev/docs/quickstart)
 
 Official, lightweight, and reactive JavaScript/TypeScript Client SDK for **ToggleMesh** — the real-time, high-performance feature flag and configuration management engine.
+
+📖 **Read the full documentation here:** [docs.togglemesh.dev](https://docs.togglemesh.dev)
 
 This SDK is specifically designed for **Client-Side (Browser, Mobile/React Native) environments**, leveraging secure **Remote Evaluation** to evaluate targeting rules on the server side, preventing sensitive rule leakage to the client.
 

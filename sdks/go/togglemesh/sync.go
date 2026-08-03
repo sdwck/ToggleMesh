@@ -29,7 +29,7 @@ func (c *ToggleMeshClient) syncState() error {
 	}
 
 	req.Header.Set("x-api-key", c.options.APIKey)
-	req.Header.Set("x-sdk-version", "go-0.3.0")
+	req.Header.Set("x-sdk-version", "go-0.3.3")
 
 	resp, err := c.options.HTTPClient.Do(req)
 	if err != nil {

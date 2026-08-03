@@ -1,6 +1,11 @@
 # ToggleMesh Unreal Engine SDK
 
+[![GitHub Repo](https://img.shields.io/badge/GitHub-ToggleMesh-blue?logo=github)](https://github.com/sdwck/ToggleMesh)
+[![Documentation](https://img.shields.io/badge/Docs-togglemesh.dev-success?logo=readme)](https://docs.togglemesh.dev/docs/quickstart)
+
 The official Unreal Engine SDK for ToggleMesh. This plugin provides a robust, production-ready integration with ToggleMesh for evaluating feature flags, running A/B experiments, and tracking analytics directly from Blueprints or C++.
+
+📖 **Read the full documentation here:** [docs.togglemesh.dev](https://docs.togglemesh.dev)
 
 ## Installation
 

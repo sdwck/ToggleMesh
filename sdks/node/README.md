@@ -1,8 +1,12 @@
 # ToggleMesh Node.js SDK
 
 [![GitHub Repo](https://img.shields.io/badge/GitHub-ToggleMesh-blue?logo=github)](https://github.com/sdwck/ToggleMesh)
+[![Documentation](https://img.shields.io/badge/Docs-togglemesh.dev-success?logo=readme)](https://docs.togglemesh.dev/docs/quickstart)
 
 The official ToggleMesh Server-Side SDK for Node.js environments.
+
+📖 **Read the full documentation here:** [docs.togglemesh.dev](https://docs.togglemesh.dev)
+
 This SDK provides **Local Evaluation** capabilities by fetching rules from the ToggleMesh control plane and evaluating them securely in-memory, ensuring sub-millisecond evaluation latency for high-throughput backend services.
 
 ## 📦 Installation

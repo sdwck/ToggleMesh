@@ -1,8 +1,11 @@
 # ToggleMesh Python SDK (Local Evaluation)
 
 [![GitHub Repo](https://img.shields.io/badge/GitHub-ToggleMesh-blue?logo=github)](https://github.com/sdwck/ToggleMesh)
+[![Documentation](https://img.shields.io/badge/Docs-togglemesh.dev-success?logo=readme)](https://docs.togglemesh.dev/docs/quickstart)
 
 A lightweight, robust Python SDK for evaluating feature flags with ToggleMesh.
+
+📖 **Read the full documentation here:** [docs.togglemesh.dev](https://docs.togglemesh.dev)
 
 This SDK uses **Local Evaluation**. It connects to the ToggleMesh control plane once to fetch all rules, establishes an SSE (Server-Sent Events) connection to listen for updates, and evaluates all flags locally in-memory without making network requests. This ensures ultra-fast responses (sub-millisecond) suitable for high-throughput backend services.
 

@@ -1,8 +1,12 @@
 # 🚀 ToggleMesh JS/TS CLI Tool
 
 [![GitHub Repo](https://img.shields.io/badge/GitHub-ToggleMesh-blue?logo=github)](https://github.com/sdwck/ToggleMesh)
+[![Documentation](https://img.shields.io/badge/Docs-togglemesh.dev-success?logo=readme)](https://docs.togglemesh.dev/docs/cli)
 
 The official **ToggleMesh CLI** specifically packaged for Node.js environments.
+
+📖 **Read the full CLI documentation here:** [docs.togglemesh.dev/docs/cli](https://docs.togglemesh.dev/docs/cli)
+
 This tool automates the process of synchronizing feature flags from your ToggleMesh Control Plane and generating strongly-typed definitions (like TypeScript Enums and Types) directly into your codebase.
 
 ## 📦 Installation
