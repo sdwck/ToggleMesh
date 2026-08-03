@@ -92,7 +92,7 @@ public class RegisterEndpoint : ToggleEndpoint<RegisterRequest, RegisterResponse
             var emailBody = await _templateService.RenderAsync("ConfirmEmailTemplate", new 
             { 
                 ConfirmUrl = confirmUrl,
-                ToggleMeshLogoUrl = "https://raw.githubusercontent.com/sdwck/ToggleMesh/main/docs/assets/icon.png",
+                ToggleMeshLogoUrl = "https://raw.githubusercontent.com/sdwck/ToggleMesh/main/assets/icon.png",
                 CopyrightYear = copyrightYear,
                 DashboardUrl = appUrl
             }, ct);

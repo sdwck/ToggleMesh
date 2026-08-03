@@ -59,7 +59,7 @@ public class ForgotPasswordEndpoint : ToggleEndpoint<ForgotPasswordRequest>
         var emailBody = await _templateService.RenderAsync("ForgotPasswordTemplate", new 
         { 
             ResetUrl = resetUrl,
-            ToggleMeshLogoUrl = "https://raw.githubusercontent.com/sdwck/ToggleMesh/main/docs/assets/icon.png",
+            ToggleMeshLogoUrl = "https://raw.githubusercontent.com/sdwck/ToggleMesh/main/assets/icon.png",
             CopyrightYear = copyrightYear,
             DashboardUrl = appUrl
         }, ct);

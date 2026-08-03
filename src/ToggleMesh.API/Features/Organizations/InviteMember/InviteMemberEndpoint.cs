@@ -80,7 +80,7 @@ public class InviteMemberEndpoint : ToggleEndpoint<InviteMemberRequest>
         { 
             OrganizationName = organization.Name, 
             InviteUrl = inviteUrl,
-            ToggleMeshLogoUrl = "https://raw.githubusercontent.com/sdwck/ToggleMesh/main/docs/assets/icon.png",
+            ToggleMeshLogoUrl = "https://raw.githubusercontent.com/sdwck/ToggleMesh/main/assets/icon.png",
             CopyrightYear = copyrightYear,
             DashboardUrl = appUrl
         }, ct);

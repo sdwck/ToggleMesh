@@ -221,7 +221,7 @@ export function ProjectSettingsGeneralTab({
 
                         <div className="mt-4 pt-3 border-t border-border/10 flex items-center justify-between shrink-0">
                             <span className="text-[10px] text-zinc-500">Need help configuring SDKs?</span>
-                            <a href="https://github.com/sdwck/ToggleMesh" target="_blank" rel="noopener noreferrer" className="text-[10px] text-blue-400 hover:text-blue-300 flex items-center gap-1 font-medium transition-colors">
+                            <a href="https://docs.togglemesh.dev" target="_blank" rel="noopener noreferrer" className="text-[10px] text-blue-400 hover:text-blue-300 flex items-center gap-1 font-medium transition-colors">
                                 <BookOpen className="h-3 w-3" />
                                 View Docs
                             </a>

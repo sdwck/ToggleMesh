@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="docs/assets/icon.png" alt="ToggleMesh Logo" width="120" />
+  <img src="assets/icon.png" alt="ToggleMesh Logo" width="120" />
   <h1>ToggleMesh</h1>
   <p><b>Enterprise Feature Flag & Contextual Experimentation Engine</b></p>
   <p>A high-performance, data-private, self-hosted alternative to LaunchDarkly and Statsig. Powered by .NET Core, featuring native SDKs for C#, Python, Go, Node.js, and C++.</p>
@@ -17,7 +17,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-2ea44f?style=for-the-badge" alt="MIT License" /></a>
 </p>
 
-*![ToggleMesh Admin Dashboard](docs/assets/dashboard-preview.png)*  
+*![ToggleMesh Admin Dashboard](assets/dashboard-preview.png)*  
 *Manage environments, targeting rules, and A/B tests from a unified, modern interface.*
 
 ---
