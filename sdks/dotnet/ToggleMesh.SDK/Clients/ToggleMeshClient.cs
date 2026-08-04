@@ -31,7 +31,7 @@ public class ToggleMeshClient : IToggleMeshClient, IHostedService, ISegmentProvi
     private readonly IRuleEngine _ruleEngine;
     private readonly string? _fallbackFilePath;
     private readonly IToggleMeshContextProvider[] _contextProviders;
-    private readonly string[] _identityKeys = ["UserId", "sub", "Email", "SessionId", "DeviceId", "Id"];
+    private readonly string[] _identityKeys = ["UserId", "sub", "SessionId", "DeviceId", "Id"];
     private readonly ConcurrentDictionary<string, FlagMetrics> _metricsBuffer = new();
     private readonly Channel<AnalyticsEvent> _eventsChannel;
     private readonly bool _isMetricsEnabled;
